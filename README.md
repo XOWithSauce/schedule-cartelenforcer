@@ -110,6 +110,24 @@ You can add your own custom ambush locations or modify existing ones.
 1.  Open the **CartelEnforcer** folder, then the **Ambush** folder, and locate the **default.json** file.
 2.  Each default game ambush is listed here and can be edited. **Do not add or remove** any ambushes to this file, but **only modify** the values.
 3.  Note that every time game gets a new **update**, you should **delete default.json**. It will get created again when you load a save. This way you are "updating" your default values too in the json config.
+---
+### Dealer Robbing Overhaul
+
+#### How It Works:
+
+* **Triggering the Encounter:** When you are within 60 units of a dealer about to be robbed, a message is sent asking for help, and a robber spawns to start a fight.
+
+* **Combat Outcomes:**
+    * **Successful Defense:** The robbery is successfully defended if the robber dies, is knocked out, or if the fight lasts longer than 60 seconds.
+    * **Player Cowardice:** If you flee more than 90 units from the robber, the dealer will defend the robbery on their own.
+
+* **Robber's Escape:**
+    * If the dealer is defeated, the robber enters the escape phase, gaining a temporary **Adrenaline Boost** (speed and minor health regen) and stealing items.
+    * The robber attempts to flee to the nearest Cartel safehouse, ignoring all combat.
+    * **Chase Down:** If you defeat the escaping robber, you can reclaim the stolen items.
+    * **Failed Escape:** If a safehouse is not found, the robber will flee from the player for 60 seconds before despawning.
+
+---
 
 > **Note:** The **config.json** and **default.json** files will get created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
 
