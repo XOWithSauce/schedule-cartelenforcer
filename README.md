@@ -92,7 +92,3 @@ You can add your own custom ambush locations or modify existing ones.
 > **Note:** The **config.json** and **default.json** files will get created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
 
 ---
-
-### Contribute
-
-You can contribute, build from the source, or verify the integrity of this mod on [GitHu
