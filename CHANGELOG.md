@@ -1,0 +1,15 @@
+# Version v1.1.0
+- Added a new feature to enhance the Dealer Robbing Mechanism in the base game
+    - When player is within 60 units of a Dealer, that is about to get Robbed the feature gets triggered
+    - Dealer will send a Text Message to the Player indicating they are getting robbed and asking for help
+    - A Robber is spawned near the Dealer and they begin to fight
+        - If the Robber dies or gets knocked out during fight the feature ends and nothing is stolen. 
+        - If the Player runs away more than 90 units from the Robber, the Dealer will always succesfully defend the robbery.
+        - If the fight lasts for more than 1 minute without resolution, the Dealer will always succesfully defend the robbery.
+        - If the Dealer dies or gets knocked out, the next phase begins:
+            - Robber gets a sudden Adrenaline boost, granting them Speed Boost and minor amount of Health Regeneration
+            - Robber steals items from the Dealer inventory to their own inventory
+            - Robber tries to reach nearest safehouse door, where a Cartel Dealer lives, ignoring combat during the escape
+                - If Robber reaches the house they will despawn instantly
+                - If Player kills or knocks out the escaping Robber they can steal back the items from the inventory.
+            - If the Robber can not find any Cartel Dealer safehouse, then the Robber will try to Flee the Player for a maximum of 60 seconds, after which they will despawn

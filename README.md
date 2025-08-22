@@ -1,7 +1,7 @@
 # Cartel Enforcer
 **Requires Melon Loader**
 
-This mod adds new Cartel Ambush locations to the game and gives you control over existing ones.
+This mod adds new Cartel Ambush locations to the game and gives you control over existing ones. Dealer Robbing is also overhauled and realistic, spawning the robber and moving stolen items to inventory before robber escapes to a safehouse! Kill the robber to reclaim stolen items and money!
 
 ---
 
@@ -10,6 +10,7 @@ This mod adds new Cartel Ambush locations to the game and gives you control over
 - Adds more Cartel Ambush locations to the game from the **ambush.json** file.
 - Allows configuration of Game Default Ambush locations, spawns, and radius from the **default.json** file.
 - **Debug Mode** lets you visualize all locations and corresponding spawns.
+- Dealer Robbing is now Realistic! If player is near a dealer while they are getting robbed, this will spawn a Robber next to the Dealer and try to fight them!
 - Works in Multiplayer
 
 ---
