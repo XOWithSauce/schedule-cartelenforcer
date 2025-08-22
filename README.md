@@ -31,12 +31,12 @@ You can customize the mod's settings through the **config.json** file.
 2.  Open the **config.json** file. Its contents by default are:
 ```json
 {
-  "debugMode": true
+  "debugMode": false
 }
 ```
 
 -   **`debugMode`**:
-    -   `true`: By default, show debug messages, visualize spawn locations, and display coordinates.
+    -   `true`: Show debug messages, visualize spawn locations, and display coordinates.
     -   `false`: Does not show the debug content. The cartel ambushes will still be added.
 
 
