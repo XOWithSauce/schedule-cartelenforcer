@@ -1,40 +1,40 @@
 using System.Collections;
-using FishNet;
 using HarmonyLib;
+using Il2CppFishNet;
+using Il2CppScheduleOne;
+using Il2CppScheduleOne.AvatarFramework.Equipping;
+using Il2CppScheduleOne.Cartel;
+using Il2CppScheduleOne.Combat;
+using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.Dialogue;
+using Il2CppScheduleOne.Economy;
+using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Levelling;
+using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.Messaging;
+using Il2CppScheduleOne.Money;
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.NPCs.CharacterClasses;
+using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.PlayerScripts;
+using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.Vehicles;
+using Il2CppScheduleOne.Vehicles.AI;
+using Il2CppScheduleOne.VoiceOver;
+using Il2CppTMPro;
 using MelonLoader;
 using MelonLoader.Utils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
-using ScheduleOne;
-using ScheduleOne.AvatarFramework.Equipping;
-using ScheduleOne.Cartel;
-using ScheduleOne.Combat;
-using ScheduleOne.DevUtilities;
-using ScheduleOne.Dialogue;
-using ScheduleOne.Economy;
-using ScheduleOne.GameTime;
-using ScheduleOne.ItemFramework;
-using ScheduleOne.Levelling;
-using ScheduleOne.Map;
-using ScheduleOne.Messaging;
-using ScheduleOne.Money;
-using ScheduleOne.NPCs;
-using ScheduleOne.NPCs.CharacterClasses;
-using ScheduleOne.Persistence;
-using ScheduleOne.PlayerScripts;
-using ScheduleOne.UI;
-using ScheduleOne.Vehicles;
-using ScheduleOne.Vehicles.AI;
-using ScheduleOne.VoiceOver;
-using TMPro;
 using UnityEngine;
 
-[assembly: MelonInfo(typeof(CartelEnforcer.CartelEnforcer), CartelEnforcer.BuildInfo.Name, CartelEnforcer.BuildInfo.Version, CartelEnforcer.BuildInfo.Author, CartelEnforcer.BuildInfo.DownloadLink)]
+[assembly: MelonInfo(typeof(CartelEnforcer_IL2Cpp.CartelEnforcer_IL2Cpp), CartelEnforcer_IL2Cpp.BuildInfo.Name, CartelEnforcer_IL2Cpp.BuildInfo.Version, CartelEnforcer_IL2Cpp.BuildInfo.Author, CartelEnforcer_IL2Cpp.BuildInfo.DownloadLink)]
 [assembly: MelonColor()]
 [assembly: MelonOptionalDependencies("FishNet.Runtime")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
-namespace CartelEnforcer
+namespace CartelEnforcer_IL2Cpp
 {
     public static class BuildInfo
     {
@@ -47,7 +47,6 @@ namespace CartelEnforcer
     }
 
     #region Persistent JSON Files and Serialization
-    [System.Serializable]
     public class ModConfig
     {
         public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, Enable Debug Log Messages, etc.
@@ -70,7 +69,6 @@ namespace CartelEnforcer
     }
 
     // Serializer for base CartelAmbushLocation
-    [System.Serializable]
     public class NewAmbushConfig
     {
         public int mapRegion = 0; // Maps out to 0 = Northtown, 5 = Uptown
@@ -80,7 +78,6 @@ namespace CartelEnforcer
     }
 
     // Serialize this class to json file for configure
-    [System.Serializable]
     public class ListNewAmbush
     {
         public List<NewAmbushConfig> addedAmbushes = new List<NewAmbushConfig>();
@@ -270,8 +267,10 @@ namespace CartelEnforcer
         }
     }
     #endregion
-    public class CartelEnforcer : MelonMod
+    public class CartelEnforcer_IL2Cpp : MelonMod
     {
+        public static CartelEnforcer_IL2Cpp Instance;
+
         public static ModConfig currentConfig;
         public static ListNewAmbush ambushConfig;
         public static ListNewAmbush gameDefaultAmbush;
@@ -328,6 +327,7 @@ namespace CartelEnforcer
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
+            Instance = this;
             currentConfig = ConfigLoader.Load();
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
         }
@@ -410,7 +410,7 @@ namespace CartelEnforcer
         public static IEnumerator InitializeAndEvaluateMiniQuest()
         {
             yield return InitMiniQuest();
-            NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassNewDiag;
+            NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassNewDiag;
             coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
             yield return null;
         }
@@ -481,7 +481,7 @@ namespace CartelEnforcer
         [HarmonyPatch(typeof(LoadManager), "ExitToMenu")]
         public static class LoadManager_ExitToMenu_Patch
         {
-            public static bool Prefix(SaveInfo autoLoadSave = null, ScheduleOne.UI.MainMenu.MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
+            public static bool Prefix(SaveInfo autoLoadSave = null, Il2CppScheduleOne.UI.MainMenu.MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
             {
                 //MelonLogger.Msg("Exit Menu");
                 ExitPreTask();
@@ -641,7 +641,7 @@ namespace CartelEnforcer
                 HourPassAction = () => instanceActivities.HourPass(),
                 modTicksPassed = 0,
                 currentModHours = instanceActivities.HoursUntilNextGlobalActivity,
-                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
+                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile
             });
             indexCurrent++;
 
@@ -656,7 +656,7 @@ namespace CartelEnforcer
                     HourPassAction = () => act.HourPass(),
                     modTicksPassed = 0,
                     currentModHours = act.HoursUntilNextActivity,
-                    CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
+                    CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile
                 });
                 indexCurrent++;
             }
@@ -670,7 +670,7 @@ namespace CartelEnforcer
                 HourPassAction = () => instanceDealMgr.HourPass(),
                 modTicksPassed = 0,
                 currentModHours = instanceDealMgr.HoursUntilNextDealRequest,
-                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced
+                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced
             });
             indexCurrent++;
 
@@ -682,7 +682,7 @@ namespace CartelEnforcer
                 HourPassAction = () => hoursUntilDriveBy = Mathf.Clamp(hoursUntilDriveBy - 1, 0, 48),
                 modTicksPassed = 0,
                 currentModHours = hoursUntilDriveBy,
-                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
+                CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile
             });
 
             Log("Finished populating Activity Frequency Parameters");
@@ -872,14 +872,8 @@ namespace CartelEnforcer
                     dealer.Movement.GetClosestReachablePoint(targetPosition: randomPoint, out spawnPos);
                 } while (spawnPos == Vector3.zero); // Because GetClosestReachablePoint can return V3.Zero as default (unreachable)
 
-                List<CartelGoon> spawnedGoons = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnMultipleGoons(spawnPos, 1, false);
-                if (spawnedGoons.Count == 0)
-                {
-                    Log("Failed to spawn goon. Robbery failed.");
-                    yield break;
-                }
+                CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
 
-                CartelGoon goon = spawnedGoons[0];
                 goon.Movement.Warp(spawnPos);
                 yield return new WaitForSeconds(0.5f);
                 if (!registered) yield break;
@@ -888,9 +882,15 @@ namespace CartelEnforcer
 
                 dealer.Behaviour.CombatBehaviour.SetTarget(null, dealer.NetworkObject);
                 dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
-                goon.AttackEntity(dealer);
+                ICombatTargetable targetable = dealer.NetworkObject.GetComponent<ICombatTargetable>();
+                if (targetable != null)
+                {
+                    coros.Add(MelonCoroutines.Start(StateRobberyCombat(dealer, goon, region)));
+                    goon.AttackEntity(targetable);
+                }
+                else
+                    MelonLogger.Warning("ICombatTargetable Not Found");
 
-                coros.Add(MelonCoroutines.Start(StateRobberyCombat(dealer, goon, region)));
             }
         }
 
@@ -913,6 +913,7 @@ namespace CartelEnforcer
 
             if (dealer.Health.IsDead || !dealer.IsConscious || dealer.Health.IsKnockedOut)
             {
+
                 // Dealer is dead Partial rob
                 Log("Dealer was defeated! Initiating partial robbery.");
 
@@ -1046,7 +1047,7 @@ namespace CartelEnforcer
                 if (d.isInBuilding && d.CurrentBuilding != null)
                 {
                     NPCEnterableBuilding building = d.CurrentBuilding;
-                    ScheduleOne.Doors.StaticDoor door = building.GetClosestDoor(goon.CenterPointTransform.position, false);
+                    Il2CppScheduleOne.Doors.StaticDoor door = building.GetClosestDoor(goon.CenterPointTransform.position, false);
                     float distToDoor = Vector3.Distance(door.transform.position, d.CenterPointTransform.position);
                     if (distToDoor < distance)
                     {
@@ -1317,7 +1318,7 @@ namespace CartelEnforcer
                     ParkData data = new();
                     data.spotIndex = -1; // set visible false
                     ParkingLot lot = UnityEngine.Object.FindObjectOfType<ParkingLot>(); // find any parking lot
-                    data.lotGUID = new Guid(lot.BakedGUID);
+                    data.lotGUID = new Il2CppSystem.Guid(lot.BakedGUID);
                     driveByParking = data; // Now we can use that parking lot to network the visibility + set static
                 }
                 else
@@ -1342,7 +1343,16 @@ namespace CartelEnforcer
                 {
                     thomasInstance.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
                     yield return new WaitForSeconds(3f);
-                    if (thomasInstance.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+                    AvatarRangedWeapon wep = null;
+                    try
+                    {
+                        wep = thomasInstance.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
+                    } catch (InvalidCastException ex)
+                    {
+                        MelonLogger.Warning("Failed to Cast Thomas Gun Weapon Instance: " + ex);
+                    }
+
+                    if (wep != null)
                     {
                         wep.MaxUseRange = 45f;
                         wep.MinUseRange = 8f;
@@ -1388,7 +1398,7 @@ namespace CartelEnforcer
                 yield return new WaitForSeconds(1f);
                 elapsedSec += 1f;
                 if (!registered) yield break;
-                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile || driveByActive)
+                if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || driveByActive)
                 {
                     yield return new WaitForSeconds(60f);
                     continue;
@@ -1444,7 +1454,7 @@ namespace CartelEnforcer
             yield return new WaitForSeconds(0.1f);
             if (!registered) yield break;
 
-            driveByAgent.Navigate(trig.endPosition, null, DriveByNavComplete);
+            driveByAgent.Navigate(trig.endPosition, null, (Il2CppScheduleOne.Vehicles.AI.VehicleAgent.NavigationCallback)DriveByNavComplete);
             driveByAgent.AutoDriving = true;
 
             coros.Add(MelonCoroutines.Start(DriveByShooting(player)));
@@ -1624,31 +1634,23 @@ namespace CartelEnforcer
                     text = "What's the word around town? I need info on the Benzies.";
                     break;
             }
+
+
             choice.ChoiceText = $"{text} <color=#FF3008>(Bribe -$100)</color>";
             choice.Enabled = true;
-            choice.isValidCheck = (out string invalidReason) =>
+            void OnMiniQuestChosenWrapped()
             {
-                bool unlocked = NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile;
-
-                if (unlocked)
-                {
-                    invalidReason = string.Empty;
-                }
-                else
-                {
-                    invalidReason = "Not Unlocked Yet";
-                }
-                return unlocked;
-            };
-
-            choice.onChoosen.AddListener(() => { OnMiniQuestChosen(choice, npc, controller); });
+                OnMiniQuestChosen(choice, npc, controller);
+            }
+            choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnMiniQuestChosenWrapped);
             int index = controller.AddDialogueChoice(choice);
             Log("Created Mini Quest Dialogue for: " + npc.FirstName);
             return;
         }
-        
+
         public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller)
         {
+
             Log("Option Chosen");
             if (UnityEngine.Random.Range(0f, 1f) > 0.30f || NetworkSingleton<MoneyManager>.Instance.cashBalance < 101f)
             {
@@ -1677,9 +1679,12 @@ namespace CartelEnforcer
             else // Start mini quest
             {
                 Log("Start Quest");
-                List<DeadDrop> drops = (from drop in DeadDrop.DeadDrops
-                                        where drop.Storage.ItemCount == 0
-                                        select drop).ToList<DeadDrop>();
+                List<DeadDrop> drops = new();
+                for (int i = 0; i < DeadDrop.DeadDrops.Count; i++)
+                {
+                    if (DeadDrop.DeadDrops[i].Storage.ItemCount == 0)
+                        drops.Add(DeadDrop.DeadDrops[i]);
+                }
 
                 DeadDrop random = drops[UnityEngine.Random.Range(0, drops.Count)];
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-100f, true, false);
@@ -1739,7 +1744,7 @@ namespace CartelEnforcer
         public static IEnumerator DisposeChoice(DialogueController controller, NPC npc)
         {
             yield return new WaitForSeconds(0.4f);
-            List<DialogueController.DialogueChoice> oldChoices = controller.Choices;
+            var oldChoices = controller.Choices;
             oldChoices.RemoveAt(oldChoices.Count - 1);
             controller.Choices = oldChoices;
             Log("Disposed Choice");
@@ -1756,7 +1761,7 @@ namespace CartelEnforcer
 
             bool opened = false;
             UnityEngine.Events.UnityAction onOpenedAction = null;
-            onOpenedAction = () =>
+            void WrapOnOpenCallback()
             {
                 Log("Quest Complete");
                 NetworkSingleton<LevelManager>.Instance.AddXP(100);
@@ -1766,7 +1771,8 @@ namespace CartelEnforcer
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
                 }
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
-            };
+            }
+            onOpenedAction = (UnityEngine.Events.UnityAction)WrapOnOpenCallback;
             entity.Storage.onOpened.AddListener(onOpenedAction);
 
             float duration = UnityEngine.Random.Range(30f, 120f);
@@ -1891,12 +1897,6 @@ namespace CartelEnforcer
         public static IEnumerator SpawnAmbushAreaVisual()
         {
             Log("Spawning Debug visuals for Ambush Areas");
-            // prevent stripping
-            var meshRenderer = new MeshRenderer();
-            var meshFilter = new MeshFilter();
-            var boxCollider = new BoxCollider();
-            var capsuleCollider = new CapsuleCollider();
-
             Shader standardShader = Shader.Find("Unlit/Color");
             if (standardShader == null)
             {
@@ -1971,11 +1971,6 @@ namespace CartelEnforcer
         public static IEnumerator SpawnDriveByAreaVisual()
         {
             Log("Spawning Debug visuals for Drive By Triggers");
-            // prevent stripping
-            var meshRenderer = new MeshRenderer();
-            var meshFilter = new MeshFilter();
-            var sphereCollider = new SphereCollider();
-
             // Shader select order
             Shader standardShader = Shader.Find("Unlit/Color");
             if (standardShader == null)

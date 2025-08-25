@@ -1,3 +1,22 @@
+# Version v1.2.0
+- Added Configuration support for changing the Cartel Activity Frequency
+    - Value *activityFrequency* in `config.json`
+- Added Configuration support for changing the Minimum Cartel Influence requirements
+    - Value *activityInfluenceMin* in `config.json`
+- Added New Configuration values *driveByEnabled*, *realRobberyEnabled* and *miniQuestsEnabled*
+- Changed the Default Debug Mode value to be false in code
+- Added Functionality for changing all activity frequencies to be roughly 10 times faster at *activityFrequency* 1.0 and roughly 10 times slower at *activityFrequency* -1.0, Default Disabled at 0.0
+- Added Functionality for changing all activity Influence requirements to be at 0 (Events will happen always) when *activityInfluenceMin* is at -1.0 and at 1000 (Events will only happen at max cartel influence) when at 1.0, Default Disabled at 0.0
+- Added a New Mini Quest, which can be acquired from select NPCs (see readme for more info)
+- Added a new event Drive By and 11 new area triggers (Orange Spheres in Debug Mode) (see readme for more info)
+- Added methods to break coroutines when exiting to menu or loading last save to avoid errors
+- Organized the startup sequence to be faster and reliable
+- Added More Debug Mode Keybinds to trigger events manually:
+    - Left CTRL + G to start Instant Drive By at nearest trigger
+    - Left CTRL + H to give one of the select npcs a Mini Quest
+- Changed the Real Robberies to evaluate current Region:
+    - If Dealer Robbery is spawned then based on combat outcomes, the Regional Cartel influence will change
+
 # Version v1.1.0
 - Added a new feature to enhance the Dealer Robbing Mechanism in the base game
     - When player is within 60 units of a Dealer, that is about to get Robbed the feature gets triggered
