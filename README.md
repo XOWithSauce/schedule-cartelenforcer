@@ -77,19 +77,19 @@ You can customize the mod's settings through the **config.json** file.
     - `0.0` (Default): Influence requirements are set to the game's default.
 - **`ambushFrequency`**: Adjusts the frequency of Ambush events.
     - `1.0`: Ambush can happen as often as every 1 in-game hour.
-    - `0.0` (Default): Ambush can happen at most once every 2 in-game days.
+    - `0.0`: Ambush can happen at most once every 2 in-game days.
     - `-1.0`: Ambush can happen at most once every 4 in-game days.
 - **`deadDropStealFrequency`**: Adjusts the frequency of Dead Drop Steal events.
     - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days.
 - **`cartelCustomerDealFrequency`**: Adjusts the frequency of Cartel Customer Deal events.
     - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days.
 - **`cartelRobberyFrequency`**: Adjusts the frequency of Cartel Robbery events.
     - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days.
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
