@@ -1,4 +1,3 @@
-
 # Cartel Enforcer
 **Requires Melon Loader**
 
@@ -16,6 +15,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Realistic Robberies](#realistic-robberies)
     * [Drive-By Events](#drive-by-events)
     * [Mini-Quests](#mini-quests)
+    * [Intercept Deals](#intercept-deals)
 * [Modifying Spawns](#modifying-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
 
@@ -28,6 +28,8 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
+- **Intercept Deals:** A new event where a Cartel dealer attempts to intercept player deals.
+- **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, debug messages, and trigger events manually for testing.
 
 ---
@@ -51,9 +53,14 @@ You can customize the mod's settings through the **config.json** file.
     "debugMode": false,
     "activityFrequency": 0.0,
     "activityInfluenceMin": 0.0,
+    "ambushFrequency": 1.0,
+    "deadDropStealFrequency": 1.0,
+    "cartelCustomerDealFrequency": 1.0,
+    "cartelRobberyFrequency": 1.0,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
-    "miniQuestsEnabled": true
+    "miniQuestsEnabled": true,
+    "interceptDeals": true
 }
 ```
 
@@ -68,6 +75,22 @@ You can customize the mod's settings through the **config.json** file.
     - `1.0`: Activities will rarely happen, as they require maximum regional influence.
     - `-1.0`: Activities do not require any regional influence and can happen anywhere.
     - `0.0` (Default): Influence requirements are set to the game's default.
+- **`ambushFrequency`**: Adjusts the frequency of Ambush events.
+    - `1.0`: Ambush can happen as often as every 1 in-game hour.
+    - `0.0` (Default): Ambush can happen at most once every 2 in-game days.
+    - `-1.0`: Ambush can happen at most once every 4 in-game days.
+- **`deadDropStealFrequency`**: Adjusts the frequency of Dead Drop Steal events.
+    - `1.0`: Can happen as often as every 1 in-game hour.
+    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `-1.0`: Can happen at most once every 4 in-game days.
+- **`cartelCustomerDealFrequency`**: Adjusts the frequency of Cartel Customer Deal events.
+    - `1.0`: Can happen as often as every 1 in-game hour.
+    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `-1.0`: Can happen at most once every 4 in-game days.
+- **`cartelRobberyFrequency`**: Adjusts the frequency of Cartel Robbery events.
+    - `1.0`: Can happen as often as every 1 in-game hour.
+    - `0.0` (Default): Can happen at most once every 2 in-game days.
+    - `-1.0`: Can happen at most once every 4 in-game days.
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -77,6 +100,9 @@ You can customize the mod's settings through the **config.json** file.
 - **`miniQuestsEnabled`**:
     - `true`: Enables mini-quests.
     - `false`: Disables mini-quests.
+- **`interceptDeals`**:
+    - `true`: Enables the Intercept Deals event.
+    - `false`: Disables the event.
 
 ---
 
@@ -92,14 +118,13 @@ In debug mode, you can see various visual cues and use keybinds to test features
 
 <img src="https://i.imgur.com/7x5l97m.png">
 
-
-
-
-
 - **Keybinds:**
     - `Left CTRL + R`: Trigger a Dealer Robbery at the nearest dealer.
     - `Left CTRL + G`: Trigger an instant drive-by at the nearest location.
     - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
+    - `Left CTRL + L`: Log internal mod data to the console.
+    - `Left CTRL + I`: Log inventory content to the console.
+    - `Left CTRL + T`: Trigger an Intercept Deal event.
 
 ---
 
@@ -114,9 +139,24 @@ For multiplayer to function correctly, all players must have the same `default.j
 #### Realistic Robberies
 
 When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
-- **Robber defeated:** If the robber is killed or knocked out, regional influence decreases by 80.
+- **Robber defeated:** If the robber is killed or knocked out, regional influence decreases by 25.
 - **Player flees:** If you run out of range, regional influence increases by 20.
 - **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 50.
+
+#### Intercept Deals
+
+This is a new type of event where the Cartel actively attempts to intercept one of your deals.
+- The event can only occur between 6 PM and 4 AM and when the Cartel is hostile.
+- Only deals with less than 5 hours and more than 1 hour and 30 minutes remaining can be intercepted.
+- If the player is within 40 units of the customer, the intercept is canceled.
+- The Cartel Dealer can have your Stolen Items in their inventory
+- **Event Timeline:**
+    - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
+    - A random timer of 10-30 seconds begins before the Cartel dealer starts their intercept.
+- **Outcomes:**
+    - If you complete the deal within the 10-30 second grace period, Cartel influence decreases by 100.
+    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 50.
+    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
 
 #### Drive-By Events
 
@@ -131,15 +171,16 @@ These events only happen when the Cartel is hostile.
 
 Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 - The quest-giving NPCs are chosen randomly every 8-16 hours.
-- There's a 70% chance an NPC will refuse to give you a quest.
-- If they agree, you pay a $100 bribe to get a tip on a Cartel dead drop.
-- **Dead Drop Location:** The NPC has an 80% chance to only reveal the region and a 20% chance to tell you the exact location.
-- You have a limited time (30-120 seconds) to find the dead drop.
+- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
+- **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
+- **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
+- You have a limited time (60-120 seconds) to find the dead drop.
 - **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 25.
 - **Failure:** If you fail to find it, the items vanish and regional influence increases by 50.
 - **Loot Pools:** One of the following two pools is selected for each quest:
     - **Common (80% chance):** 3-10 items chosen from: Cocaine, Meth, Green Crack Seed, OG Kush Seed.
     - **Rare (20% chance):** 1 item chosen from: Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
+    - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel.
 
 ---
 

@@ -20,14 +20,19 @@ using ScheduleOne.Messaging;
 using ScheduleOne.Money;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
+using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.Persistence;
 using ScheduleOne.PlayerScripts;
+using ScheduleOne.Product;
+using ScheduleOne.Quests;
 using ScheduleOne.UI;
+using ScheduleOne.UI.Phone.Messages;
 using ScheduleOne.Vehicles;
 using ScheduleOne.Vehicles.AI;
 using ScheduleOne.VoiceOver;
 using TMPro;
 using UnityEngine;
+using UnityEngine.UI;
 
 [assembly: MelonInfo(typeof(CartelEnforcer.CartelEnforcer), CartelEnforcer.BuildInfo.Name, CartelEnforcer.BuildInfo.Version, CartelEnforcer.BuildInfo.Author, CartelEnforcer.BuildInfo.DownloadLink)]
 [assembly: MelonColor()]
@@ -42,7 +47,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.2.0";
+        public const string Version = "1.3.0";
         public const string DownloadLink = null;
     }
 
@@ -52,21 +57,37 @@ namespace CartelEnforcer
     {
         public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, Enable Debug Log Messages, etc.
 
-        public float activityFrequency = 0.0f; // From -1.0 to 0.0 to 1.0,
-                                               // -1.0= Activity is 10 times less frequent
-                                               // 0.0 = Activity is at game default frequency 
-                                               // 1.0 = Activity is 10 times more frequent
+        // From -1.0 to 0.0 to 1.0,
+        // -1.0= Activity is 10 times less frequent
+        // 0.0 = Activity is at game default frequency 
+        // 1.0 = Activity is 10 times more frequent
+        public float activityFrequency = 0.0f; 
 
-        public float activityInfluenceMin = 0.0f; // From -1.0 to 0.0 to 1.0,
-                                                  // -1.0 = Activity influence requirement is 100% Less (Means cartel influence requirement is at 0 and activities happen always)
-                                                  // 0.0  = Activity influence requirement is at Game Default
-                                                  // 1.0  = Activity influence requirement is 100% More (Means cartel influence will only happen if at maximum regional cartel influence)
+        // From -1.0 to 0.0 to 1.0,
+        // -1.0 = Activity influence requirement is 100% Less (Means cartel influence requirement is at 0 and activities happen always)
+        // 0.0  = Activity influence requirement is at Game Default
+        // 1.0  = Activity influence requirement is 100% More (Means cartel influence will only happen if at maximum regional cartel influence)
+        public float activityInfluenceMin = 0.0f;
+
+        // All four follow same pattern:
+        // Basically different from the Activity Frequency parameter, because this specifically states how often at maximum something can happen
+        // Whereas the ActivityFrequency simulates hours passing at a faster or slower pace. This Patches the "Start" method to block if condition is not met!
+        // from -1.0 to 0.0 to 1.0
+        // -1.0 = Activity for this specific type can happen only once every 4 days
+        // 0.0 = Activity for this specific type can happen only once every 2 days
+        // 1.0 = Activity for this specific type can happen every hour
+        public float ambushFrequency = 1.0f;
+        public float deadDropStealFrequency = 1.0f;
+        public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
+        public float cartelRobberyFrequency = 1.0f;
 
         public bool driveByEnabled = true;
 
         public bool realRobberyEnabled = true;
 
         public bool miniQuestsEnabled = true;
+
+        public bool interceptDeals = true;
     }
 
     // Serializer for base CartelAmbushLocation
@@ -91,6 +112,7 @@ namespace CartelEnforcer
         private static string pathModConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "config.json");
         private static string pathAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "ambush.json");
         private static string pathDefAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "default.json");
+        private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
 
         #region Mod Config 
         public static ModConfig Load()
@@ -246,6 +268,122 @@ namespace CartelEnforcer
             return currentState;
         }
         #endregion
+
+        #region Persistence for Cartel Stolen Items
+        public static string SanitizeAndFormatName(string orgName)
+        {
+            string stolenItemsFileName = orgName;
+
+            if (stolenItemsFileName != null)
+            {
+                stolenItemsFileName = stolenItemsFileName.Replace(" ", "_").ToLower();
+                stolenItemsFileName = stolenItemsFileName.Replace(",", "");
+                stolenItemsFileName = stolenItemsFileName.Replace(".", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("<", "");
+                stolenItemsFileName = stolenItemsFileName.Replace(">", "");
+                stolenItemsFileName = stolenItemsFileName.Replace(":", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("\"", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("/", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("\\", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("|", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("?", "");
+                stolenItemsFileName = stolenItemsFileName.Replace("*", "");
+            }
+            stolenItemsFileName = stolenItemsFileName + ".json";
+            return stolenItemsFileName;
+        }
+        [System.Serializable]
+        public class SerializeStolenItems
+        {
+            public string ID;
+            public int Quality;
+            public int Quantity;
+        }
+        [System.Serializable]
+        public class StolenItemsList
+        {
+            public List<SerializeStolenItems> items;
+        }
+        public static List<QualityItemInstance> LoadStolenItems()
+        {
+            StolenItemsList stolenItems;
+            string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
+            string fileName = SanitizeAndFormatName(orgName);
+            if (File.Exists(Path.Combine(pathCartelStolen, fileName)))
+            {
+                try
+                {
+                    string json = File.ReadAllText(Path.Combine(pathCartelStolen, fileName));
+                    stolenItems = JsonConvert.DeserializeObject<StolenItemsList>(json);
+                }
+                catch (Exception ex)
+                {
+                    stolenItems = new();
+                    MelonLogger.Warning("Failed to read Cartel Stolen Items data: " + ex);
+                }
+            }
+            else
+            {
+                stolenItems = new();
+            }
+            List<QualityItemInstance> newQualityItemList = new List<QualityItemInstance>();
+            if (stolenItems.items != null && stolenItems.items.Count > 0)
+            {
+                foreach (SerializeStolenItems seri in stolenItems.items)
+                {
+                    ItemDefinition def = Registry.GetItem(seri.ID);
+                    ItemInstance item = def.GetDefaultInstance(seri.Quantity);
+                    switch(seri.Quality)
+                    {
+                        case 0:
+                            (item as QualityItemInstance).Quality = EQuality.Trash;
+                            break;
+                        case 1:
+                            (item as QualityItemInstance).Quality = EQuality.Poor;
+                            break;
+                        case 2:
+                            (item as QualityItemInstance).Quality = EQuality.Standard;
+                            break;
+                        case 3:
+                            (item as QualityItemInstance).Quality = EQuality.Premium;
+                            break;
+                        case 4:
+                            (item as QualityItemInstance).Quality = EQuality.Heavenly;
+                            break;
+
+                    }
+                    newQualityItemList.Add((item as QualityItemInstance));
+                }
+            }
+            return newQualityItemList;
+        }
+
+        public static void Save(List<QualityItemInstance> stolenItems)
+        {
+            StolenItemsList itemsList = new();
+            itemsList.items = new();
+
+            foreach (QualityItemInstance item in stolenItems)
+            {
+                SerializeStolenItems newItem = new() { ID = item.ID, Quality = (int)item.Quality, Quantity = item.Quantity};
+                itemsList.items.Add(newItem);
+            }
+            try
+            {
+                string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
+                string fileName = SanitizeAndFormatName(orgName);
+                string saveDestination = Path.Combine(pathCartelStolen, fileName);
+                string json = JsonConvert.SerializeObject(itemsList, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
+                File.WriteAllText(saveDestination, json);
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save Cartel Stolen Items data: " + ex);
+            }
+        }
+        #endregion
+
     }
 
     // Because vector3 isnt just xyz for serialization, we remove everything except xyz from the base object properties
@@ -272,11 +410,15 @@ namespace CartelEnforcer
     #endregion
     public class CartelEnforcer : MelonMod
     {
+        public static CartelEnforcer Instance { get; private set; }
         public static ModConfig currentConfig;
         public static ListNewAmbush ambushConfig;
         public static ListNewAmbush gameDefaultAmbush;
+        public static List<QualityItemInstance> cartelStolenItems;
+        private static readonly object cartelItemLock = new object(); // for above list
 
         public static List<HrPassParameterMap> actFreqMapping = new();
+        public static List<CartelRegActivityHours> regActivityHours = new();
 
         public static List<DriveByTrigger> driveByLocations = new();
 
@@ -285,6 +427,7 @@ namespace CartelEnforcer
         static bool registered = false;
         private bool firstTimeLoad = false;
         static bool debounce = false; // Keyboard Input
+        static bool interceptingDeal = false;
 
         // Drive By logic
         static LandVehicle driveByVeh;
@@ -298,6 +441,14 @@ namespace CartelEnforcer
         // Coordinate ui elements for debug
         private static TextMeshProUGUI _positionText;
         private static Transform _playerTransform;
+
+        // UI Elements to save Sprites and Colors for changing Quest icon when intercepted
+        public static Color questIconBack;
+        public static Sprite handshake;
+        public static Sprite benziesLogo;
+
+        // Track current intercepted contract GUID
+        public static List<string> contractGuids = new();
 
         // Mini Quest Dead Drops
         public static List<string> rareDrops = new()
@@ -328,6 +479,7 @@ namespace CartelEnforcer
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
+            Instance = this;
             currentConfig = ConfigLoader.Load();
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
         }
@@ -353,7 +505,9 @@ namespace CartelEnforcer
                     }
                     coros.Clear();
                     driveByActive = false;
+                    interceptingDeal = false;
                     driveByLocations.Clear();
+                    regActivityHours.Clear();
                     actFreqMapping.Clear();
                     targetNPCs.Clear();
                 }
@@ -366,6 +520,8 @@ namespace CartelEnforcer
 
             currentConfig = ConfigLoader.Load();
 
+            cartelStolenItems = ConfigLoader.LoadStolenItems();
+
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
 
@@ -374,8 +530,13 @@ namespace CartelEnforcer
             if (currentConfig.miniQuestsEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateMiniQuest()));
 
-            if (currentConfig.activityFrequency != 0.0f)
-                coros.Add(MelonCoroutines.Start(TickOverrideHourPass()));
+            if (currentConfig.interceptDeals)
+            {
+                coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
+                coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
+            }
+
+
 
             if (currentConfig.debugMode)
                 MelonCoroutines.Start(MakeUI());
@@ -405,11 +566,14 @@ namespace CartelEnforcer
                 yield return MelonCoroutines.Start(SpawnAmbushAreaVisual());
 
             coros.Add(MelonCoroutines.Start(TickOverrideHourPass()));
+            Log("Adding HourPass Function to callbacks");
+            NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassReduceCartelRegActHours;
         }
 
         public static IEnumerator InitializeAndEvaluateMiniQuest()
         {
             yield return InitMiniQuest();
+            Log("Adding DayPass Function for Mini Quest");
             NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassNewDiag;
             coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
             yield return null;
@@ -456,7 +620,45 @@ namespace CartelEnforcer
                     MelonCoroutines.Start(OnInputGiveMiniQuest());
                 }
             }
-            
+
+            // Left CTRL + L to Log Big Blop of info
+            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.L))
+            {
+                if (!debounce)
+                {
+                    debounce = true;
+                    MelonCoroutines.Start(OnInputInternalLog());
+                }
+            }
+
+            // Left CTRL + I (INVENTORY) to Log Big Blop of info
+            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.I))
+            {
+                debounce = true;
+                for (int i = 0; i < Player.Local.Inventory.Count(); i++)
+                {
+                    if (Player.Local.Inventory[i].ItemInstance != null)
+                    {
+                        Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
+                        Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
+                        Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
+
+                        if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
+                        {
+                            if (inst != null && inst.ID != null)
+                                Log($"AppliedPackaging ID: {inst.AppliedPackaging.ID}");
+                        }
+                    }
+                }
+                debounce = false;
+            }
+
+            // Left CTRL + T Intercept random deal
+            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.T))
+            {
+                debounce = true;
+                MelonCoroutines.Start(OnInputInterceptContract());
+            }
 
         }
         #endregion
@@ -473,17 +675,37 @@ namespace CartelEnforcer
             }
             coros.Clear();
             driveByActive = false;
+            interceptingDeal = false;
             driveByLocations.Clear();
+            regActivityHours.Clear();
             actFreqMapping.Clear();
             targetNPCs.Clear();
+        }
+
+        [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
+        public static class SaveManager_Save_String_Patch
+        {
+            public static bool Prefix(SaveManager __instance, string saveFolderPath)
+            {
+                ConfigLoader.Save(cartelStolenItems);
+                return true;
+            }
+        }
+        [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { })]
+        public static class SaveManager_Save_Patch
+        {
+            public static bool Prefix(SaveManager __instance)
+            {
+                return true;
+            }
         }
 
         [HarmonyPatch(typeof(LoadManager), "ExitToMenu")]
         public static class LoadManager_ExitToMenu_Patch
         {
-            public static bool Prefix(SaveInfo autoLoadSave = null, ScheduleOne.UI.MainMenu.MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
+            public static bool Prefix(LoadManager __instance, SaveInfo autoLoadSave = null, ScheduleOne.UI.MainMenu.MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
             {
-                //MelonLogger.Msg("Exit Menu");
+                ConfigLoader.Save(cartelStolenItems);
                 ExitPreTask();
                 return true;
             }
@@ -494,7 +716,6 @@ namespace CartelEnforcer
         {
             public static bool Prefix(DeathScreen __instance)
             {
-                //MelonLogger.Msg("LoadLastSave");
                 ExitPreTask();
                 return true;
             }
@@ -505,10 +726,11 @@ namespace CartelEnforcer
         public static IEnumerator ApplyGameDefaultAmbush()
         {
             yield return new WaitForSeconds(5f);
+            if (!registered) yield break;
+
             ambushConfig = ConfigLoader.LoadAmbushConfig();
             gameDefaultAmbush = ConfigLoader.LoadDefaultAmbushConfig();
             Log("Loaded Ambush Config Data");
-            yield return new WaitForSeconds(1f);
 
             CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
             Log("Applying Game Defaults Cartel Ambushes");
@@ -519,7 +741,7 @@ namespace CartelEnforcer
                 {
                     List<Vector3> defaultData = loc.AmbushPoints.Select(tr => tr.position).ToList();
                     NewAmbushConfig loadedConfig = gameDefaultAmbush.addedAmbushes.ElementAt(i);
-                    Log($"Checking Default Ambush {i}");
+                    Log($"  Checking Default Ambush {i}");
                     i++;
                     if (loadedConfig.spawnPoints.Count != defaultData.Count)
                     {
@@ -557,6 +779,8 @@ namespace CartelEnforcer
         public static IEnumerator AddUserModdedAmbush()
         {
             yield return new WaitForSeconds(2f);
+            if (!registered) yield break;
+
             Log("Adding User Modded Ambushes to existing ones");
             CartelRegionActivities[] regAct = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
             int i = 1;
@@ -566,7 +790,7 @@ namespace CartelEnforcer
                 {
                     CartelRegionActivities regActivity = regAct.FirstOrDefault(act => (int)act.Region == config.mapRegion);
 
-                    Log($"Generating Ambush object {i} in region: {regActivity.Region}");
+                    Log($"  Generating Ambush object {i} in region: {regActivity.Region}");
                     Transform nextParent = regActivity.transform.Find("Ambush locations");
                     GameObject newAmbushObj = new($"AmbushLocation ({nextParent.childCount})");
                     CartelAmbushLocation baseComp = newAmbushObj.AddComponent<CartelAmbushLocation>();
@@ -615,7 +839,7 @@ namespace CartelEnforcer
 
         public class HrPassParameterMap
         {
-            public int itemIndex { get; set; }
+            public string itemDesc { get; set; }
             public Func<int> Getter { get; set; }
             public Action<int> Setter { get; set; }
             public Action HourPassAction { get; set; }
@@ -623,6 +847,43 @@ namespace CartelEnforcer
             public int currentModHours { get; set; }
             public Func<bool> CanPassHour { get; set; }
         }
+        // Because we want to be able to change the individual activity in region frequency we must cast types to check
+        // Otherwise same randomization as in the source code originally
+        // Just adds hours structure into the inner activity which can block...
+        // Not just the RegionalActivity, Ambush Globals also added
+        public class CartelRegActivityHours
+        {
+            public int region; // Identifier integer maps out to region, but -1 is global
+            public int cartelActivityClass = 0; // This will hold the DeadDropSteal (0) class, CartelCustomerDeal (1) or RobDealer (2)
+            public int hoursUntilEnable = 0; // ingame hours (60sec)
+
+        }
+
+        // Helper function for populating activityhours
+        public static int GetActivityHours(float configValue)
+        {
+            int hours = 0;
+            if (configValue > 0.0f) // 2 days at 0.0 -> every hour at 1.0
+            {
+                int startValue = 48;
+                int endValue = 1;
+
+                hours = Mathf.RoundToInt(Mathf.Lerp((float)startValue, (float)endValue, configValue));
+            }
+            else if (configValue < 0.0f) // 2 days at 0.0 -> every 4 days at -1.0
+            {
+                int startValue = 48;
+                int endValue = 96;
+                // we flip because its negative
+                float t = -configValue;
+                hours = Mathf.RoundToInt(Mathf.Lerp((float)startValue, (float)endValue, t));
+            }
+            else
+            {
+                hours = 48;
+            }
+            return hours;
+        } 
 
         public static IEnumerator PopulateParameterMap()
         {
@@ -632,10 +893,11 @@ namespace CartelEnforcer
 
             int indexCurrent = 0;
 
-            CartelActivities instanceActivities = NetworkSingleton<Cartel>.Instance.Activities;
+            CartelActivities instanceActivities = NetworkSingleton<Cartel>.Instance.Activities; // OF TYPE AMBUSH
+            // THIS.GLOBALACTIVITIES LIST IS ONLY AMBUSH??
             actFreqMapping.Add(new HrPassParameterMap
             {
-                itemIndex = indexCurrent,
+                itemDesc = "Global Activities",
                 Getter = () => instanceActivities.HoursUntilNextGlobalActivity,
                 Setter = (value) => instanceActivities.HoursUntilNextGlobalActivity = value,
                 HourPassAction = () => instanceActivities.HourPass(),
@@ -644,13 +906,21 @@ namespace CartelEnforcer
                 CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
             });
             indexCurrent++;
+            // Add above to the custom activity hours
+            CartelRegActivityHours activityGlobalHrs = new();
+            activityGlobalHrs.region = -1; // Global Activity Ambush has region index -1
+            activityGlobalHrs.hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
+            activityGlobalHrs.cartelActivityClass = -1; // -1 reserved for the global ambushes
+            regActivityHours.Add(activityGlobalHrs); // Always first element
 
-            CartelRegionActivities[] regInstanceActivies = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
+
+            CartelRegionActivities[] regInstanceActivies = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
+            // ACT.ACTIVITIESLIST INVOKED BY HOUR PASS IS NOW CARTEL ACTIVITY : <T> DEAD DROP, CARTEL CUSTOMER DEAL OR ROB DEALER
             foreach (CartelRegionActivities act in regInstanceActivies)
             {
                 actFreqMapping.Add(new HrPassParameterMap
                 {
-                    itemIndex = indexCurrent,
+                    itemDesc = $"Cartel Regional Activities ({act.Region.ToString()})",
                     Getter = () => act.HoursUntilNextActivity,
                     Setter = (value) => act.HoursUntilNextActivity = value,
                     HourPassAction = () => act.HourPass(),
@@ -659,12 +929,43 @@ namespace CartelEnforcer
                     CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
                 });
                 indexCurrent++;
+                Log($"  {act.Region.ToString()} - Parsing Inner Activities");
+                foreach(CartelActivity inRegAct in act.Activities)
+                {
+                    CartelRegActivityHours activityHrs = new();
+                    activityHrs.region = (int)act.Region;
+
+                    int hours = 0;
+                    // Now determine class
+                    if (inRegAct is StealDeadDrop)
+                    {
+                        activityHrs.cartelActivityClass = 0;
+                        hours = GetActivityHours(currentConfig.deadDropStealFrequency);
+                    }
+                    else if (inRegAct is CartelCustomerDeal)
+                    {
+                        activityHrs.cartelActivityClass = 1;
+                        hours = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
+
+                    }
+                    else // else its RobDealer class
+                    {
+                        activityHrs.cartelActivityClass = 2;
+                        hours = GetActivityHours(currentConfig.cartelRobberyFrequency);
+                    }
+
+                    activityHrs.hoursUntilEnable = hours;
+
+                    regActivityHours.Add(activityHrs);
+                    Log($"    {act.Region.ToString()} - {activityHrs.cartelActivityClass} class Added to regActivityHours");
+                }
             }
 
+            // NORMAL DEALS WHEN TRUCED
             CartelDealManager instanceDealMgr = NetworkSingleton<Cartel>.Instance.DealManager;
             actFreqMapping.Add(new HrPassParameterMap
             {
-                itemIndex = indexCurrent,
+                itemDesc = "Cartel Deal Manager (Truced only)",
                 Getter = () => instanceDealMgr.HoursUntilNextDealRequest,
                 Setter = (value) => instanceDealMgr.HoursUntilNextDealRequest = value,
                 HourPassAction = () => instanceDealMgr.HourPass(),
@@ -674,9 +975,11 @@ namespace CartelEnforcer
             });
             indexCurrent++;
 
+
+            // MY DRIVE BY
             actFreqMapping.Add(new HrPassParameterMap
             {
-                itemIndex = indexCurrent,
+                itemDesc = "Drive-By Events",
                 Getter = () => hoursUntilDriveBy,
                 Setter = (value) => hoursUntilDriveBy = value,
                 HourPassAction = () => hoursUntilDriveBy = Mathf.Clamp(hoursUntilDriveBy - 1, 0, 48),
@@ -684,9 +987,232 @@ namespace CartelEnforcer
                 currentModHours = hoursUntilDriveBy,
                 CanPassHour = () => NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile
             });
-
+            
             Log("Finished populating Activity Frequency Parameters");
+            Log($"{regActivityHours.Count} items in RegActivityHours");
             yield return null;
+        }
+
+        
+        // Tie the new class into basic hour pass
+        public static void OnHourPassReduceCartelRegActHours()
+        {
+            if (regActivityHours.Count > 0)
+            {
+                foreach (CartelRegActivityHours regActHrs in regActivityHours)
+                {
+                    int resultHrs = Mathf.Clamp(regActHrs.hoursUntilEnable - 1, 0, 96);
+                    regActHrs.hoursUntilEnable = resultHrs;
+                }
+            }
+            else
+            {
+                //Log("Region Activity Hours are Not Mapped in HourPass");
+            }
+        }
+
+        // Basically same as in original source code but patched to obey the global activity frequency cap of mod
+        [HarmonyPatch(typeof(CartelActivities), "TryStartActivity")]
+        public static class CartelActivities_TryStartActivityPatch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(CartelActivities __instance)
+            {
+                //Log("TryStartGlobalActivity");
+                __instance.HoursUntilNextGlobalActivity = CartelActivities.GetNewCooldown();
+                if (!__instance.CanNewActivityBegin())
+                {
+                    //Log("NewActivity Cant Begin");
+                    return false;
+                }
+                List<CartelActivity> activitiesReadyToStart = __instance.GetActivitiesReadyToStart();
+                List<EMapRegion> validRegionsForActivity = __instance.GetValidRegionsForActivity();
+                if (activitiesReadyToStart.Count == 0 || validRegionsForActivity.Count == 0)
+                {
+                    //Log("No Activities or Regions ready to start");
+                    return false;
+                }
+                validRegionsForActivity.Sort((EMapRegion a, EMapRegion b) => NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(b).CompareTo(NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(a)));
+                EMapRegion region = EMapRegion.Northtown;
+                bool flag = false;
+                foreach (EMapRegion emapRegion in validRegionsForActivity)
+                {
+                    float influence = NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(emapRegion);
+                    // This part is modified to obey the influence mod
+                    float mult = 0f;
+                    float result = 0f;
+                    if (currentConfig.activityInfluenceMin == 0.0f)
+                    {
+                        //per original source code
+                        mult = 0.7f;
+                        result = influence * mult; // this is actually division, only 70% of original influence
+                                                   // And then if result is higher than 0..1 ranged rand
+                        // Per original source code Random value 0..1 is smaller than result
+                        if (UnityEngine.Random.Range(0f, 1f) < result)
+                        {
+                            region = emapRegion;
+                            flag = true;
+                            break;
+                        }
+                    }
+                    else if (currentConfig.activityInfluenceMin > 0.0f)
+                    {
+                        result = Mathf.Lerp(influence * 0.7f, 1f, currentConfig.activityInfluenceMin);
+                        if (UnityEngine.Random.Range(0f, 1f) > result)
+                        {
+                            region = emapRegion;
+                            flag = true;
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        // flip because negative
+                        float t = -currentConfig.activityInfluenceMin;
+                        // now if activityInfluenceMin was -1.0, it becomes t=1 so that multiplier is always 0f
+                        // meaning that the random range check will always return true
+                        mult = Mathf.Lerp(1f, 0f, currentConfig.activityInfluenceMin);
+                        result = influence * mult;
+                        if (UnityEngine.Random.Range(0f, 1f) > result)
+                        {
+                            region = emapRegion;
+                            flag = true;
+                            break;
+                        }
+                    }
+
+                }
+                if (!flag)
+                {
+                    //Log("Ambush Random Roll not triggered");
+                    return false;
+                }
+                //Log("Check the Ambush hours");
+                // Now we check that the activity activation obeys to the ambush in config
+                // Element at 0 is always the timer for Ambush global activity
+                if (regActivityHours[0].hoursUntilEnable > 0)
+                {
+                    //Log("Ambush not ready");
+                    return false;
+                }
+
+
+                int readyCount = activitiesReadyToStart.Count;
+                do
+                {
+                    readyCount = activitiesReadyToStart.Count;
+                    if (readyCount == 0) break;
+
+                    int activityIndex = UnityEngine.Random.Range(0, readyCount);
+                    if (activitiesReadyToStart[activityIndex].IsRegionValidForActivity(region))
+                    {
+                        //Log("Start Global Activity");
+                        __instance.StartGlobalActivity(null, region, activityIndex);
+                        regActivityHours[0].hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
+                        return false;
+                    }
+                    else
+                    {
+                        activitiesReadyToStart.Remove(activitiesReadyToStart[activityIndex]);
+                    }
+
+                } while (readyCount != 0);
+
+                //Log("TryStartGlobalActivity Finished");
+
+                return false; // Always block since patch handles the original source code
+            }
+        }
+
+        [HarmonyPatch(typeof(CartelRegionActivities), "TryStartActivity")] 
+        public static class CartelRegionActivities_TryStartActivityPatch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(CartelRegionActivities __instance)
+            {
+                __instance.HoursUntilNextActivity = CartelRegionActivities.GetNewCooldown(__instance.Region);
+                //Log("TryStartRegionalActivity");
+                List<CartelActivity> list = new List<CartelActivity>(__instance.Activities);
+                // Maps out indexes in the reg act hours
+                List<int> foundMatch = new();
+                for (int i = 0; i < regActivityHours.Count; i++)
+                {
+                    if (regActivityHours[i].region == (int)__instance.Region)
+                    {
+                        foundMatch.Add(i);
+                    }
+                }
+                Dictionary<CartelActivity, List<int>> enabledActivities = new(); // List Int first element = index at regActivityHours, second element is actInt
+                // parse activity int
+                foreach (CartelActivity inRegAct in list)
+                {
+                    int actInt = 0;
+                    if (inRegAct is StealDeadDrop)
+                        actInt = 0;
+                    else if (inRegAct is CartelCustomerDeal)
+                        actInt = 1;
+                    else // else its RobDealer class
+                        actInt = 2;
+
+                    for (int i = 0; i < foundMatch.Count; i++)
+                    {
+                        if (regActivityHours[foundMatch[i]].cartelActivityClass == actInt)
+                        {
+                            if (regActivityHours[foundMatch[i]].hoursUntilEnable <= 0)
+                            {
+                                //Log("Hours Until Enable Satisfied - IDX: " + foundMatch[i]);
+                                List<int> indexAndActInt = new() { foundMatch[i], actInt };
+                                enabledActivities.Add(inRegAct, indexAndActInt);
+                            }
+                        }
+                    }
+                }
+
+                if (enabledActivities.Count == 0)
+                {
+                    //Log("No Regional Activities can be enabled at this moment");
+                    return false;
+                }
+
+                int enabledCount = enabledActivities.Count;
+                //Log("Enabled Activities Count: " + enabledCount);
+                do
+                {
+                    enabledCount = enabledActivities.Count;
+                    if (enabledCount == 0) break;
+
+                    KeyValuePair<CartelActivity, List<int>> selected = enabledActivities.ElementAtOrDefault(UnityEngine.Random.Range(0, enabledCount));
+                    if (selected.Key.IsRegionValidForActivity(__instance.Region))
+                    {
+                        __instance.StartActivity(null, __instance.Activities.IndexOf(selected.Key));
+                        //Log("Starting Activity!");
+                        if (selected.Value[1] == 0)// StealDeadDrop
+                        {
+                            regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.deadDropStealFrequency);
+                        }
+                        else if (selected.Value[1] == 1)// CartelCustomerDeals
+                        {
+                            regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
+                        }
+                        else if (selected.Value[1] == 2)// RobDealer
+                        {
+
+                            regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelRobberyFrequency);
+                        }
+
+                        // Finally break
+                        break;
+                    }
+                    else
+                    {
+                        enabledActivities.Remove(selected.Key);
+                    }
+                } while (enabledCount != 0);
+
+                //Log("Finished TryStartRegionalActivity");
+
+                return false; // Just block running the original function with shuffle as described in comments
+            }
         }
 
         public static IEnumerator TickOverrideHourPass()
@@ -706,12 +1232,13 @@ namespace CartelEnforcer
 
             while (registered)
             {
-                yield return new WaitForSeconds(tickRate);
                 if (!registered) yield break;
                 if (actFreqMapping.Count == 0) continue;
                 foreach (HrPassParameterMap item in actFreqMapping)
                 {
-                    yield return new WaitForSeconds(0.2f);
+                    yield return new WaitForSeconds(tickRate / actFreqMapping.Count); // So we arrive at the end of list around the full time length of tick rate, less cluttering big chunk changes more like overtime one by one
+                    yield return new WaitForSeconds(0.05f); //min rate
+
                     if (!registered) yield break;
                     MelonCoroutines.Start(HelperSet(item));
                 }
@@ -722,6 +1249,8 @@ namespace CartelEnforcer
         public static IEnumerator HelperSet(HrPassParameterMap hpmap)
         {
             yield return new WaitForSeconds(0.1f);
+            if (!registered) yield break;
+
             // based on source code these guards needed
             if (!hpmap.CanPassHour())
                 yield break;
@@ -772,7 +1301,6 @@ namespace CartelEnforcer
         {
             yield return new WaitForSeconds(2f);
             if (!registered) yield break;
-            Log($"Config Activity Influence: {currentConfig.activityInfluenceMin}");
             if (currentConfig.activityInfluenceMin != 0.0f)
             {
                 Log("Changing Activity Influence Requirements");
@@ -822,24 +1350,120 @@ namespace CartelEnforcer
                 return Vector3.Distance(dealer.transform.position, Player.Local.transform.position) < maxDistance;
             }
 
+            private static void Original(Dealer __instance)
+            {
+                // This is original source code, difference is that we allow for stealing items and persist them.
+                // Per original source code SummarizeLosses is defined inside the function.
+                static void SummarizeLosses(Dealer __instance, List<ItemInstance> items, float cash)
+                {
+                    // Added this piece of code to the original source, everything else inside Original function is original source code or equivalent
+                    if (items.Count > 0)
+                        coros.Add(MelonCoroutines.Start(CartelStealsItems(items, () => { Log($"Succesfully stolen {items.Count} items"); })));
+                    
+                    if (items.Count == 0 && cash <= 0f)
+                    {
+                        return;
+                    }
+                    List<string> list = new List<string>();
+                    for (int i = 0; i < items.Count; i++)
+                    {
+                        string text = items[i].Quantity.ToString() + "x ";
+                        if (items[i] is ProductItemInstance && (items[i] as ProductItemInstance).AppliedPackaging != null)
+                        {
+                            text = text + (items[i] as ProductItemInstance).AppliedPackaging.Name + " of ";
+                        }
+                        text += items[i].Definition.Name;
+                        if (items[i] is QualityItemInstance)
+                        {
+                            text = text + " (" + (items[i] as QualityItemInstance).Quality.ToString() + " quality)";
+                        }
+                        list.Add(text);
+                    }
+                    if (cash > 0f)
+                    {
+                        list.Add(MoneyManager.FormatAmount(cash, false, false) + " cash");
+                    }
+                    string text2 = "This is what they got:\n" + string.Join("\n", list);
+                    __instance.MSGConversation.SendMessage(new Message(text2, Message.ESenderType.Other, true, -1), false, true);
+                }
+
+                float num = 0f;
+                foreach (ItemSlot itemSlot in __instance.Inventory.ItemSlots)
+                {
+                    if (itemSlot.ItemInstance != null)
+                    {
+                        num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtilityForNPCs);
+                    }
+                }
+                float num2 = UnityEngine.Random.Range(0f, 1f);
+                num2 = Mathf.Lerp(num2, 1f, num * 0.5f);
+                if (num2 > 0.67f)
+                {
+                    __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
+                    return;
+                }
+                if (num2 > 0.25f)
+                {
+                    __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_partially_defended"), Message.ESenderType.Other, false, -1), true, true);
+                    List<ItemInstance> list = new List<ItemInstance>();
+                    float num3 = 1f - Mathf.InverseLerp(0.25f, 0.67f, num2);
+                    for (int i = 0; i < __instance.Inventory.ItemSlots.Count; i++)
+                    {
+                        if (__instance.Inventory.ItemSlots[i].ItemInstance != null)
+                        {
+                            float num4 = num3 * 0.8f;
+                            if (UnityEngine.Random.Range(0f, 1f) < num4)
+                            {
+                                int num5 = Mathf.RoundToInt((float)__instance.Inventory.ItemSlots[i].ItemInstance.Quantity * num3);
+                                list.Add(__instance.Inventory.ItemSlots[i].ItemInstance.GetCopy(num5));
+                                __instance.Inventory.ItemSlots[i].ChangeQuantity(-num5, false);
+                            }
+                        }
+                    }
+                    __instance.TryMoveOverflowItems();
+                    float num6 = __instance.Cash * num3;
+                    __instance.ChangeCash(-num6);
+                    SummarizeLosses(__instance, list, num6);
+                    return;
+                }
+
+                __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_loss"), Message.ESenderType.Other, false, -1), true, true);
+                List<ItemInstance> list2 = new List<ItemInstance>();
+                foreach (ItemSlot itemSlot2 in __instance.Inventory.ItemSlots)
+                {
+                    if (itemSlot2.ItemInstance != null)
+                    {
+                        list2.Add(itemSlot2.ItemInstance.GetCopy(itemSlot2.ItemInstance.Quantity));
+                    }
+                }
+                __instance.Inventory.Clear();
+                foreach (ItemSlot itemSlot3 in __instance.overflowSlots)
+                {
+                    if (itemSlot3.ItemInstance != null)
+                    {
+                        list2.Add(itemSlot3.ItemInstance.GetCopy(itemSlot3.ItemInstance.Quantity));
+                        itemSlot3.ClearStoredInstance(false);
+                    }
+                }
+                float cash = __instance.Cash;
+                __instance.ChangeCash(-cash);
+                SummarizeLosses(__instance, list2, cash);
+            }
+
             [HarmonyPrefix]
             public static bool Prefix(Dealer __instance)
             {
-                if (!currentConfig.realRobberyEnabled) return true;
-
-                if (!IsPlayerNearby(__instance))
+                Log("DealerPrefix-TryRob");
+                if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
                 {
-                    Log("Player not nearby, allowing original TryRobDealer logic to proceed.");
-                    return true;
+                    if (!__instance.isInBuilding)
+                        coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
                 }
-
-                Log("Player is nearby! Initiating combat robbery.");
-
-                __instance.MSGConversation.SendMessage(new Message(
-                    "HELP BOSS!! Benzies are trying to ROB ME!!",
-                    Message.ESenderType.Other, false, -1), true, true);
-
-                coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
+                else
+                {
+                    Log("Orig");
+                    Original(__instance);
+                }
 
                 return false;
             }
@@ -858,6 +1482,8 @@ namespace CartelEnforcer
                 }
 
                 Vector3 spawnPos = Vector3.zero;
+                int maxAttempts = 6;
+                int j = 0;
                 do
                 {
                     yield return new WaitForSeconds(0.3f);
@@ -870,7 +1496,10 @@ namespace CartelEnforcer
                     float randomRadius = UnityEngine.Random.Range(8f, 16f);
                     Vector3 randomPoint = dealer.transform.position + (randomDirection * randomRadius);
                     dealer.Movement.GetClosestReachablePoint(targetPosition: randomPoint, out spawnPos);
-                } while (spawnPos == Vector3.zero); // Because GetClosestReachablePoint can return V3.Zero as default (unreachable)
+                    j++;
+                } while (spawnPos == Vector3.zero && j <= maxAttempts); // Because GetClosestReachablePoint can return V3.Zero as default (unreachable)
+
+                if (spawnPos == Vector3.zero) yield break;
 
                 List<CartelGoon> spawnedGoons = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnMultipleGoons(spawnPos, 1, false);
                 if (spawnedGoons.Count == 0)
@@ -878,6 +1507,31 @@ namespace CartelEnforcer
                     Log("Failed to spawn goon. Robbery failed.");
                     yield break;
                 }
+
+                string text = "";
+                switch (UnityEngine.Random.Range(0, 5))
+                {
+                    case 0:
+                        text = "HELP BOSS!! Benzies are trying to ROB ME!!";
+                        break;
+                    case 1:
+                        text = "BOSS!! I'm getting robbed!";
+                        break;
+                    case 2:
+                        text = "I'm being jumped, come back me up!";
+                        break;
+                    case 3:
+                        text = "Benzies set me up!! Come help quick!";
+                        break;
+                    case 4:
+                        text = "Help, boss! I'm getting ambushed!";
+                        break;
+                    default:
+                        text = "HELP BOSS!! Benzies are trying to ROB ME!!";
+                        break;
+                }
+
+                dealer.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, false, -1), true, true);
 
                 CartelGoon goon = spawnedGoons[0];
                 goon.Movement.Warp(spawnPos);
@@ -887,6 +1541,7 @@ namespace CartelEnforcer
                 goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
 
                 dealer.Behaviour.CombatBehaviour.SetTarget(null, dealer.NetworkObject);
+                dealer.Behaviour.CombatBehaviour.Begin();
                 dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
                 goon.AttackEntity(dealer);
 
@@ -982,9 +1637,6 @@ namespace CartelEnforcer
                         }
                     }
                 }
-                // Does this need Inventory.OnContentsChange invoke for networking after the change??
-
-                // Now here we need to start new coro for escaping goon running to nearest Cartel Dealer
                 coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region)));
             }
             else if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
@@ -992,6 +1644,11 @@ namespace CartelEnforcer
                 // Goon is dead or knocked out,defended robbery
                 Log("Goon was defeated! Robbery attempt defended.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
+
+                // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
+                if (dealer.Behaviour.activeBehaviour != null && dealer.Behaviour.activeBehaviour is CombatBehaviour)
+                    dealer.Behaviour.CombatBehaviour.End();
+
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
                 if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
                 {
@@ -1001,11 +1658,15 @@ namespace CartelEnforcer
             else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 90f)
             {
                 // Player is out of range
-
                 // For now just make a hacky way to prevent robbery
                 // if outside range, then full defend
                 Log("Player outside of range. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
+
+                // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
+                if (dealer.Behaviour.activeBehaviour != null && dealer.Behaviour.activeBehaviour is CombatBehaviour)
+                    dealer.Behaviour.CombatBehaviour.End();
+
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
                 if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
                 {
@@ -1016,13 +1677,24 @@ namespace CartelEnforcer
             {
                 Log("State Timed Out. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
+
+                // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
+                if (dealer.Behaviour.activeBehaviour != null && dealer.Behaviour.activeBehaviour is CombatBehaviour)
+                    dealer.Behaviour.CombatBehaviour.End();
+
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
         }
         public static IEnumerator DespawnSoon(CartelGoon goon)
         {
-            yield return new WaitForSeconds(30f);
+            yield return new WaitForSeconds(60f);
             if (!registered) yield break;
+
+            if (!goon.Behaviour.CombatBehaviour.enabled)
+                goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+            if (goon.IgnoreImpacts)
+                goon.IgnoreImpacts = false;
 
             if (goon.IsGoonSpawned)
                 goon.Despawn();
@@ -1033,11 +1705,15 @@ namespace CartelEnforcer
         {
             yield return new WaitForSeconds(0.5f);
             if (!registered) yield break;
-
+            Log("Start Escape");
             // After succesful robbery, navigate goon towards nearest CartelDealer apartment door
             CartelDealer[] cartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
             float distance = 150f;
+            NPCEnterableBuilding building = null;
+            ScheduleOne.Doors.StaticDoor door = null;
             Vector3 destination = Vector3.zero;
+            NPCEvent_CartelGoonExit stayInside = null;
+            
             foreach (CartelDealer d in cartelDealers)
             {
                 yield return new WaitForSeconds(0.1f);
@@ -1045,84 +1721,143 @@ namespace CartelEnforcer
 
                 if (d.isInBuilding && d.CurrentBuilding != null)
                 {
-                    NPCEnterableBuilding building = d.CurrentBuilding;
-                    ScheduleOne.Doors.StaticDoor door = building.GetClosestDoor(goon.CenterPointTransform.position, false);
-                    float distToDoor = Vector3.Distance(door.transform.position, d.CenterPointTransform.position);
+                    building = d.CurrentBuilding;
+                    door = building.GetClosestDoor(goon.CenterPointTransform.position, false);
+                    float distToDoor = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
                     if (distToDoor < distance)
                     {
-                        destination = door.transform.position;
+                        destination = door.AccessPoint.position;
                         distance = distToDoor;
                     }
                 }
             }
 
+            if (goon.Behaviour.ScheduleManager.ActionList != null && goon.Behaviour.ScheduleManager.ActionList[0] != null && goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_CartelGoonExit ev)
+            {
+                stayInside = ev;
+
+                stayInside.End();
+                stayInside.gameObject.SetActive(false);
+                stayInside.Door = door;
+                stayInside.Building = building;
+                stayInside = ev;
+            }
+
             Log($"Escaping to: {destination}");
             Log($"Distance: {distance}");
+            goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+            goon.IgnoreImpacts = true;
+            goon.Behaviour.GetBehaviour("Follow Schedule").Enable();
 
             goon.Movement.GetClosestReachablePoint(destination, out Vector3 closest);
             coros.Add(MelonCoroutines.Start(ApplyAdrenalineRush(goon)));
 
             if (destination == Vector3.zero || !goon.Movement.CanGetTo(closest)) // If the destination look up fails or cant traverse to
             {
-                Log("No Destination or can not traverse to it");
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
                 goon.Behaviour.FleeBehaviour.SetEntityToFlee(Player.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
                 goon.Behaviour.FleeBehaviour.Begin_Networked(null);
-                yield break;
-            }
-            
-            goon.Movement.SetDestination(closest);
-            Vector3 appliedDest = goon.Movement.CurrentDestination;
-
-            // While not dead or escape has elapsed under 60 seconds
-            int elapsedNav = 0;
-            while (elapsedNav < 60 &&
-                goon.IsConscious &&
-                !goon.Health.IsDead &&
-                !goon.Health.IsKnockedOut &&
-                !goon.isInBuilding)
-            {
-                yield return new WaitForSeconds(0.4f);
-                if (!registered) yield break;
-
-                elapsedNav++;
-                
-                if (goon.Movement.CurrentDestination != appliedDest)
-                    goon.Movement.SetDestination(appliedDest);
-
-                if (goon.Behaviour.activeBehaviour.ToString().Contains("Follow Schedule"))
-                    continue;
-
-                if (goon.Behaviour.activeBehaviour != null && goon.Behaviour.activeBehaviour is CombatBehaviour)
-                {
-                    goon.Behaviour.activeBehaviour.SendEnd();
-                    yield return new WaitForSeconds(0.2f);
-                    if (!registered) yield break;
-
-                    goon.Movement.SetDestination(closest);
-                }
-            }
-
-            if (goon.isInBuilding)
-            {
-                // The goon successfully escaped.
-                Log("Goon Escaped to Cartel Dealer!");
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.050f);
-                goon.Despawn();
-            }
-            else if (elapsedNav >= 60)
-            {
-                // The escape attempt timed out.
-                Log("Despawned escaping goon due to timeout");
-                goon.Despawn();
             }
             else
             {
-                // The goon was defeated (dead or knocked out).
-                Log("Goon Escape Dead or Knocked out!");
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
+                goon.Movement.SetDestination(closest);
             }
 
+            // While not dead or escape has elapsed under 60 seconds
+            int elapsedNav = 0;
+            float remainingDist = 100f;
+            while (elapsedNav < 60 &&
+                goon.IsConscious &&
+                goon.IsGoonSpawned &&
+                !goon.Health.IsDead &&
+                !goon.Health.IsKnockedOut &&
+                !goon.isInBuilding &&
+                Vector3.Distance(closest, goon.CenterPointTransform.position) > 3f)
+            {
+                yield return new WaitForSeconds(0.2f);
+                if (!registered) yield break;
+                float currDist = Vector3.Distance(closest, goon.CenterPointTransform.position);
+                if (currDist < remainingDist)
+                    remainingDist = currDist;
+                elapsedNav++;
+            }
+
+            if (!goon.Health.IsDead && !goon.Health.IsKnockedOut && remainingDist < 3f)
+            {
+                // The goon successfully escaped.
+                Log("Goon Escaped to Cartel Dealer!");
+                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
+                {
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.050f);
+                }
+                List<ItemInstance> list = new List<ItemInstance>();
+                for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
+                {
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance) continue;
+
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                    {
+                        int qty = Mathf.Min(goon.Inventory.ItemSlots[i].ItemInstance.Quantity, 20);
+                        list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
+                    }
+                }
+                if (list.Count > 0)
+                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
+
+                if (goon.IsGoonSpawned)
+                    goon.Despawn();
+
+                stayInside.gameObject.SetActive(true);
+                stayInside.Resume();
+
+                if (!goon.Behaviour.CombatBehaviour.Enabled)
+                    goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+                if (goon.IgnoreImpacts)
+                    goon.IgnoreImpacts = false;
+
+            }
+            else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
+            {
+                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
+                {
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.025f);
+                }
+                // The goon was defeated (dead or knocked out).
+                stayInside.gameObject.SetActive(true);
+                stayInside.Resume();
+                coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
+            }
+            else if (elapsedNav >= 60 && goon.IsGoonSpawned)
+            {
+                // The escape attempt timed out.
+                Log("Despawned escaping goon due to timeout");
+
+                List<ItemInstance> list = new List<ItemInstance>();
+                for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
+                {
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance) continue;
+
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                    {
+                        int qty = Mathf.Min(goon.Inventory.ItemSlots[i].ItemInstance.Quantity, 20);
+                        list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
+                    }
+                }
+                if (list.Count > 0)
+                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
+
+                stayInside.gameObject.SetActive(true);
+                stayInside.Resume();
+
+                if (!goon.Behaviour.CombatBehaviour.Enabled)
+                    goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+                if (goon.IgnoreImpacts)
+                    goon.IgnoreImpacts = false;
+
+                if (goon.IsGoonSpawned)
+                    goon.Despawn();
+            }
             yield return null;
         }
 
@@ -1131,29 +1866,24 @@ namespace CartelEnforcer
         {
             float origWalk = goon.Movement.WalkSpeed;
             float origRun = goon.Movement.RunSpeed;
-            goon.Movement.WalkSpeed = goon.Movement.WalkSpeed * 2.2f;
-            goon.Movement.RunSpeed = goon.Movement.RunSpeed * 1.6f;
-            goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, 100f, 0.4f));
+            goon.Movement.WalkSpeed = goon.Movement.WalkSpeed * 3.3f;
+            goon.Movement.RunSpeed = goon.Movement.RunSpeed * 2.5f;
+            goon.Movement.MoveSpeedMultiplier = 1.6f;
+            goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, 100f, 0.2f));
 
-            Log($"Adrenaline applied:\n    Speed:{(goon.Movement.WalkSpeed)}\n    Health:{goon.Health.Health}");
-
-            yield return new WaitForSeconds(5f);
-            if (!registered) yield break;
-
-            goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origRun, 0.2f);
-            goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origRun, 0.2f);
-
-            yield return new WaitForSeconds(5f);
-            if (!registered) yield break;
-
-            goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origRun, 0.2f);
-            goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origRun, 0.2f);
-
-            yield return new WaitForSeconds(5f);
-            if (!registered) yield break;
+            for (int i = 0; i < 15; i++)
+            {
+                yield return new WaitForSeconds(1f);
+                if (!registered) yield break;
+                goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origWalk, 0.035f);
+                goon.Movement.RunSpeed = Mathf.Lerp(goon.Movement.RunSpeed, origRun, 0.035f);
+                goon.Movement.MoveSpeedMultiplier = Mathf.Lerp(goon.Movement.MoveSpeedMultiplier, 1f, 0.06f);
+            }
 
             goon.Movement.WalkSpeed = origWalk;
             goon.Movement.RunSpeed = origRun;
+            goon.Movement.MoveSpeedMultiplier = 1f;
+
         }
         #endregion
 
@@ -1342,6 +2072,8 @@ namespace CartelEnforcer
                 {
                     thomasInstance.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
                     yield return new WaitForSeconds(3f);
+                    if (!registered) yield break;
+
                     if (thomasInstance.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
                     {
                         wep.MaxUseRange = 45f;
@@ -1396,7 +2128,8 @@ namespace CartelEnforcer
 
                 if (elapsedSec >= 60f)
                 {
-                    hoursUntilDriveBy = hoursUntilDriveBy - 1;
+                    if (hoursUntilDriveBy != 0)
+                        hoursUntilDriveBy = hoursUntilDriveBy - 1;
                     elapsedSec = elapsedSec - 60f;
                 }
 
@@ -1580,6 +2313,7 @@ namespace CartelEnforcer
 
         public static void OnDayPassNewDiag()
         {
+            Log("Resetting Mini Quest Dialogue Flags");
             foreach (NPC npc in targetNPCs.Keys.ToList())
             {
                 targetNPCs[npc].HasAskedQuestToday = false;
@@ -1610,6 +2344,9 @@ namespace CartelEnforcer
             DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
             string text = "";
+            float paid = Mathf.Lerp(500f, 100f, npc.RelationData.NormalizedRelationDelta);
+            paid = Mathf.Round(paid / 20f) * 20f;
+
             switch (UnityEngine.Random.Range(0, 3))
             {
                 case 0:
@@ -1624,7 +2361,7 @@ namespace CartelEnforcer
                     text = "What's the word around town? I need info on the Benzies.";
                     break;
             }
-            choice.ChoiceText = $"{text} <color=#FF3008>(Bribe -$100)</color>";
+            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-${paid}</color>)";
             choice.Enabled = true;
             choice.isValidCheck = (out string invalidReason) =>
             {
@@ -1641,72 +2378,61 @@ namespace CartelEnforcer
                 return unlocked;
             };
 
-            choice.onChoosen.AddListener(() => { OnMiniQuestChosen(choice, npc, controller); });
+            choice.onChoosen.AddListener(() => { OnMiniQuestChosen(choice, npc, controller, paid); });
             int index = controller.AddDialogueChoice(choice);
             Log("Created Mini Quest Dialogue for: " + npc.FirstName);
             return;
         }
         
-        public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller)
+        public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller, float paid)
         {
             Log("Option Chosen");
-            if (UnityEngine.Random.Range(0f, 1f) > 0.30f || NetworkSingleton<MoneyManager>.Instance.cashBalance < 101f)
+            float chance = Mathf.Lerp(0.30f, 0.60f, npc.RelationData.NormalizedRelationDelta); // At max rela only 40% chance to refuse
+            if (UnityEngine.Random.Range(0f, 1f) < chance && NetworkSingleton<MoneyManager>.Instance.cashBalance >= 100f)
             {
-                Log("RefuseQuestGive");
-                npc.PlayVO(EVOLineType.Annoyed, false);
-                npc.Avatar.EmotionManager.AddEmotionOverride("Annoyed", "product_rejected", 10f, 1);
-                Log("SubmitContinue");
-                controller.handler.ContinueSubmitted();
-                Log("ShowText");
-                switch (UnityEngine.Random.Range(0, 3))
-                {
-                    case 0:
-                        controller.handler.WorldspaceRend.ShowText($"I've heard nothing...", 15f);
-                        break;
-
-                    case 1:
-                        controller.handler.WorldspaceRend.ShowText($"No! Leave me alone!", 15f);
-                        break;
-
-                    case 2:
-                        controller.handler.WorldspaceRend.ShowText($"I'm afraid to talk about it...", 15f);
-                        break;
-                }
-
-            }
-            else // Start mini quest
-            {
+                // Start mini quest
                 Log("Start Quest");
                 List<DeadDrop> drops = (from drop in DeadDrop.DeadDrops
                                         where drop.Storage.ItemCount == 0
                                         select drop).ToList<DeadDrop>();
 
                 DeadDrop random = drops[UnityEngine.Random.Range(0, drops.Count)];
-                NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-100f, true, false);
 
                 string location = "";
-                if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
+                if (UnityEngine.Random.Range(0f, 1f) > chance) // At max rela only 40% chance to tell only region
                     location = random.Region.ToString() + " region";
                 else
                     location = random.DeadDropName;
 
+                List<ItemInstance> listItems = new();
                 ItemInstance item;
                 int qty;
+                // First take from loot pool select 1
                 if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
                 {
                     ItemDefinition def = Registry.GetItem(commonDrops[UnityEngine.Random.Range(0, commonDrops.Count)]);
                     qty = UnityEngine.Random.Range(3, 11);
                     item = def.GetDefaultInstance(qty);
+                    listItems.Add(item);
                 }
                 else
                 {
                     ItemDefinition def = Registry.GetItem(rareDrops[UnityEngine.Random.Range(0, rareDrops.Count)]);
                     qty = 1;
                     item = def.GetDefaultInstance(qty);
+                    listItems.Add(item);
+                }
+                // Then take from stolen items
+                if (cartelStolenItems.Count > 0) 
+                {
+                    List<ItemInstance> fromPool = GetFromPool(2);
+                    if (fromPool.Count > 0)
+                        listItems.AddRange(fromPool);
                 }
 
-                coros.Add(MelonCoroutines.Start(CreateDropContent(random, item, npc)));
+                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc)));
                 controller.handler.ContinueSubmitted();
+                NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
                 switch (UnityEngine.Random.Range(0, 5))
                 {
                     case 0:
@@ -1730,6 +2456,29 @@ namespace CartelEnforcer
                         break;
                 }
             }
+            else 
+            {
+                Log("RefuseQuestGive");
+                controller.handler.ContinueSubmitted();
+                switch (UnityEngine.Random.Range(0, 3))
+                {
+                    case 0:
+                        controller.handler.WorldspaceRend.ShowText($"I've heard nothing...", 15f);
+                        npc.PlayVO(EVOLineType.No, false);
+                        break;
+
+                    case 1:
+                        controller.handler.WorldspaceRend.ShowText($"No! Leave me alone!", 15f);
+                        npc.Avatar.EmotionManager.AddEmotionOverride("Annoyed", "product_rejected", 6f, 1);
+                        npc.PlayVO(EVOLineType.Annoyed, false);
+                        break;
+
+                    case 2:
+                        controller.handler.WorldspaceRend.ShowText($"I'm afraid to talk about it...", 15f);
+                        npc.PlayVO(EVOLineType.Concerned, false);
+                        break;
+                }
+            }
             targetNPCs[npc].HasActiveQuest = false;
             targetNPCs[npc].HasAskedQuestToday = true;
             coros.Add(MelonCoroutines.Start(DisposeChoice(controller, npc)));
@@ -1739,6 +2488,8 @@ namespace CartelEnforcer
         public static IEnumerator DisposeChoice(DialogueController controller, NPC npc)
         {
             yield return new WaitForSeconds(0.4f);
+            if (!registered) yield break;
+
             List<DialogueController.DialogueChoice> oldChoices = controller.Choices;
             oldChoices.RemoveAt(oldChoices.Count - 1);
             controller.Choices = oldChoices;
@@ -1746,13 +2497,17 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public static IEnumerator CreateDropContent(DeadDrop entity, ItemInstance filledItem, NPC npc)
+        public static IEnumerator CreateDropContent(DeadDrop entity, List<ItemInstance> filledItems, NPC npc)
         {
             yield return new WaitForSeconds(5f);
-            entity.Storage.InsertItem(filledItem, true);
+            if (!registered) yield break;
 
             Log($"MiniQuest Drop at: {entity.DeadDropName}");
-            Log($"MiniQuest Reward: {filledItem.Name} x {filledItem.Quantity}");
+            for (int i = 0; i < filledItems.Count; i++)
+            {
+                entity.Storage.InsertItem(filledItems[i], true);
+                Log($"MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
+            }
 
             bool opened = false;
             UnityEngine.Events.UnityAction onOpenedAction = null;
@@ -1769,10 +2524,9 @@ namespace CartelEnforcer
             };
             entity.Storage.onOpened.AddListener(onOpenedAction);
 
-            float duration = UnityEngine.Random.Range(30f, 120f);
+            float duration = UnityEngine.Random.Range(60f, 120f);
             yield return new WaitForSeconds(duration);
-            if (entity.Storage.ItemSlots[0].ItemInstance == filledItem)
-                entity.Storage.ItemSlots[0].ClearStoredInstance();
+            if (!registered) yield break;
 
             if (!opened)
             {
@@ -1780,6 +2534,7 @@ namespace CartelEnforcer
                 {
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, 0.050f);
                 }
+                entity.Storage.ClearContents();
             }
 
             entity.Storage.onOpened.RemoveListener(onOpenedAction);
@@ -1789,6 +2544,425 @@ namespace CartelEnforcer
 
         #endregion
 
+        #region Helper Functions for Persistent Stolen Items
+        // match with quality + id -> Else add it
+        public static IEnumerator CartelStealsItems(List<ItemInstance> items, Action cb = null)
+        {
+            lock (cartelItemLock)
+            {
+                for (int i = 0; i < items.Count; i++)
+                {
+                    int realQty = -1;
+
+                    if (items[i] is QualityItemInstance inst)
+                    {
+                        // Search for existing 
+                        int foundIdx = -1;
+                        if (cartelStolenItems.Count > 0)
+                        {
+                            for (int j = 0; j < cartelStolenItems.Count; j++)
+                            {
+                                if (inst.ID == items[i].ID && cartelStolenItems[j].Quality == inst.Quality)
+                                {
+                                    foundIdx = j;
+                                    break;
+                                }
+                            }
+                        }
+                        // Is packaging, jars + 5qty, brick +20
+                        if (items[i] is ProductItemInstance packin)
+                        {
+                            if (packin != null && packin.ID != null)
+                            {
+                                switch (packin.ID)
+                                {
+                                    case "jar":
+                                        realQty = 5;
+                                        break;
+                                    case "brick":
+                                        realQty = 20;
+                                        break;
+                                    default:
+                                        realQty = 1;
+                                        break;
+                                }
+                            }
+                        }
+
+                        if (foundIdx >= 0) // Exists in already stolen items
+                        {
+                            if (realQty != -1) {
+                                cartelStolenItems[foundIdx].Quantity += items[i].Quantity * realQty;
+                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                            }
+                            else {
+                                cartelStolenItems[foundIdx].Quantity += items[i].Quantity;
+                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                            }
+                        }
+                        else // not exist
+                        {
+                            if (realQty != -1)
+                            {
+                                cartelStolenItems.Add(inst);
+                                // At end of list change quantity to be same as qty*packaging
+                                cartelStolenItems[cartelStolenItems.Count].Quantity = items[i].Quantity*realQty;
+                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                            }
+                            else
+                            {
+                                cartelStolenItems.Add(inst); // Else Qty is already set nothing to do
+                                Log($"ADD: {inst.Quantity}");
+                            }
+                        }
+                    }
+                }
+            }
+            if (cb != null)
+                cb();
+            yield return null;
+        }
+
+        // From pool max 20 unpackaged items per slot, saves quality
+        public static List<ItemInstance> GetFromPool(int maxEmptySlotsToFill)
+        {
+            List<ItemInstance> fromPool = new();
+            lock (cartelItemLock)
+            {
+                int itemsToPick = Mathf.Min(maxEmptySlotsToFill, cartelStolenItems.Count);
+
+                for (int i = 0; i < itemsToPick; i++)
+                {
+                    if (cartelStolenItems.Count == 0) break;
+                    int randomIndex = UnityEngine.Random.Range(0, cartelStolenItems.Count);
+                    QualityItemInstance randomSelected = cartelStolenItems[randomIndex];
+                    int minQty = Mathf.Min(randomSelected.Quantity, 20);
+
+                    ItemDefinition def = Registry.GetItem(randomSelected.ID);
+                    ItemInstance item = def.GetDefaultInstance(minQty);
+                    if (item is QualityItemInstance inst)
+                        inst.Quality = cartelStolenItems[randomIndex].Quality;
+
+                    fromPool.Add(item);
+
+                    if (minQty >= randomSelected.Quantity)
+                        cartelStolenItems.RemoveAt(randomIndex);
+                    else
+                        cartelStolenItems[randomIndex].Quantity -= minQty; 
+                }
+            }
+            return fromPool;
+        }
+        #endregion
+
+        #region Intercept Deals 
+        public static IEnumerator EvaluateCartelIntercepts()
+        {
+            yield return new WaitForSeconds(5f);
+            Log("Starting Cartel Intercepts Evaluation");
+            float frequency = 180f;
+            if (currentConfig.activityFrequency >= 0.0f)
+                frequency = Mathf.Lerp(frequency, 60f, currentConfig.activityFrequency);
+            else
+                frequency = Mathf.Lerp(frequency, 480f, -currentConfig.activityFrequency);
+
+
+            while (registered)
+            {
+                yield return new WaitForSeconds(UnityEngine.Random.Range(frequency, frequency*2));
+                if (!registered) yield break;
+
+                // from 6pm to 4am only
+                if (!(TimeManager.Instance.CurrentTime >= 1800 || TimeManager.Instance.CurrentTime <= 400))
+                    continue;
+
+                // Only when hostile
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    continue;
+
+                if (!interceptingDeal)
+                {
+                    coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
+                }
+            }
+        }
+        public static IEnumerator StartInterceptDeal()
+        {
+            Log("Started Checking Intercept Deal Validity");
+            List<Guid> occupied = new();
+            CartelDealer[] allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
+            foreach (CartelDealer d in allCartelDealers)
+            {
+                foreach (Contract c in d.ActiveContracts)
+                {
+                    if (!occupied.Contains(c.GUID))
+                        occupied.Add(c.GUID);
+                }
+            }
+
+            List<Contract> validContracts = new();
+            for (int i = 0; i < NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount; i++)
+            {
+                Transform trContract = NetworkSingleton<QuestManager>.Instance.ContractContainer.GetChild(i);
+                if (trContract != null)
+                {
+                    Contract contract = trContract.GetComponent<Contract>();
+                    if (contract.Dealer != null) continue; // Not player
+                    if (occupied.Contains(contract.GUID)) continue; // Not cartel dealer
+                    if (contract.GetMinsUntilExpiry() > 300) continue; // Only take contracts with less than 5h left
+                    if (contract.GetMinsUntilExpiry() < 90) continue; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
+                    if (contractGuids.Contains(contract.GUID.ToString())) continue; // Only take contracts currently not intercepted
+                    validContracts.Add(contract);
+                }
+
+            }
+            if (validContracts.Count == 0)
+            {
+                Log("No Valid Contracts");
+                yield break; // No Valid Contracts this time
+            }
+            Contract randomContract = validContracts[UnityEngine.Random.Range(0, validContracts.Count)];
+            Customer customer = randomContract.Customer.GetComponent<Customer>();
+            CartelDealer selected = null;
+
+            EMapRegion region = EMapRegion.Northtown;
+            for (int i = 0; i < Singleton<Map>.Instance.Regions.Length; i++)
+            {
+                if (Singleton<Map>.Instance.Regions[i].RegionBounds.IsPointInsidePolygon(customer.NPC.CenterPointTransform.position))
+                {
+                    region = Singleton<Map>.Instance.Regions[i].Region;
+                }
+            }
+            selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(region).CartelDealer;
+
+            // Ensure Cartel Dealer is not dead or knocked out
+            if (selected.Health.IsDead || selected.Health.IsKnockedOut) yield break;
+            // Ensure NPC is not dead or knocked out
+            if (customer.NPC.Health.IsDead || customer.NPC.Health.IsKnockedOut) yield break;
+            // Ensure Player is not nearby
+            float distanceToPlayer = Vector3.Distance(customer.NPC.CenterPointTransform.position, Player.Local.CenterPointTransform.position);
+            if (distanceToPlayer < 40f) yield break;
+
+            string cGuid = randomContract.GUID.ToString();
+            contractGuids.Add(cGuid);
+
+            NPCEvent_StayInBuilding event1 = null;
+            NPCSignal_HandleDeal event2 = null;
+            if (selected.Behaviour.ScheduleManager.ActionList != null)
+            {
+                foreach (NPCAction action in selected.Behaviour.ScheduleManager.ActionList)
+                {
+                    if (action is NPCEvent_StayInBuilding ev1)
+                        event1 = ev1;
+
+                    if (action is NPCSignal_HandleDeal ev2)
+                        event2 = ev2;
+                }
+            }
+
+            string text = "";
+            switch (UnityEngine.Random.Range(0, 7))
+            {
+                case 0:
+                    text = "What's taking so long? I will just find another dealer...";
+                    break;
+                case 1:
+                    text = "Nevermind! I made a deal with someone else.";
+                    break;
+                case 2:
+                    text = "Are you coming or not? I might just buy from someone else.";
+                    break;
+                case 3:
+                    text = "Yo where are you?! I've been waiting at our spot. I'll message another dealer then...";
+                    break;
+                case 4:
+                    text = "This isn't working out. I'm taking my business elsewhere.";
+                    break;
+                case 5:
+                    text = "I'm not waiting around all day. Don't bother texting me back.";
+                    break;
+                case 6:
+                    text = "You snooze, you lose. Found another dealer to sell me my shit.";
+                    break;
+                case 7:
+                    text = "I'll hustle with someone else if you ghost me like this...";
+                    break;
+            }
+
+            Log("Starting Intercept Deal");
+            customer.NPC.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, true, -1), true, true);
+            interceptingDeal = true;
+
+            coros.Add(MelonCoroutines.Start(QuestUIEffect(randomContract)));
+            coros.Add(MelonCoroutines.Start(BeginIntercept(selected, randomContract, customer, region, event1, event2, cGuid)));
+            yield return null;
+        }
+
+        public static IEnumerator BeginIntercept(CartelDealer dealer, Contract contract, Customer customer, EMapRegion region, NPCEvent_StayInBuilding ev1, NPCSignal_HandleDeal ev2, string cGuid)
+        {
+            yield return new WaitForSeconds(UnityEngine.Random.Range(10f, 30f)); // Cartel dealer is kinda fast so have to wait a bit
+            if (!registered) yield break;
+
+            if (customer.CurrentContract == null) // If player managed to complete it within that timeframe
+            {
+                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
+                {
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
+                }
+                contractGuids.Remove(cGuid);
+                interceptingDeal = false;
+                yield break;
+            }
+
+            contract.BopHUDUI();
+            dealer.SetIsAcceptingDeals(true);
+            contract.CompletionXP = Mathf.RoundToInt((float)contract.CompletionXP * 0.5f);
+            contract.completedContractsIncremented = false;
+
+            for (int i = 0; i < dealer.Inventory.ItemSlots.Count; i++)
+            {
+                if (dealer.Inventory.ItemSlots[i].ItemInstance == null)
+                {
+                    List<ItemInstance> fromPool = GetFromPool(1);
+                    if (fromPool.Count > 0)
+                        dealer.Inventory.ItemSlots[i].ItemInstance = fromPool[0];
+                }
+            }
+
+            void OnQuestEndEvaluateResult(EQuestState state)
+            {
+                float cartelDealerDist = Vector3.Distance(dealer.CenterPointTransform.position, customer.NPC.CenterPointTransform.position);
+                float playerDist = Vector3.Distance(dealer.CenterPointTransform.position, Player.GetClosestPlayer(dealer.CenterPointTransform.position, out _).CenterPointTransform.position);
+                if (cartelDealerDist < playerDist && cartelDealerDist < 5f)
+                {
+                    Log("Cartel Succesfully Intercepted Deal");
+                    if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
+                    {
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.100f);
+                    }
+                    customer.NPC.RelationData.ChangeRelationship(-0.5f, true);
+                }
+                else if (playerDist < 5f)
+                {
+                    Log("Player Stopped Cartel Intercept");
+                    if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
+                    {
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
+                    }
+                }
+                interceptingDeal = false;
+                if (contractGuids.Contains(cGuid))
+                    contractGuids.Remove(cGuid);
+
+                ev2.End();
+                ev2.HasStarted = false;
+                ev1.enabled = true;
+                ev1.IsActive = true;
+                ev1.HasStarted = true;
+                ev1.Resume();
+            }
+
+            contract.onQuestEnd.AddListener(new UnityEngine.Events.UnityAction<EQuestState>(OnQuestEndEvaluateResult));
+
+            dealer.AddContract(contract);
+
+            if (ev1 != null)
+            {
+                ev1.StartTime = 0400;
+                ev1.EndTime = 1800;
+                ev1.End();
+                ev1.HasStarted = false;
+                ev1.enabled = false;
+            }
+            if (ev2 != null)
+            {
+                ev2.Started();
+                ev2.HasStarted = true;
+            }
+            dealer.CheckAttendStart();
+            // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
+            // The dealer will have the contract too and try to complete it, but this way player can do it too
+            if (customer.CurrentContract != null)
+                if (customer.CurrentContract.Dealer != null)
+                    customer.CurrentContract.Dealer = null;
+
+            yield return null;
+        }
+
+        public static IEnumerator FetchUIElementsInit()
+        {
+            yield return new WaitForSeconds(10f);
+            if (!registered) yield break;
+
+            foreach (Transform tr in PlayerSingleton<MessagesApp>.Instance.conversationEntryContainer)
+            {
+                if (tr.Find("Name").GetComponent<Text>().text != "Thomas Benzies")
+                    continue;
+                benziesLogo = tr.Find("IconMask").Find("Icon").GetComponent<Image>().sprite;
+            }
+            Log("Fetched Benzies Logo UI Element");
+            yield return null;
+        }
+
+        public static IEnumerator QuestUIEffect(Contract contract)
+        {
+            QuestHUDUI[] current = UnityEngine.Object.FindObjectsOfType<QuestHUDUI>();
+            QuestHUDUI found = null;
+            foreach (QuestHUDUI item in current)
+            {
+                yield return new WaitForSeconds(0.1f);
+                if (!registered) yield break;
+
+                if (item == null) continue;
+                if (item.Quest == contract)
+                {
+                    found = item;
+                }
+            }
+
+            Transform contractIcon = found.MainLabel.transform.Find("IconContainer").Find("ContractIcon(Clone)");
+            Image background = contractIcon.Find("Background").GetComponent<Image>();
+            questIconBack = background.color;
+
+            coros.Add(MelonCoroutines.Start(LerpQuestColor(background)));
+
+            Image fillImg = contractIcon.Find("Fill").GetComponent<Image>();
+            handshake = fillImg.sprite;
+
+            found.BopIcon();
+            fillImg.overrideSprite = benziesLogo;
+
+            coros.Add(MelonCoroutines.Start(ResetQuestUIEffect(fillImg, background)));
+
+            yield return null;
+        }
+
+        public static IEnumerator ResetQuestUIEffect(Image fillImg, Image background)
+        {
+            while (interceptingDeal && registered) { yield return new WaitForSeconds(10f); }
+            background.color = questIconBack;
+            fillImg.overrideSprite = handshake;
+            yield return null;
+        }
+        public static IEnumerator LerpQuestColor(Image background)
+        {
+            Color startColor = background.color;
+            Color endColor = Color.white;
+            float duration = 2.0f;
+            float timer = 0f;
+
+            while (timer < duration && registered)
+            {
+                float t = timer / duration;
+                background.color = Color.Lerp(startColor, endColor, t);
+                timer += Time.deltaTime;
+                yield return new WaitForSeconds(0.1f);
+                if (!registered) yield break;
+            }
+            yield return null;
+        }
+        #endregion
+        
         #region Debug Mode Content
         public static void Log(string msg)
         {
@@ -1831,12 +3005,11 @@ namespace CartelEnforcer
             foreach (Dealer d in allDealers)
             {
                 yield return new WaitForSeconds(0.1f);
-                if (d.GetType() == typeof(Dealer))
+                if (d is not CartelDealer)
                 {
                     regularDealers.Add(d);
                 }
             }
-
             Dealer nearest = null;
             float distanceToP = 100f;
             foreach (Dealer d in regularDealers)
@@ -1849,11 +3022,8 @@ namespace CartelEnforcer
                     nearest = d;
                 }
             }
-
             nearest.TryRobDealer();
-            yield return new WaitForSeconds(1f);
             debounce = false;
-
             yield return null;
         }
         public static IEnumerator OnInputGiveMiniQuest()
@@ -1873,6 +3043,72 @@ namespace CartelEnforcer
             yield return null;
         }
 
+        // Log misc variables otherwise hidden
+        public static IEnumerator OnInputInternalLog()
+        {
+            string Map(int classIndex)
+            {
+                switch (classIndex)
+                {
+                    case -1:
+                        return "Ambush";
+                    case 0:
+                        return "StealDeadDrop";
+                    case 1:
+                        return "CartelCustomerDeal";
+                    case 2:
+                        return "RobDealer";
+                    default:
+                        return "Unknown";
+                }
+            } 
+
+            Log("\nActivity Hours Table Per Activity Type\n---------------");
+            foreach(CartelRegActivityHours rghrs in regActivityHours)
+            {
+                Log($"\n  Class: {Map(rghrs.cartelActivityClass)}\n  HoursUntil Enable: {rghrs.hoursUntilEnable}\nRegion: {rghrs.region}\n******");
+            }
+            Log("---------------\n\n\n");
+            yield return new WaitForSeconds(1f);
+
+            Log("\nActivity Frequency Table\n---------------");
+            foreach (HrPassParameterMap map in actFreqMapping)
+            {
+                Log($"\n{map.itemDesc}\n  Ticks Passed: {map.modTicksPassed}\n  Mod HoursUntilNext: {map.currentModHours}\n  Instance HoursUntilNext: {map.Getter()}\n******");
+            }
+            Log("---------------\n\n\n");
+            yield return new WaitForSeconds(1f);
+
+            Log("\nCartel Stolen Items\n---------------");
+            foreach (QualityItemInstance itemInst in cartelStolenItems)
+            {
+                Log($"\n  Item: {itemInst.Name}\n  Quantity: {itemInst.Quantity}\n  Quality: {itemInst.Quality}\n******");
+            }
+            Log("---------------\n\n\n");
+
+            yield return new WaitForSeconds(1f);
+
+            Log("\nMini Quest NPC Status\n---------------");
+            foreach (NPC npc in targetNPCs.Keys.ToList())
+            {
+                Log($"  Name: {npc.name}");
+                Log($"    Has Active Quest: {targetNPCs[npc].HasActiveQuest}");
+                Log($"    Has Asked Today: {targetNPCs[npc].HasAskedQuestToday}");
+            }
+            Log("---------------\n\n\n");
+
+            yield return new WaitForSeconds(1f);
+            debounce = false;
+        }
+
+        // Start Cartel Intercept Contract
+        public static IEnumerator OnInputInterceptContract()
+        {
+            MelonCoroutines.Start(StartInterceptDeal());
+            yield return new WaitForSeconds(1f);
+            debounce = false;
+            yield return null;
+        }
         public static IEnumerator MakeUI()
         {
             _playerTransform = Player.Local.CenterPointTransform;

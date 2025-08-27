@@ -1,3 +1,43 @@
+# Version v1.3.0
+- Added 4 new configuration values to allow individual frequency change of Ambush, Dead Drop Steal, Cartel Customer Deal and Cartel Robbery events frequencies
+    - Default at 1.0 means that the event frequency is NOT capped at all and can happen every ingame hour (doesnt mean that it will happen every hour)
+    - at 0.0 the event can happen only once every 2 ingame days at fastest
+    - at -1.0 the event can happen only once every 4 ingame days at fastest
+    - Note: These values dont change how often something happens, these values decide when something CAN happen next time (as opposed to activityFrequency which directly changes frequency of when something happens)
+- Added new configuration value for Intercept Deals
+    - New type of event where Cartel will Actively attempt to intercept Player deals
+    - Based on activityFrequency deal CAN be intercepted at 1.0 every ingame hour and at -1.0 every 8 ingame hours and At 0.0 every 3 ingame hours.
+    - Deals can Only be intercepted from 6pm to 4am only and Cartel must be Hostile
+    - Only Deals with less than 5 hours left AND more than 1 hour and 30mins left can be intercepted by cartel
+    - If player is closer than 40 units distance to the Customer whose deal is about to be intercepted, the intercept is cancelled.
+    - More in Readme or Description
+- Added Persistence for Cartel Stolen Items in stolen.json file
+    - When Dealer gets robbed, their items are stored individually each save file.
+- Added more debug controls, CTRL + L to log internal mod data, CTRL + I to log inventory content, CTRL + T to Intercept random deal
+- Added new Harmony Patch to save the Stolen Items data whenever player saves the game
+- Added function to the Exit Menu Prefix to save Stolen Items data when exiting to menu
+- Completed the TryStartActivity and TryStartGlobalActivity Patches to match the funcitonality of original source code.
+    - They are now equivalent to Transpliers, overwriting the entire function so that it is possible to control ambush, dead drops, etc. individual event frequencies
+- Completely patched the TryRobDealer function to have original source code functionality alongside the existing features. This allows the code to store stolen items even if robbery was done via the "text message indication"
+- Added more text message templates to send to player when robbery is about to start
+- Added functionality for the Real Robbery to steal and store items
+- Lowered the Influence Decrease in Real Robbery when the Robber dies now influence decreases by 25, previously 80
+- Changed Robber Despawn timer to be 60 seconds up from 30
+- Adjusted Robber Adrenaline boost to have faster movement speed and adjust more smoothly
+- Changed Mini Quests to now ask for a dynamic payment price, based on the relations status with the NPC. If at best possible relations, the Mini Quest costs 100 cash. If at lowest possible relations it will cost 500 cash. Previously it was static 100 cash.
+- Changed Mini Quest Refusal rate to be much lower and based on the relations with the NPC. At best possible relations there is only 40% chance to refuse to give the quest. At worst possible relations there is 70% chance to refuse.
+- Changed Mini Quest to have the NPC tell player more often the exact location, based on the NPC Relation data, at best relation there is only 40% chance to tell the region and 60% chance to tell the exact location of the Cartel Dead Drop
+- Changed Mini Quest Lower timerange to be 60 instead of 30 seconds to allow player to reach across the map
+- Changed Mini Quest Rewards to Additionally give out some of the Cartel Stolen Items
+
+- Fixed a bug where Dealer combat behaviour would not stop after defeating the robber
+- Fixed a bug where the Robber would not travel to the correct building, but nearest door
+- Fixed a bug where the Robbery function would not correctly evaluate when the Robber has succesfully escaped to the safehouse
+- Fixed a bug where Robbery Goon Spawning would keep searching for a spawn position nearby indefinitely
+
+
+
+
 # Version v1.2.0
 - Added Configuration support for changing the Cartel Activity Frequency
     - Value *activityFrequency* in `config.json`
