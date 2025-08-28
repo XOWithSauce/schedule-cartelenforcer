@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Linq;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppFishNet;
@@ -33,8 +31,20 @@ using MelonLoader;
 using MelonLoader.Utils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Diagnostics.Contracts;
+using System.IO;
+using System.Linq;
+using System.Xml;
+using TMPro;
+using Unity.Entities;
+using Unity.VisualScripting;
+using UnityEditor.VersionControl;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Windows;
 
 [assembly: MelonInfo(typeof(CartelEnforcer_IL2Cpp.CartelEnforcer_IL2Cpp), CartelEnforcer_IL2Cpp.BuildInfo.Name, CartelEnforcer_IL2Cpp.BuildInfo.Version, CartelEnforcer_IL2Cpp.BuildInfo.Author, CartelEnforcer_IL2Cpp.BuildInfo.DownloadLink)]
 [assembly: MelonColor()]
@@ -62,7 +72,7 @@ namespace CartelEnforcer_IL2Cpp
         // -1.0= Activity is 10 times less frequent
         // 0.0 = Activity is at game default frequency 
         // 1.0 = Activity is 10 times more frequent
-        public float activityFrequency = 0.0f; 
+        public float activityFrequency = 0.0f;
 
         // From -1.0 to 0.0 to 1.0,
         // -1.0 = Activity influence requirement is 100% Less (Means cartel influence requirement is at 0 and activities happen always)
@@ -240,7 +250,7 @@ namespace CartelEnforcer_IL2Cpp
                         config.ambushPosition = loc.transform.position;
                         config.spawnPoints = loc.AmbushPoints.Select(tr => tr.position).ToList();
                         config.detectionRadius = loc.DetectionRadius;
-                        
+
                         bool isDuplicate = currentState.addedAmbushes.Any(existingConfig =>
                             existingConfig.mapRegion == config.mapRegion &&
                             existingConfig.ambushPosition == config.ambushPosition);
@@ -545,7 +555,7 @@ namespace CartelEnforcer_IL2Cpp
             coros.Add(MelonCoroutines.Start(EvaluateDriveBy()));
         }
 
-        public static IEnumerator InitializeAmbush() 
+        public static IEnumerator InitializeAmbush()
         {
             yield return MelonCoroutines.Start(ApplyGameDefaultAmbush());
             yield return MelonCoroutines.Start(AddUserModdedAmbush());
@@ -577,81 +587,84 @@ namespace CartelEnforcer_IL2Cpp
         {
             if (!registered || currentConfig == null)
                 return;
-
-            if (currentConfig.debugMode && _playerTransform != null && _positionText != null)
+            if (currentConfig.debugMode)
             {
-                Vector3 playerPos = _playerTransform.position;
-                string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
-                _positionText.text = formattedPosition;
-            }
-            // SEE Debug #region in code for InputFunctions
-            // Left CTRL + R to Start Rob Dealer Function to nearest dealer
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.R))
-            {
-                if (!debounce)
+                if (_playerTransform != null && _positionText != null)
                 {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputStartRob());
+                    Vector3 playerPos = _playerTransform.position;
+                    string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
+                    _positionText.text = formattedPosition;
                 }
-            }
 
-            // Left CTRL + G to Start Drive By Instant 
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.G))
-            {
-                if (!debounce)
+                if (Input.GetKey(KeyCode.LeftControl))
                 {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputStartDriveBy());
-                }
-            }
-
-            // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.H))
-            {
-                if (!debounce)
-                {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputGiveMiniQuest());
-                }
-            }
-            // Left CTRL + L to Log Big Blop of info
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.L))
-            {
-                if (!debounce)
-                {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputInternalLog());
-                }
-            }
-
-            // Left CTRL + I (INVENTORY) to Log Big Blop of info
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.I))
-            {
-                debounce = true;
-                for (int i = 0; i < Player.Local.Inventory.Count(); i++)
-                {
-                    if (Player.Local.Inventory[i].ItemInstance != null)
+                    // SEE Debug #region in code for InputFunctions
+                    // Left CTRL + R to Start Rob Dealer Function to nearest dealer
+                    if (Input.GetKey(KeyCode.R))
                     {
-                        Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
-                        Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
-                        Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
-
-                        if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
+                        if (!debounce)
                         {
-                            if (inst != null && inst.ID != null)
-                                Log($"AppliedPackaging ID: {inst.AppliedPackaging.ID}");
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputStartRob());
                         }
                     }
+                    // Left CTRL + G to Start Drive By Instant 
+                    else if (Input.GetKey(KeyCode.G))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputStartDriveBy());
+                        }
+                    }
+                    // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
+                    else if (Input.GetKey(KeyCode.H))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputGiveMiniQuest());
+                        }
+                    }
+                    // Left CTRL + L to Log Big Blop of info
+                    else if (Input.GetKey(KeyCode.L))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputInternalLog());
+                        }
+                    }
+                    // Left CTRL + I (INVENTORY) to Log Big Blop of info
+                    else if (Input.GetKey(KeyCode.I))
+                    {
+                        debounce = true;
+                        for (int i = 0; i < Player.Local.Inventory.Count(); i++)
+                        {
+                            if (Player.Local.Inventory[i].ItemInstance != null)
+                            {
+                                Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
+                                Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
+                                Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
+
+                                if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
+                                {
+                                    if (inst != null && inst.ID != null)
+                                        Log($"AppliedPackaging ID: {inst.AppliedPackaging.ID}");
+                                }
+                            }
+                        }
+                        debounce = false;
+                    }
+                    // Left CTRL + T Intercept random deal
+                    else if (Input.GetKey(KeyCode.T))
+                    {
+                        debounce = true;
+                        MelonCoroutines.Start(OnInputInterceptContract());
+                    }
                 }
-                debounce = false;
             }
 
-            // Left CTRL + T Intercept random deal
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.T))
-            {
-                debounce = true;
-                MelonCoroutines.Start(OnInputInterceptContract());
-            }
 
         }
         #endregion
@@ -1319,7 +1332,7 @@ namespace CartelEnforcer_IL2Cpp
                 CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
                 foreach (CartelRegionActivities act in regAct)
                 {
-                    foreach(CartelActivity activity in act.Activities)
+                    foreach (CartelActivity activity in act.Activities)
                     {
                         float result = 0f;
                         if (currentConfig.activityInfluenceMin > 0.0f && activity.InfluenceRequirement > 0.0f)
@@ -1329,7 +1342,7 @@ namespace CartelEnforcer_IL2Cpp
 
                         Log($"Changing Regional Activity Influence from {activity.InfluenceRequirement} to {result}");
                         activity.InfluenceRequirement = result;
-                    } 
+                    }
                 }
             }
             Log("Finished changing Activity Influence Requirements");
@@ -1550,7 +1563,7 @@ namespace CartelEnforcer_IL2Cpp
             int elapsed = 0;
             while (!dealer.Health.IsDead && !dealer.Health.IsKnockedOut &&
                 !goon.Health.IsDead && !goon.Health.IsKnockedOut &&
-                Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) <= 90f && 
+                Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) <= 90f &&
                 elapsed < maxWaitSec)
             {
                 yield return new WaitForSeconds(1f);
@@ -1608,7 +1621,7 @@ namespace CartelEnforcer_IL2Cpp
                         list.Remove(list.FirstOrDefault());
                     }
                 }
-                
+
                 if (takenSlots < availableSlots)
                 {
                     // Also take cash if there is still available space
@@ -2065,7 +2078,8 @@ namespace CartelEnforcer_IL2Cpp
                     try
                     {
                         wep = thomasInstance.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
-                    } catch (InvalidCastException ex)
+                    }
+                    catch (InvalidCastException ex)
                     {
                         MelonLogger.Warning("Failed to Cast Thomas Gun Weapon Instance: " + ex);
                     }
@@ -2234,7 +2248,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                     else if (distToPlayer < 25f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || ( angleToPlayer < -25f && angleToPlayer > -70f ))
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || (angleToPlayer < -25f && angleToPlayer > -70f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2250,7 +2264,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                     else if (distToPlayer < 45f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f) )
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2971,7 +2985,8 @@ namespace CartelEnforcer_IL2Cpp
             foreach (DriveByTrigger trigItem in driveByLocations)
             {
                 float distanceTo = Vector3.Distance(Player.Local.CenterPointTransform.position, trigItem.triggerPosition);
-                if (distanceTo <= nearest) {
+                if (distanceTo <= nearest)
+                {
                     trig = trigItem;
                     nearest = distanceTo;
                 }
@@ -3163,7 +3178,7 @@ namespace CartelEnforcer_IL2Cpp
 
                     cube.transform.parent = Map.Instance.transform;
                     cube.transform.localScale = new Vector3(rad, rad, rad);
-                    cube.transform.position = loc.transform.position + new Vector3(0, 25f+rad, 0);
+                    cube.transform.position = loc.transform.position + new Vector3(0, 25f + rad, 0);
                     cube.SetActive(true);
 
                     foreach (Transform tr in loc.AmbushPoints)
@@ -3184,7 +3199,7 @@ namespace CartelEnforcer_IL2Cpp
                             desiredCapsuleWorldScale.y / cubeWorldScale.y,
                             desiredCapsuleWorldScale.z / cubeWorldScale.z
                         );
-                        
+
                         capsule.SetActive(true);
                     }
                 }
@@ -3214,7 +3229,7 @@ namespace CartelEnforcer_IL2Cpp
 
                 sphere.transform.parent = Map.Instance.transform;
                 sphere.transform.localScale = new Vector3(rad * 2, rad * 2, rad * 2);
-                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f+rad*2, 0);
+                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f + rad * 2, 0);
                 sphere.SetActive(true);
             }
             yield break;
