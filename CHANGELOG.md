@@ -1,3 +1,13 @@
+# Version v1.3.1 
+- Fixed a bug where time stops randomly
+- Fixed miscellanious bugs in il2cpp version
+- Changed the intercept deals timer to tick faster
+- Tried to fix a bug where the robbery success evaluation would not work if the robber runs fast enough
+- Fixed the way at which Deal Intercepts get evaluated
+- Fixed a bug where the intercept deal would not evaluate player having succesfully stopped the intercept
+- Fixed the functionality of intercept deal to match readme descripption
+- Added new checks at the end of intercept deal, if the intercept is stopped (contract ends) that increases relationship by 0.25 (0.0 - 5.0)
+
 # Version v1.3.0
 - Added 4 new configuration values to allow individual frequency change of Ambush, Dead Drop Steal, Cartel Customer Deal and Cartel Robbery events frequencies
     - Default at 1.0 means that the event frequency is NOT capped at all and can happen every ingame hour (doesnt mean that it will happen every hour)

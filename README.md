@@ -154,8 +154,8 @@ This is a new type of event where the Cartel actively attempts to intercept one 
     - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
     - A random timer of 10-30 seconds begins before the Cartel dealer starts their intercept.
 - **Outcomes:**
-    - If you complete the deal within the 10-30 second grace period, Cartel influence decreases by 100.
-    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 50.
+    - If you complete the deal within the 10-30 second grace period, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
+    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
     - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
 
 #### Drive-By Events
@@ -234,6 +234,13 @@ You can add or modify custom ambush locations.
 1. Open `Mods/CartelEnforcer/Ambush/default.json`.
 2. You can only **modify** the values here; do not add or remove any ambushes.
 3. If the game receives a new update, delete `default.json` to ensure your configuration is up to date. It will be recreated the next time you load a save.
+
+#### Modifying Cartel Stolen Items
+
+1. Open `Mods/CartelEnforcer/CartelItems/(organisation name).json`.
+2. You can only the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id.
+3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
+
 
 ---
 > **Note:** The `config.json` and `default.json` files will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.

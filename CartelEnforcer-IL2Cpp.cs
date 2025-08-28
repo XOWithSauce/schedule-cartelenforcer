@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Linq;
 using HarmonyLib;
 using Il2Cpp;
 using Il2CppFishNet;
@@ -49,7 +48,7 @@ namespace CartelEnforcer_IL2Cpp
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.3.0";
+        public const string Version = "1.3.1";
         public const string DownloadLink = null;
     }
 
@@ -539,10 +538,11 @@ namespace CartelEnforcer_IL2Cpp
         public static IEnumerator InitializeAndEvaluateDriveBy()
         {
             yield return MelonCoroutines.Start(InitializeDriveByData());
-            if (currentConfig.debugMode)
-                yield return MelonCoroutines.Start(SpawnDriveByAreaVisual());
+
 
             coros.Add(MelonCoroutines.Start(EvaluateDriveBy()));
+            if (currentConfig.debugMode)
+                yield return MelonCoroutines.Start(SpawnDriveByAreaVisual());
         }
 
         public static IEnumerator InitializeAmbush() 
@@ -556,12 +556,12 @@ namespace CartelEnforcer_IL2Cpp
         {
             yield return MelonCoroutines.Start(PopulateParameterMap());
             yield return MelonCoroutines.Start(ApplyInfluenceConfig());
-            if (currentConfig.debugMode)
-                yield return MelonCoroutines.Start(SpawnAmbushAreaVisual());
 
             coros.Add(MelonCoroutines.Start(TickOverrideHourPass()));
             Log("Adding HourPass Function to callbacks");
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassReduceCartelRegActHours;
+            if (currentConfig.debugMode)
+                yield return MelonCoroutines.Start(SpawnAmbushAreaVisual());
         }
 
         public static IEnumerator InitializeAndEvaluateMiniQuest()
@@ -1004,11 +1004,11 @@ namespace CartelEnforcer_IL2Cpp
             [HarmonyPrefix]
             public static bool Prefix(CartelActivities __instance)
             {
-                //Log("TryStartGlobalActivity");
+                Log("[GLOBACT] TryStartGlobalActivity");
                 __instance.HoursUntilNextGlobalActivity = CartelActivities.GetNewCooldown();
                 if (!__instance.CanNewActivityBegin())
                 {
-                    //Log("NewActivity Cant Begin");
+                    Log("[GLOBACT]    NewActivity Cant Begin");
                     return false;
                 }
                 List<CartelActivity> activitiesReadyToStart = new(); // Normally just assing the activities ready to start but here in il2cpp world we need to actually have buttsex and run for each loop to assign each element to the list its so dumb
@@ -1024,9 +1024,10 @@ namespace CartelEnforcer_IL2Cpp
 
                 if (activitiesReadyToStart.Count == 0 || validRegionsForActivity.Count == 0)
                 {
-                    //Log("No Activities or Regions ready to start");
+                    Log("[GLOBACT]    No Activities or Regions ready to start");
                     return false;
                 }
+                Log($"[GLOBACT]    Total Activities ready to start: {activitiesReadyToStart.Count}");
                 validRegionsForActivity.Sort((EMapRegion a, EMapRegion b) => NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(b).CompareTo(NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(a)));
                 EMapRegion region = EMapRegion.Northtown;
                 bool flag = false;
@@ -1079,20 +1080,21 @@ namespace CartelEnforcer_IL2Cpp
                 }
                 if (!flag)
                 {
-                    //Log("Ambush Random Roll not triggered");
+                    Log("[GLOBACT]    Ambush Random Roll not triggered");
                     return false;
                 }
-                //Log("Check the Ambush hours");
+                Log("[GLOBACT]    Check the Ambush hours");
                 // Now we check that the activity activation obeys to the ambush in config
                 // Element at 0 is always the timer for Ambush global activity
                 if (regActivityHours[0].hoursUntilEnable > 0)
                 {
-                    //Log("Ambush not ready");
+                    Log("[GLOBACT]    Ambush not ready");
                     return false;
                 }
 
 
                 int readyCount = activitiesReadyToStart.Count;
+                Log($"[GLOBACT]    Ambush Pos ReadyCount: {readyCount}");
                 do
                 {
                     readyCount = activitiesReadyToStart.Count;
@@ -1101,10 +1103,15 @@ namespace CartelEnforcer_IL2Cpp
                     int activityIndex = UnityEngine.Random.Range(0, readyCount);
                     if (activitiesReadyToStart[activityIndex].IsRegionValidForActivity(region))
                     {
-                        //Log("Start Global Activity");
-                        __instance.StartGlobalActivity(null, region, activityIndex);
-                        regActivityHours[0].hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
-                        return false;
+                        int indexInActivities = NetworkSingleton<Cartel>.Instance.Activities.GlobalActivities.IndexOf(activitiesReadyToStart[activityIndex]); // This causes deadlock when passed to global activity?? for now set to 0
+                        if (indexInActivities != -1)
+                        {
+                            Log($"[GLOBACT]   idx: {indexInActivities} | {activitiesReadyToStart[activityIndex].name}");
+                            Log("[GLOBACT]    Start Global Activity");
+                            NetworkSingleton<Cartel>.Instance.Activities.StartGlobalActivity(null, region, 0);
+                            regActivityHours[0].hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
+                            break;
+                        }
                     }
                     else
                     {
@@ -1113,7 +1120,7 @@ namespace CartelEnforcer_IL2Cpp
 
                 } while (readyCount != 0);
 
-                //Log("TryStartGlobalActivity Finished");
+                Log("[GLOBACT] TryStartGlobalActivity Finished");
 
                 return false; // Always block since patch handles the original source code
             }
@@ -1126,7 +1133,7 @@ namespace CartelEnforcer_IL2Cpp
             public static bool Prefix(CartelRegionActivities __instance)
             {
                 __instance.HoursUntilNextActivity = CartelRegionActivities.GetNewCooldown(__instance.Region);
-                //Log("TryStartRegionalActivity");
+                Log("[REGACT] TryStartRegionalActivity");
                 List<CartelActivity> list = new();
                 foreach (CartelActivity activity in __instance.Activities)
                     list.Add(activity);
@@ -1158,9 +1165,11 @@ namespace CartelEnforcer_IL2Cpp
                         {
                             if (regActivityHours[foundMatch[i]].hoursUntilEnable <= 0)
                             {
-                                //Log("Hours Until Enable Satisfied - IDX: " + foundMatch[i]);
-                                List<int> indexAndActInt = new() { foundMatch[i], actInt };
-                                enabledActivities.Add(inRegAct, indexAndActInt);
+                                if (!enabledActivities.ContainsKey(inRegAct))
+                                {
+                                    List<int> indexAndActInt = new() { foundMatch[i], actInt };
+                                    enabledActivities.Add(inRegAct, indexAndActInt);
+                                }
                             }
                         }
                     }
@@ -1168,12 +1177,12 @@ namespace CartelEnforcer_IL2Cpp
 
                 if (enabledActivities.Count == 0)
                 {
-                    //Log("No Regional Activities can be enabled at this moment");
+                    Log("[REGACT]    No Regional Activities can be enabled at this moment");
                     return false;
                 }
 
                 int enabledCount = enabledActivities.Count;
-                //Log("Enabled Activities Count: " + enabledCount);
+                Log("[REGACT]    Enabled Activities Count: " + enabledCount);
                 do
                 {
                     enabledCount = enabledActivities.Count;
@@ -1183,7 +1192,7 @@ namespace CartelEnforcer_IL2Cpp
                     if (selected.Key.IsRegionValidForActivity(__instance.Region))
                     {
                         __instance.StartActivity(null, __instance.Activities.IndexOf(selected.Key));
-                        //Log("Starting Activity!");
+                        Log("[REGACT]    Starting Activity!");
                         if (selected.Value[1] == 0)// StealDeadDrop
                         {
                             regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.deadDropStealFrequency);
@@ -1207,7 +1216,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                 } while (enabledCount != 0);
 
-                //Log("Finished TryStartRegionalActivity");
+                Log("[REGACT] Finished TryStartRegionalActivity");
 
                 return false; // Just block running the original function with shuffle as described in comments
             }
@@ -1226,7 +1235,7 @@ namespace CartelEnforcer_IL2Cpp
             // Else condition here is that Activity Frequency is at minimum -1.0, where tick rate should be 10 times slower
             // But this doesnt work for tickrate because HourPass functions in classes add automatically
             // Therefore we must have an "hour" pass in 600 seconds
-            Log("Starting HourPass Override, Tick once every " + tickRate + " seconds");
+            Log("[HOURPASS] Starting HourPass Override, Tick once every " + tickRate + " seconds");
 
             while (registered)
             {
@@ -1355,7 +1364,7 @@ namespace CartelEnforcer_IL2Cpp
                 {
                     // Added this piece of code to the original source, everything else inside Original function is original source code or equivalent
                     if (items.Count > 0)
-                        coros.Add(MelonCoroutines.Start(CartelStealsItems(items, () => { Log($"Succesfully stolen {items.Count} items"); })));
+                        coros.Add(MelonCoroutines.Start(CartelStealsItems(items, () => { Log($"[CARTEL INV]    Succesfully stolen {items.Count} unique items"); })));
 
                     if (items.Count == 0 && cash <= 0f)
                     {
@@ -1450,15 +1459,15 @@ namespace CartelEnforcer_IL2Cpp
             [HarmonyPrefix]
             public static bool Prefix(Dealer __instance)
             {
-                Log("DealerPrefix-TryRob");
                 if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
                 {
+                    Log("[TRY ROB]    Run Custom");
                     if (!__instance.isInBuilding)
                         coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
                 }
                 else
                 {
-                    Log("Orig");
+                    Log("[TRY ROB]    Run original");
                     Original(__instance);
                 }
 
@@ -1486,7 +1495,7 @@ namespace CartelEnforcer_IL2Cpp
                     yield return new WaitForSeconds(0.3f);
                     if (!registered) yield break;
 
-                    Log("Finding Spawn Robber Position");
+                    Log("[TRY ROB]    Finding Spawn Robber Position");
                     Vector3 randomDirection = UnityEngine.Random.onUnitSphere;
                     randomDirection.y = 0;
                     randomDirection.Normalize();
@@ -1559,12 +1568,11 @@ namespace CartelEnforcer_IL2Cpp
                 elapsed++;
                 //Log($"In Combat:\n    Dealer:{dealer.Health.Health}\n    Goon:{goon.Health.Health}");
             }
-
             if (dealer.Health.IsDead || !dealer.IsConscious || dealer.Health.IsKnockedOut)
             {
 
                 // Dealer is dead Partial rob
-                Log("Dealer was defeated! Initiating partial robbery.");
+                Log("[TRY ROB]    Dealer was defeated! Initiating partial robbery.");
 
                 int availableSlots = 0;
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
@@ -1603,7 +1611,7 @@ namespace CartelEnforcer_IL2Cpp
 
                     if (goon.Inventory.ItemSlots[i].ItemInstance == null)
                     {
-                        Log($"Inserting {list.FirstOrDefault().Name} to Slot {i}");
+                        Log($"[TRY ROB]    Inserting {list.FirstOrDefault().Name} to Slot {i}");
                         goon.Inventory.ItemSlots[i].InsertItem(list.FirstOrDefault());
                         list.Remove(list.FirstOrDefault());
                     }
@@ -1624,7 +1632,7 @@ namespace CartelEnforcer_IL2Cpp
                     {
                         if (goon.Inventory.ItemSlots[i].ItemInstance == null)
                         {
-                            Log($"Inserting Cash to Slot {i}");
+                            Log($"[TRY ROB]    Inserting Cash to Slot {i}");
                             goon.Inventory.ItemSlots[i].InsertItem(cashInstance);
                             break;
                         }
@@ -1637,7 +1645,7 @@ namespace CartelEnforcer_IL2Cpp
             else if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
                 // Goon is dead or knocked out,defended robbery
-                Log("Goon was defeated! Robbery attempt defended.");
+                Log("[TRY ROB]    Goon was defeated! Robbery attempt defended.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
                 // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
                 if (dealer.Behaviour.activeBehaviour != null && dealer.Behaviour.activeBehaviour is CombatBehaviour)
@@ -1650,7 +1658,7 @@ namespace CartelEnforcer_IL2Cpp
             }
             else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 90f)
             {
-                Log("Player outside of range. Dealer defends robbery.");
+                Log("[TRY ROB]    Player outside of range. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
@@ -1665,7 +1673,7 @@ namespace CartelEnforcer_IL2Cpp
             }
             else if (elapsed >= 60)
             {
-                Log("State Timed Out. Dealer defends robbery.");
+                Log("[TRY ROB]    State Timed Out. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 // Apparently dealer will not exit combat automatically, it bugs out so we disable manual if this happens
@@ -1687,15 +1695,16 @@ namespace CartelEnforcer_IL2Cpp
                 goon.IgnoreImpacts = false;
 
             if (goon.IsGoonSpawned)
+            {
+                Log("[TRY ROB]    Despawned Goon");
                 goon.Despawn();
+            }
             yield return null;
         }
 
         public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region)
         {
-            yield return new WaitForSeconds(0.5f);
-            if (!registered) yield break;
-
+            Log("[TRY ROB]    Start Escape");
             // After succesful robbery, navigate goon towards nearest CartelDealer apartment door
             CartelDealer[] cartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
             float distance = 150f;
@@ -1721,19 +1730,26 @@ namespace CartelEnforcer_IL2Cpp
                 }
             }
 
-            if (goon.Behaviour.ScheduleManager.ActionList != null && goon.Behaviour.ScheduleManager.ActionList[0] != null && goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_CartelGoonExit ev)
-            {
-                stayInside = ev;
 
+            if (goon.Behaviour.ScheduleManager.ActionList != null)
+            {
+                for (int k = 0; k < goon.Behaviour.ScheduleManager.ActionList.Count; k++)
+                {
+                    NPCEvent_CartelGoonExit temp1 = goon.Behaviour.ScheduleManager.ActionList[k].TryCast<NPCEvent_CartelGoonExit>();
+                    if (temp1 != null)
+                        stayInside = temp1;
+                }
+            }
+            if (stayInside != null)
+            {
                 stayInside.End();
                 stayInside.gameObject.SetActive(false);
                 stayInside.Door = door;
                 stayInside.Building = building;
-                stayInside = ev;
             }
 
-            Log($"Escaping to: {destination}");
-            Log($"Distance: {distance}");
+            Log($"[TRY ROB]    Escaping to: {destination}");
+            Log($"[TRY ROB]    Distance: {distance}");
             goon.Behaviour.CombatBehaviour.Disable_Networked(null);
             goon.IgnoreImpacts = true;
             goon.Behaviour.GetBehaviour("Follow Schedule").Enable();
@@ -1753,6 +1769,13 @@ namespace CartelEnforcer_IL2Cpp
 
             goon.Movement.SetDestination(closest);
 
+            List<EMapRegion> mapReg = new();
+            foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
+                mapReg.Add(unlmapReg);
+            bool changeInfluence = false;
+            if (InstanceFinder.IsServer && mapReg.Contains(region))
+                changeInfluence = true;
+
             // While not dead or escape has elapsed under 60 seconds
             int elapsedNav = 0;
             float remainingDist = 100f;
@@ -1764,20 +1787,22 @@ namespace CartelEnforcer_IL2Cpp
                 !goon.isInBuilding &&
                 Vector3.Distance(closest, goon.CenterPointTransform.position) > 3f)
             {
-                yield return new WaitForSeconds(0.2f);
                 if (!registered) yield break;
                 float currDist = Vector3.Distance(closest, goon.CenterPointTransform.position);
                 if (currDist < remainingDist)
                     remainingDist = currDist;
+                yield return new WaitForSeconds(0.2f);
                 elapsedNav++;
             }
 
-            if (!goon.Health.IsDead && !goon.Health.IsKnockedOut && remainingDist < 3f)
+            if (!goon.Health.IsDead && !goon.Health.IsKnockedOut && remainingDist < 5f)
             {
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                {
+                Log("[TRY ROB]    Goon Escaped to Cartel Dealer!");
+
+                if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.050f);
-                }
+                Log("[TRY ROB]    -ParsingItems!");
+
                 List<ItemInstance> list = new List<ItemInstance>();
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
                 {
@@ -1789,14 +1814,18 @@ namespace CartelEnforcer_IL2Cpp
                         list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
                     }
                 }
+                Log("[TRY ROB]    -Steal!");
                 if (list.Count > 0)
                     coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
 
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
 
-                stayInside.gameObject.SetActive(true);
-                stayInside.Resume();
+                if (stayInside != null)
+                {
+                    stayInside.gameObject.SetActive(true);
+                    stayInside.Resume();
+                }
 
                 if (!goon.Behaviour.CombatBehaviour.Enabled)
                     goon.Behaviour.CombatBehaviour.Enable_Networked(null);
@@ -1806,19 +1835,22 @@ namespace CartelEnforcer_IL2Cpp
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
             {
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                {
+                if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.025f);
-                }
+                Log("[TRY ROB]    Robber Defeated");
                 // The goon was defeated (dead or knocked out).
-                stayInside.gameObject.SetActive(true);
-                stayInside.Resume();
+                if (stayInside != null)
+                {
+                    stayInside.gameObject.SetActive(true);
+                    stayInside.Resume();
+                }
+                
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
             else if (elapsedNav >= 60 && goon.IsGoonSpawned)
             {
                 // The escape attempt timed out.
-                Log("Despawned escaping goon due to timeout");
+                Log("[TRY ROB]    Despawned escaping goon due to timeout");
 
                 List<ItemInstance> list = new List<ItemInstance>();
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
@@ -1834,8 +1866,11 @@ namespace CartelEnforcer_IL2Cpp
                 if (list.Count > 0)
                     coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
 
-                stayInside.gameObject.SetActive(true);
-                stayInside.Resume();
+                if (stayInside != null)
+                {
+                    stayInside.gameObject.SetActive(true);
+                    stayInside.Resume();
+                }
 
                 if (!goon.Behaviour.CombatBehaviour.Enabled)
                     goon.Behaviour.CombatBehaviour.Enable_Networked(null);
@@ -1845,6 +1880,7 @@ namespace CartelEnforcer_IL2Cpp
 
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
+                Log("[TRY ROB] End");
             }
 
             yield return null;
@@ -2113,15 +2149,20 @@ namespace CartelEnforcer_IL2Cpp
             float elapsedSec = 0f;
             while (registered)
             {
-                yield return new WaitForSeconds(1f);
-                elapsedSec += 1f;
+                yield return new WaitForSeconds(2f);
+                elapsedSec += 2f;
                 if (!registered) yield break;
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || driveByActive)
                 {
                     yield return new WaitForSeconds(60f);
                     continue;
                 }
-
+                if (driveByActive)
+                {
+                    yield return new WaitForSeconds(60f);
+                    elapsedSec += 60f;
+                    continue;
+                }
                 if (elapsedSec >= 60f)
                 {
                     if (hoursUntilDriveBy != 0)
@@ -2134,8 +2175,8 @@ namespace CartelEnforcer_IL2Cpp
                 {
                     foreach (DriveByTrigger trig in driveByLocations)
                     {
-                        yield return new WaitForSeconds(1f);
-                        elapsedSec += 1f;
+                        yield return new WaitForSeconds(0.5f);
+                        elapsedSec += 0.5f;
                         if (!registered) yield break;
 
                         if (Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius)
@@ -2158,7 +2199,7 @@ namespace CartelEnforcer_IL2Cpp
         {
             if (driveByActive || !registered) yield break;
             driveByActive = true;
-            Log("Beginning Drive By Event");
+            Log("[DRIVE BY] Beginning Drive By Event");
             Player player = Player.GetClosestPlayer(trig.triggerPosition, out _);
 
             driveByVeh.ExitPark_Networked(null, false);
@@ -2219,7 +2260,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                 }
 
-                Log($"Angle: {angleToPlayer} - Dist: {distToPlayer} -  WeaponHits: {wepHits}");
+                Log($"[DRIVE BY]    Angle: {angleToPlayer} - Dist: {distToPlayer} -  WeaponHits: {wepHits}");
                 if (!wepHits) continue;
 
                 if (angleToPlayer < -10f && angleToPlayer > -80f)
@@ -2263,7 +2304,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                 }
             }
-            Log($"Drive By Bullets shot: {bulletsShot}/{maxBulletsShot}");
+            Log($"[DRIVE BY]    Drive By Bullets shot: {bulletsShot}/{maxBulletsShot}");
             yield return null;
         }
 
@@ -2274,7 +2315,7 @@ namespace CartelEnforcer_IL2Cpp
             driveByAgent.StopNavigating();
             driveByVeh.Park_Networked(null, driveByParking);
             driveByActive = false;
-            Log("Drive By Complete");
+            Log("[DRIVE BY] Drive By Complete");
             hoursUntilDriveBy = UnityEngine.Random.Range(16, 48);
         }
 
@@ -2309,6 +2350,7 @@ namespace CartelEnforcer_IL2Cpp
 
         public static void OnDayPassNewDiag()
         {
+            Log("[DAY PASS] Resetting Mini Quest Dialogue Flags");
             foreach (NPC npc in targetNPCs.Keys.ToList())
             {
                 targetNPCs[npc].HasAskedQuestToday = false;
@@ -2320,6 +2362,7 @@ namespace CartelEnforcer_IL2Cpp
             Log("Starting Mini Quest Dialogue Random Generation");
             while (registered)
             {
+                Log("[MINI QUEST] Try Generate");
                 List<NPC> listOf = targetNPCs.Keys.ToList();
                 NPC random = listOf[UnityEngine.Random.Range(0, listOf.Count)];
                 if (targetNPCs.ContainsKey(random))
@@ -2366,18 +2409,18 @@ namespace CartelEnforcer_IL2Cpp
             }
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnMiniQuestChosenWrapped);
             int index = controller.AddDialogueChoice(choice);
-            Log("Created Mini Quest Dialogue for: " + npc.FirstName);
+            Log("[MINI QUEST]    Created Mini Quest Dialogue for: " + npc.FirstName);
             return;
         }
 
         public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller, float paid)
         {
 
-            Log("Option Chosen");
+            Log("[MINI QUEST]    Option Chosen");
             float chance = Mathf.Lerp(0.30f, 0.60f, npc.RelationData.NormalizedRelationDelta); // At max rela only 40% chance to refuse
             if (UnityEngine.Random.Range(0f, 1f) < chance && NetworkSingleton<MoneyManager>.Instance.cashBalance >= 100f)
             {
-                Log("Start Quest");
+                Log("[MINI QUEST]    Start Quest");
                 List<DeadDrop> drops = new();
                 for (int i = 0; i < DeadDrop.DeadDrops.Count; i++)
                 {
@@ -2446,7 +2489,7 @@ namespace CartelEnforcer_IL2Cpp
             }
             else
             {
-                Log("RefuseQuestGive");
+                Log("[MINI QUEST] RefuseQuestGive");
                 controller.handler.ContinueSubmitted();
                 switch (UnityEngine.Random.Range(0, 3))
                 {
@@ -2481,7 +2524,7 @@ namespace CartelEnforcer_IL2Cpp
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(oldChoices.Count - 1);
             controller.Choices = oldChoices;
-            Log("Disposed Choice");
+            Log("[MINI QUEST]    Disposed Choice");
             yield return null;
         }
 
@@ -2489,25 +2532,27 @@ namespace CartelEnforcer_IL2Cpp
         {
             yield return new WaitForSeconds(5f);
             if (!registered) yield break;
-
+            Log($"[MINI QUEST]    MiniQuest Drop at: {entity.DeadDropName}");
             for (int i = 0; i < filledItems.Count; i++)
             {
                 entity.Storage.InsertItem(filledItems[i], true);
-                Log($"MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
+                Log($"[MINI QUEST]    MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
             }
-            Log($"MiniQuest Drop at: {entity.DeadDropName}");
 
+            List<EMapRegion> mapReg = new();
+            foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
+                mapReg.Add(unlmapReg);
             bool opened = false;
             UnityEngine.Events.UnityAction onOpenedAction = null;
             void WrapOnOpenCallback()
             {
-                Log("Quest Complete");
+                Log("[MINI QUEST] Quest Complete");
                 NetworkSingleton<LevelManager>.Instance.AddXP(100);
                 opened = true;
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(entity.Region))
-                {
+                
+                if (InstanceFinder.IsServer && mapReg.Contains(entity.Region))
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
-                }
+
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             }
             onOpenedAction = (UnityEngine.Events.UnityAction)WrapOnOpenCallback;
@@ -2519,15 +2564,13 @@ namespace CartelEnforcer_IL2Cpp
 
             if (!opened)
             {
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(entity.Region))
-                {
+                if (InstanceFinder.IsServer && mapReg.Contains(entity.Region))
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, 0.050f);
-                }
                 entity.Storage.ClearContents();
             }
 
             entity.Storage.onOpened.RemoveListener(onOpenedAction);
-            Log($"Removed MiniQuest Reward. Quest Duration: {duration}");
+            Log($"[MINI QUEST] Removed MiniQuest Reward. Quest Duration: {duration}");
             yield return null;
         }
 
@@ -2583,12 +2626,12 @@ namespace CartelEnforcer_IL2Cpp
                             if (realQty != -1)
                             {
                                 cartelStolenItems[foundIdx].Quantity += items[i].Quantity * realQty;
-                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                             else
                             {
                                 cartelStolenItems[foundIdx].Quantity += items[i].Quantity;
-                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                         }
                         else // not exist
@@ -2598,12 +2641,12 @@ namespace CartelEnforcer_IL2Cpp
                                 cartelStolenItems.Add(inst);
                                 // At end of list change quantity to be same as qty*packaging
                                 cartelStolenItems[cartelStolenItems.Count].Quantity = items[i].Quantity * realQty;
-                                Log($"ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                             else
                             {
                                 cartelStolenItems.Add(inst); // Else Qty is already set nothing to do
-                                Log($"ADD: {inst.Quantity}");
+                                Log($"[CARTEL INV] ADD: {inst.Quantity}");
                             }
                         }
                     }
@@ -2651,7 +2694,7 @@ namespace CartelEnforcer_IL2Cpp
         {
             yield return new WaitForSeconds(5f);
             Log("Starting Cartel Intercepts Evaluation");
-            float frequency = 180f;
+            float frequency = 90f;
             if (currentConfig.activityFrequency >= 0.0f)
                 frequency = Mathf.Lerp(frequency, 60f, currentConfig.activityFrequency);
             else
@@ -2679,7 +2722,7 @@ namespace CartelEnforcer_IL2Cpp
         }
         public static IEnumerator StartInterceptDeal()
         {
-            Log("Started Checking Intercept Deal Validity");
+            Log("[INTERCEPT] Started Checking Intercept Deal Validity");
             List<string> occupied = new();
             CartelDealer[] allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
             foreach (CartelDealer d in allCartelDealers)
@@ -2692,36 +2735,82 @@ namespace CartelEnforcer_IL2Cpp
             }
 
             List<Contract> validContracts = new();
-            for (int i = 0; i < NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount; i++)
+
+            int i = 0;
+            do
             {
+                if (i >= NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount)
+                {
+                    break; // Safe transform parse
+                }
                 Transform trContract = NetworkSingleton<QuestManager>.Instance.ContractContainer.GetChild(i);
                 if (trContract != null)
                 {
                     Contract contract = trContract.GetComponent<Contract>();
-                    if (contract.Dealer != null) continue; // Not player
-                    if (occupied.Contains(contract.GUID.ToString())) continue; // Not cartel dealer
-                    if (contract.GetMinsUntilExpiry() > 300) continue; // Only take contracts with less than 5h left
-                    if (contract.GetMinsUntilExpiry() < 90) continue; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
-                    if (contractGuids.Contains(contract.GUID.ToString())) continue; // Only take contracts currently not intercepted
-                    validContracts.Add(contract);
+                    bool isValid = true;
+                    if (contract.Dealer != null) isValid = false; // Not player
+                    if (occupied.Contains(contract.GUID.ToString())) isValid = false; // Not cartel dealer
+                    if (contract.GetMinsUntilExpiry() > 300) isValid = false; // Only take contracts with less than 5h left
+                    if (contract.GetMinsUntilExpiry() < 90) isValid = false; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
+                    if (contractGuids.Contains(contract.GUID.ToString())) isValid = false; // Only take contracts currently not intercepted
+
+                    if (isValid)
+                    {
+                        if (!validContracts.Contains(contract))
+                            validContracts.Add(contract);
+                    }
+                }
+                i++;
+            } while (i < NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount);
+            // Check that the contract exists in UI since we need it later in functions
+            QuestHUDUI[] current = UnityEngine.Object.FindObjectsOfType<QuestHUDUI>();
+            List<Contract> ctrsToRemove = new();
+            if (current.Length == 0)
+            {
+                Log($"[INTERCEPT]    No HUD Elements to parse");
+
+            }
+            foreach (Contract contract in validContracts)
+            {
+                bool exists = false;
+
+                foreach (QuestHUDUI item in current)
+                {
+                    yield return new WaitForSeconds(0.1f);
+                    if (!registered) yield break;
+                    if (item.Quest == contract)
+                    {
+                        exists = true;
+                        break;
+                    }
                 }
 
+                if (!exists)
+                    ctrsToRemove.Add(contract);
+            }
+            // Remove the ones which dont exist in UI since that causes an error
+            if (ctrsToRemove.Count > 0)
+            {
+                foreach (Contract ctr in ctrsToRemove)
+                    validContracts.Remove(ctr);
             }
             if (validContracts.Count == 0)
             {
-                Log("No Valid Contracts");
+                Log("[INTERCEPT]    No Valid Contracts After Removing Non-UI supported");
                 yield break; // No Valid Contracts this time
             }
+
+
             Contract randomContract = validContracts[UnityEngine.Random.Range(0, validContracts.Count)];
             Customer customer = randomContract.Customer.GetComponent<Customer>();
             CartelDealer selected = null;
 
             EMapRegion region = EMapRegion.Northtown;
-            for (int i = 0; i < Singleton<Map>.Instance.Regions.Length; i++)
+            for (int j = 0; j < Singleton<Map>.Instance.Regions.Length; j++)
             {
-                if (Singleton<Map>.Instance.Regions[i].RegionBounds.IsPointInsidePolygon(customer.NPC.CenterPointTransform.position))
+                if (Singleton<Map>.Instance.Regions[j].RegionBounds.IsPointInsidePolygon(customer.NPC.CenterPointTransform.position))
                 {
-                    region = Singleton<Map>.Instance.Regions[i].Region;
+                    region = Singleton<Map>.Instance.Regions[j].Region;
                 }
             }
             selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(region).CartelDealer;
@@ -2739,15 +2828,18 @@ namespace CartelEnforcer_IL2Cpp
 
             NPCEvent_StayInBuilding event1 = null;
             NPCSignal_HandleDeal event2 = null;
+
             if (selected.Behaviour.ScheduleManager.ActionList != null)
             {
-                foreach (NPCAction action in selected.Behaviour.ScheduleManager.ActionList)
+                for (int k = 0; k < selected.Behaviour.ScheduleManager.ActionList.Count; k++)
                 {
-                    if (action is NPCEvent_StayInBuilding ev1)
-                        event1 = ev1;
+                    NPCEvent_StayInBuilding temp1 = selected.Behaviour.ScheduleManager.ActionList[k].TryCast<NPCEvent_StayInBuilding>();
+                    if (temp1 != null)
+                        event1 = temp1;
 
-                    if (action is NPCSignal_HandleDeal ev2)
-                        event2 = ev2;
+                    NPCSignal_HandleDeal temp2 = selected.Behaviour.ScheduleManager.ActionList[k].TryCast<NPCSignal_HandleDeal>();
+                    if (temp2 != null)
+                        event2 = temp2;
                 }
             }
 
@@ -2780,7 +2872,7 @@ namespace CartelEnforcer_IL2Cpp
                     break;
             }
 
-            Log("Starting Intercept Deal");
+            Log("[INTERCEPT]    Starting Intercept Deal");
             customer.NPC.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, true, -1), true, true);
             interceptingDeal = true;
 
@@ -2794,19 +2886,23 @@ namespace CartelEnforcer_IL2Cpp
             yield return new WaitForSeconds(UnityEngine.Random.Range(10f, 30f)); // Cartel dealer is kinda fast so have to wait a bit
             if (!registered) yield break;
 
+            List<EMapRegion> mapReg = new();
+            foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
+                mapReg.Add(unlmapReg);
+            bool changeInfluence = false;
+            if (InstanceFinder.IsServer && mapReg.Contains(region))
+                changeInfluence = true;
+
             if (customer.CurrentContract == null) // If player managed to complete it within that timeframe
             {
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                {
+                if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
-                }
                 contractGuids.Remove(cGuid);
                 interceptingDeal = false;
                 yield break;
             }
 
             contract.BopHUDUI();
-            dealer.SetIsAcceptingDeals(true);
             contract.CompletionXP = Mathf.RoundToInt((float)contract.CompletionXP * 0.5f);
             contract.completedContractsIncremented = false;
 
@@ -2822,39 +2918,49 @@ namespace CartelEnforcer_IL2Cpp
 
             void OnQuestEndEvaluateResult(EQuestState state)
             {
+                Log("[INTERCEPT]    EVALUATE RESULT: " + state);
                 float cartelDealerDist = Vector3.Distance(dealer.CenterPointTransform.position, customer.NPC.CenterPointTransform.position);
-                float playerDist = Vector3.Distance(dealer.CenterPointTransform.position, Player.GetClosestPlayer(dealer.CenterPointTransform.position, out _).CenterPointTransform.position);
+                float playerDist = Vector3.Distance(Player.Local.CenterPointTransform.position, customer.NPC.CenterPointTransform.position);
+                
                 if (cartelDealerDist < playerDist && cartelDealerDist < 5f)
                 {
-                    Log("Cartel Succesfully Intercepted Deal");
-                    if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                    {
+                    Log("[INTERCEPT]    Cartel Succesfully Intercepted Deal");
+                    if (changeInfluence)
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.100f);
-                    }
-                    customer.NPC.RelationData.ChangeRelationship(-0.5f, true);
+                    customer.NPC.RelationData.ChangeRelationship(-1f, true);
                 }
-                else if (playerDist < 5f)
+                else if (playerDist < 5f && (dealer.Health.IsDead || dealer.Health.IsKnockedOut) && state == EQuestState.Completed)
                 {
-                    Log("Player Stopped Cartel Intercept");
-                    if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                    {
-                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
-                    }
+                    Log("[INTERCEPT]    Player Stopped Cartel Intercept & killed dealer");
+                    if (changeInfluence)
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
+                    customer.NPC.RelationData.ChangeRelationship(0.25f, true);
+
                 }
-                interceptingDeal = false;
+                else if (playerDist < 5f && state == EQuestState.Completed)
+                {
+                    Log("[INTERCEPT]    Player Stopped Cartel Intercept");
+                    if (changeInfluence)
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
+                    customer.NPC.RelationData.ChangeRelationship(0.25f, true);
+
+                }
                 if (contractGuids.Contains(cGuid))
                     contractGuids.Remove(cGuid);
-
-                ev2.End();
                 ev2.HasStarted = false;
+                ev2.End();
                 ev1.enabled = true;
                 ev1.IsActive = true;
                 ev1.HasStarted = true;
                 ev1.Resume();
+
+                interceptingDeal = false;
+
             }
 
             contract.onQuestEnd.AddListener(new Action<EQuestState>(OnQuestEndEvaluateResult));
 
+            dealer.SetIsAcceptingDeals(true);
             dealer.AddContract(contract);
 
             if (ev1 != null)
@@ -2885,19 +2991,60 @@ namespace CartelEnforcer_IL2Cpp
             yield return new WaitForSeconds(10f);
             if (!registered) yield break;
 
-            foreach (Transform tr in PlayerSingleton<MessagesApp>.Instance.conversationEntryContainer)
+            RectTransform rt = PlayerSingleton<MessagesApp>.Instance.conversationEntryContainer;
+            if (rt == null) 
             {
-                if (tr.Find("Name").GetComponent<Text>().text != "Thomas Benzies")
-                    continue;
-                benziesLogo = tr.Find("IconMask").Find("Icon").GetComponent<Image>().sprite;
+                Log("Conversation entry container is null");
+                yield break;
             }
+
+            // Now we build a mount everest here because otherwise il2cpp thinks we are dealing with system objects
+            for (int i = 0; i < rt.childCount; i++) 
+            {
+                if (i > rt.childCount) break;
+                Transform msgItem = rt.GetChild(i);
+                if (msgItem != null)
+                {
+                    Transform nameTr = msgItem.Find("Name");
+                    if (nameTr != null && nameTr.gameObject != null)
+                    {
+                        Text text = nameTr.gameObject.GetComponent<Text>();
+                        if (text != null && text.text == "Thomas Benzies")
+                        {
+                            Transform iconMask = msgItem.Find("IconMask");
+                            if (iconMask != null)
+                            {
+                                Transform icon = iconMask.Find("Icon");
+                                if (icon != null && icon.gameObject != null)
+                                {
+                                    benziesLogo = icon.gameObject.GetComponent<Image>().sprite;
+                                    Log("Benzies Logo Assigned");
+                                }
+                            }
+                        }
+                        else
+                            continue;
+                    }
+                    else
+                        Log("NameTr is null");
+                }
+                else
+                    Log("Msg Item is Null");
+            }
+            // the below code is alternative to the mount everest code above
+            //foreach (Transform tr in rt.childCount)
+            //{
+            //    if (tr.Find("Name").GetComponent<Text>().text != "Thomas Benzies")
+            //        continue;
+            //    benziesLogo = tr.Find("IconMask").Find("Icon").GetComponent<Image>().sprite;
+            //}
             Log("Fetched Benzies Logo UI Element");
             yield return null;
         }
 
         public static IEnumerator QuestUIEffect(Contract contract)
         {
-            QuestHUDUI[] current = UnityEngine.Object.FindObjectsOfType<QuestHUDUI>();
+            QuestHUDUI[] current = UnityEngine.Object.FindObjectsOfType<QuestHUDUI>(true);
             QuestHUDUI found = null;
             foreach (QuestHUDUI item in current)
             {
@@ -2911,13 +3058,45 @@ namespace CartelEnforcer_IL2Cpp
                 }
             }
 
-            Transform contractIcon = found.MainLabel.transform.Find("IconContainer").Find("ContractIcon(Clone)");
-            Image background = contractIcon.Find("Background").GetComponent<Image>();
+            // Ugly code here but we need to actually check each transform for null
+
+            if (found == null || found.MainLabel == null || found.MainLabel.transform == null)
+            {
+                Log("[INTERCEPT] foundItem got nulled, break");
+                yield break;
+            }
+
+            Transform iconContainer = found.MainLabel.transform.Find("IconContainer");
+            if (iconContainer == null)
+            {
+                Log("[INTERCEPT] iconContainer got nulled, break");
+                yield break;
+            }
+            Transform contractIcon = iconContainer.Find("ContractIcon(Clone)");
+            if (contractIcon == null)
+            {
+                Log("[INTERCEPT] contractIcon got nulled, break");
+                yield break;
+            }
+
+            Transform backgroundTr = contractIcon.Find("Background");
+            if (backgroundTr == null)
+            {
+                Log("[INTERCEPT] backgroundTr got nulled, break");
+                yield break;
+            }
+            Image background = backgroundTr.GetComponent<Image>();
             questIconBack = background.color;
 
             coros.Add(MelonCoroutines.Start(LerpQuestColor(background)));
 
-            Image fillImg = contractIcon.Find("Fill").GetComponent<Image>();
+            Transform fillImgTr = contractIcon.Find("Fill");
+            if (fillImgTr == null)
+            {
+                Log("[INTERCEPT] backgroundTr got nulled, break");
+                yield break;
+            }
+            Image fillImg = fillImgTr.GetComponent<Image>();
             handshake = fillImg.sprite;
 
             found.BopIcon();
@@ -2933,6 +3112,7 @@ namespace CartelEnforcer_IL2Cpp
             while (interceptingDeal && registered) { yield return new WaitForSeconds(10f); }
             background.color = questIconBack;
             fillImg.overrideSprite = handshake;
+            Log("[INTERCEPT] Reset QuestUI");
             yield return null;
         }
         public static IEnumerator LerpQuestColor(Image background)
