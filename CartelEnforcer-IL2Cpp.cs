@@ -577,82 +577,85 @@ namespace CartelEnforcer_IL2Cpp
         {
             if (!registered || currentConfig == null)
                 return;
-
-            if (currentConfig.debugMode && _playerTransform != null && _positionText != null)
+            if (currentConfig.debugMode)
             {
-                Vector3 playerPos = _playerTransform.position;
-                string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
-                _positionText.text = formattedPosition;
-            }
-            // SEE Debug #region in code for InputFunctions
-            // Left CTRL + R to Start Rob Dealer Function to nearest dealer
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.R))
-            {
-                if (!debounce)
+                if (_playerTransform != null && _positionText != null)
                 {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputStartRob());
+                    Vector3 playerPos = _playerTransform.position;
+                    string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
+                    _positionText.text = formattedPosition;
                 }
-            }
-
-            // Left CTRL + G to Start Drive By Instant 
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.G))
-            {
-                if (!debounce)
+        
+                if (Input.GetKey(KeyCode.LeftControl))
                 {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputStartDriveBy());
-                }
-            }
-
-            // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.H))
-            {
-                if (!debounce)
-                {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputGiveMiniQuest());
-                }
-            }
-            // Left CTRL + L to Log Big Blop of info
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.L))
-            {
-                if (!debounce)
-                {
-                    debounce = true;
-                    MelonCoroutines.Start(OnInputInternalLog());
-                }
-            }
-
-            // Left CTRL + I (INVENTORY) to Log Big Blop of info
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.I))
-            {
-                debounce = true;
-                for (int i = 0; i < Player.Local.Inventory.Count(); i++)
-                {
-                    if (Player.Local.Inventory[i].ItemInstance != null)
+                    // SEE Debug #region in code for InputFunctions
+                    // Left CTRL + R to Start Rob Dealer Function to nearest dealer
+                    if (Input.GetKey(KeyCode.R))
                     {
-                        Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
-                        Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
-                        Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
-
-                        if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
+                        if (!debounce)
                         {
-                            if (inst != null && inst.ID != null)
-                                Log($"AppliedPackaging ID: {inst.AppliedPackaging.ID}");
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputStartRob());
                         }
                     }
+                    // Left CTRL + G to Start Drive By Instant 
+                    else if (Input.GetKey(KeyCode.G))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputStartDriveBy());
+                        }
+                    }
+                    // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
+                    else if (Input.GetKey(KeyCode.H))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputGiveMiniQuest());
+                        }
+                    }
+                    // Left CTRL + L to Log Big Blop of info
+                    else if (Input.GetKey(KeyCode.L))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputInternalLog());
+                        }
+                    }
+                    // Left CTRL + I (INVENTORY) to Log Big Blop of info
+                    else if (Input.GetKey(KeyCode.I))
+                    {
+                        debounce = true;
+                        for (int i = 0; i < Player.Local.Inventory.Count(); i++)
+                        {
+                            if (Player.Local.Inventory[i].ItemInstance != null)
+                            {
+                                Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
+                                Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
+                                Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
+        
+                                if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
+                                {
+                                    if (inst != null && inst.ID != null)
+                                        Log($"AppliedPackaging ID: {inst.AppliedPackaging.ID}");
+                                }
+                            }
+                        }
+                        debounce = false;
+                    }
+                    // Left CTRL + T Intercept random deal
+                    else if (Input.GetKey(KeyCode.T))
+                    {
+                        debounce = true;
+                        MelonCoroutines.Start(OnInputInterceptContract());
+                    }
                 }
-                debounce = false;
             }
-
-            // Left CTRL + T Intercept random deal
-            if (currentConfig.debugMode && Input.GetKey(KeyCode.LeftControl) && Input.GetKey(KeyCode.T))
-            {
-                debounce = true;
-                MelonCoroutines.Start(OnInputInterceptContract());
-            }
-
+        
+        
         }
         #endregion
 
