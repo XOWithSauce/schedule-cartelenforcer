@@ -47,7 +47,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.3.1";
+        public const string Version = "1.3.2";
         public const string DownloadLink = null;
     }
 
@@ -933,7 +933,7 @@ namespace CartelEnforcer
                 });
                 indexCurrent++;
                 Log($"  {act.Region.ToString()} - Parsing Inner Activities");
-                foreach(CartelActivity inRegAct in act.Activities)
+                foreach (CartelActivity inRegAct in act.Activities)
                 {
                     CartelRegActivityHours activityHrs = new();
                     activityHrs.region = (int)act.Region;
@@ -1154,7 +1154,6 @@ namespace CartelEnforcer
                     }
                 }
                 Dictionary<CartelActivity, List<int>> enabledActivities = new(); // List Int first element = index at regActivityHours, second element is actInt
-                Log("[REGACT]    Parse ACT Int");
                 // parse activity int
                 foreach (CartelActivity inRegAct in list)
                 {
@@ -1244,12 +1243,10 @@ namespace CartelEnforcer
             // But this doesnt work for tickrate because HourPass functions in classes add automatically
             // Therefore we must have an "hour" pass in 600 seconds
             Log("[HOURPASS] Starting HourPass Override, Tick once every " + tickRate + " seconds");
-            int timeLast = 0;
             while (registered)
             {
                 if (!registered) yield break;
                 if (actFreqMapping.Count == 0) continue;
-                timeLast = TimeManager.Instance.CurrentTime;
                 foreach (HrPassParameterMap item in actFreqMapping)
                 {
                     yield return new WaitForSeconds(tickRate / actFreqMapping.Count); // So we arrive at the end of list around the full time length of tick rate, less cluttering big chunk changes more like overtime one by one
@@ -1257,10 +1254,6 @@ namespace CartelEnforcer
 
                     if (!registered) yield break;
                     MelonCoroutines.Start(HelperSet(item));
-                }
-                if (timeLast == TimeManager.Instance.CurrentTime && TimeManager.Instance.CurrentTime != 400)
-                {
-                    Log("[HOURPASS] -> TIME DEADLOCK BUG DETECTED");
                 }
             }
             yield return null;
@@ -1342,7 +1335,7 @@ namespace CartelEnforcer
                 CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
                 foreach (CartelRegionActivities act in regAct)
                 {
-                    foreach(CartelActivity activity in act.Activities)
+                    foreach (CartelActivity activity in act.Activities)
                     {
                         float result = 0f;
                         if (currentConfig.activityInfluenceMin > 0.0f && activity.InfluenceRequirement > 0.0f)
@@ -1473,20 +1466,22 @@ namespace CartelEnforcer
             [HarmonyPrefix]
             public static bool Prefix(Dealer __instance)
             {
-                Log("[TRY ROB] Started");
-                if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                if (__instance.RelationData.Unlocked && __instance.IsRecruited)
                 {
-                    Log("[TRY ROB]    Run Custom");
+                    Log("[TRY ROB] Started");
+                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                    {
+                        Log("[TRY ROB]    Run Custom");
 
-                    if (!__instance.isInBuilding)
-                        coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
+                        if (!__instance.isInBuilding && !__instance.Health.IsDead && !__instance.Health.IsKnockedOut)
+                            coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
+                    }
+                    else
+                    {
+                        Log("[TRY ROB]    Run original");
+                        Original(__instance);
+                    }
                 }
-                else
-                {
-                    Log("[TRY ROB]    Run original");
-                    Original(__instance);
-                }
-
                 return false;
             }
 
@@ -2143,7 +2138,6 @@ namespace CartelEnforcer
 
             Log("Starting Drive By Evaluation");
             float elapsedSec = 0f;
-            int timeLast = TimeManager.Instance.CurrentTime;
             while (registered)
             {
                 yield return new WaitForSeconds(2f);
@@ -2195,11 +2189,6 @@ namespace CartelEnforcer
                     elapsedSec += 30f;
                 }
 
-                if (timeLast == TimeManager.Instance.CurrentTime && TimeManager.Instance.CurrentTime != 400)
-                {
-                    Log("[DRIVE BY] -> TIME DEADLOCK BUG DETECTED");
-                }
-                timeLast = TimeManager.Instance.CurrentTime;
             }
 
             yield return null;
@@ -2243,7 +2232,7 @@ namespace CartelEnforcer
 
             while (driveByActive)
             {
-                yield return new WaitForSeconds(UnityEngine.Random.Range(0.10f, 0.20f));
+                yield return new WaitForSeconds(UnityEngine.Random.Range(0.25f, 0.5f));
                 if (!registered) yield break;
                 if (bulletsShot >= maxBulletsShot) break;
 
@@ -2285,7 +2274,7 @@ namespace CartelEnforcer
                     }
                     else if (distToPlayer < 25f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || ( angleToPlayer < -25f && angleToPlayer > -70f ))
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || (angleToPlayer < -25f && angleToPlayer > -70f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2301,7 +2290,7 @@ namespace CartelEnforcer
                     }
                     else if (distToPlayer < 45f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f) )
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2370,7 +2359,6 @@ namespace CartelEnforcer
         public static IEnumerator EvaluateMiniQuestCreation()
         {
             Log("Starting Mini Quest Dialogue Random Generation");
-            int timeLast = TimeManager.Instance.CurrentTime;
             
             while (registered)
             {
@@ -2381,16 +2369,20 @@ namespace CartelEnforcer
                 {
                     if (!targetNPCs[random].HasActiveQuest && !targetNPCs[random].HasAskedQuestToday)
                     {
-                        targetNPCs[random].HasActiveQuest = true;
-                        InitMiniQuestDialogue(random);
+                        // If The NPC is not yet unlocked we try to roll a chance
+                        float chance = 1f;
+                        if (!random.RelationData.Unlocked)
+                        {
+                            chance = UnityEngine.Random.Range(0f, 1f);
+                        }
+                        if (chance > 0.70f)
+                        {
+                            targetNPCs[random].HasActiveQuest = true;
+                            InitMiniQuestDialogue(random);
+                        }
                     }
                 }
                 yield return new WaitForSeconds(UnityEngine.Random.Range(480f, 960f));
-                if (timeLast == TimeManager.Instance.CurrentTime && TimeManager.Instance.CurrentTime != 400)
-                {
-                    Log("[MINI QUEST] -> TIME DEADLOCK BUG DETECTED");
-                }
-                timeLast = TimeManager.Instance.CurrentTime;
             }
         }
 
@@ -2617,7 +2609,7 @@ namespace CartelEnforcer
                         {
                             for (int j = 0; j < cartelStolenItems.Count; j++)
                             {
-                                if (inst.ID == items[i].ID && cartelStolenItems[j].Quality == inst.Quality)
+                                if (cartelStolenItems[j].ID == inst.ID && cartelStolenItems[j].Quality == inst.Quality)
                                 {
                                     foundIdx = j;
                                     break;
@@ -3166,7 +3158,8 @@ namespace CartelEnforcer
             foreach (DriveByTrigger trigItem in driveByLocations)
             {
                 float distanceTo = Vector3.Distance(Player.Local.CenterPointTransform.position, trigItem.triggerPosition);
-                if (distanceTo <= nearest) {
+                if (distanceTo <= nearest) 
+                {
                     trig = trigItem;
                     nearest = distanceTo;
                 }
@@ -3250,7 +3243,7 @@ namespace CartelEnforcer
             } 
 
             Log("\nActivity Hours Table Per Activity Type\n---------------");
-            foreach(CartelRegActivityHours rghrs in regActivityHours)
+            foreach (CartelRegActivityHours rghrs in regActivityHours)
             {
                 Log($"\n  Class: {Map(rghrs.cartelActivityClass)}\n  HoursUntil Enable: {rghrs.hoursUntilEnable}\nRegion: {rghrs.region}\n******");
             }
@@ -3362,7 +3355,7 @@ namespace CartelEnforcer
 
                     cube.transform.parent = Map.Instance.transform;
                     cube.transform.localScale = new Vector3(rad, rad, rad);
-                    cube.transform.position = loc.transform.position + new Vector3(0, 25f+rad, 0);
+                    cube.transform.position = loc.transform.position + new Vector3(0, 25f + rad, 0);
                     cube.SetActive(true);
 
                     foreach (Transform tr in loc.AmbushPoints)
@@ -3418,7 +3411,7 @@ namespace CartelEnforcer
 
                 sphere.transform.parent = Map.Instance.transform;
                 sphere.transform.localScale = new Vector3(rad * 2, rad * 2, rad * 2);
-                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f+rad*2, 0);
+                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f + rad * 2, 0);
                 sphere.SetActive(true);
             }
             yield break;

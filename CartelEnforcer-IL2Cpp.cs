@@ -48,7 +48,7 @@ namespace CartelEnforcer_IL2Cpp
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.3.1";
+        public const string Version = "1.3.2";
         public const string DownloadLink = null;
     }
 
@@ -61,7 +61,7 @@ namespace CartelEnforcer_IL2Cpp
         // -1.0= Activity is 10 times less frequent
         // 0.0 = Activity is at game default frequency 
         // 1.0 = Activity is 10 times more frequent
-        public float activityFrequency = 0.0f; 
+        public float activityFrequency = 0.0f;
 
         // From -1.0 to 0.0 to 1.0,
         // -1.0 = Activity influence requirement is 100% Less (Means cartel influence requirement is at 0 and activities happen always)
@@ -585,7 +585,7 @@ namespace CartelEnforcer_IL2Cpp
                     string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
                     _positionText.text = formattedPosition;
                 }
-        
+
                 if (Input.GetKey(KeyCode.LeftControl))
                 {
                     // SEE Debug #region in code for InputFunctions
@@ -636,7 +636,7 @@ namespace CartelEnforcer_IL2Cpp
                                 Log($"{Player.Local.Inventory[i].ItemInstance.ID}");
                                 Log($"Quality: 0 Low, 5 Highest - {(Player.Local.Inventory[i].ItemInstance as QualityItemInstance).Quality}");
                                 Log($"Amount: {Player.Local.Inventory[i].ItemInstance.Quantity}");
-        
+
                                 if (Player.Local.Inventory[i].ItemInstance is ProductItemInstance inst)
                                 {
                                     if (inst != null && inst.ID != null)
@@ -654,8 +654,8 @@ namespace CartelEnforcer_IL2Cpp
                     }
                 }
             }
-        
-        
+
+
         }
         #endregion
 
@@ -1331,7 +1331,7 @@ namespace CartelEnforcer_IL2Cpp
                 CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
                 foreach (CartelRegionActivities act in regAct)
                 {
-                    foreach(CartelActivity activity in act.Activities)
+                    foreach (CartelActivity activity in act.Activities)
                     {
                         float result = 0f;
                         if (currentConfig.activityInfluenceMin > 0.0f && activity.InfluenceRequirement > 0.0f)
@@ -1366,6 +1366,7 @@ namespace CartelEnforcer_IL2Cpp
                 static void SummarizeLosses(Dealer __instance, List<ItemInstance> items, float cash)
                 {
                     // Added this piece of code to the original source, everything else inside Original function is original source code or equivalent
+                    Log("[TRY ROB ORIGINAL] Sum Loss");
                     if (items.Count > 0)
                         coros.Add(MelonCoroutines.Start(CartelStealsItems(items, () => { Log($"[CARTEL INV]    Succesfully stolen {items.Count} unique items"); })));
 
@@ -1377,15 +1378,29 @@ namespace CartelEnforcer_IL2Cpp
                     for (int i = 0; i < items.Count; i++)
                     {
                         string text = items[i].Quantity.ToString() + "x ";
-                        if (items[i] is ProductItemInstance && (items[i] as ProductItemInstance).AppliedPackaging != null)
+                        // following part is edited from original source code because it crashes in il2cpp using original logic
+                        // as type check fails on il2cpp we change it to try cast. see commented out part for replaced code
+                        ProductItemInstance tempInst = items[i].TryCast<ProductItemInstance>();
+                        if (tempInst != null)
                         {
-                            text = text + (items[i] as ProductItemInstance).AppliedPackaging.Name + " of ";
+                            if (tempInst.AppliedPackaging != null)
+                                text = text + tempInst.AppliedPackaging.Name + " of ";
                         }
                         text += items[i].Definition.Name;
-                        if (items[i] is QualityItemInstance)
+                        QualityItemInstance tempInst2 = items[i].TryCast<QualityItemInstance>();
+                        if (tempInst2 != null)
                         {
-                            text = text + " (" + (items[i] as QualityItemInstance).Quality.ToString() + " quality)";
+                            text = text + " (" + tempInst2.Quality.ToString() + " quality)";
                         }
+                        //if (items[i] is ProductItemInstance && (items[i] as ProductItemInstance).AppliedPackaging != null)
+                        //{
+                        //    text = text + (items[i] as ProductItemInstance).AppliedPackaging.Name + " of ";
+                        //}
+                        //text += items[i].Definition.Name;
+                        //if (items[i] is QualityItemInstance)
+                        //{
+                        //    text = text + " (" + (items[i] as QualityItemInstance).Quality.ToString() + " quality)";
+                        //}
                         list.Add(text);
                     }
                     if (cash > 0f)
@@ -1395,17 +1410,29 @@ namespace CartelEnforcer_IL2Cpp
                     string text2 = "This is what they got:\n" + string.Join("\n", list);
                     __instance.MSGConversation.SendMessage(new Message(text2, Message.ESenderType.Other, true, -1), false, true);
                 }
-
+                Log("[TRY ROB ORIGINAL] Evaluate Result - Check Inv");
                 float num = 0f;
                 foreach (ItemSlot itemSlot in __instance.Inventory.ItemSlots)
                 {
                     if (itemSlot.ItemInstance != null)
                     {
-                        num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtilityForNPCs);
+                        // Because of il2cpp we cast it directly see commented out part
+                        StorableItemDefinition tempDef = itemSlot.ItemInstance.Definition.TryCast<StorableItemDefinition>();
+                        if (tempDef != null)
+                        {
+                            num = Mathf.Max(num, tempDef.CombatUtilityForNPCs);
+                        }
+                        else
+                        {
+                            Log("[TRY ROB ORIGINAL] Evaluate Result - Temp Definition is null");
+                        }
+                        //num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtilityForNPCs);
                     }
                 }
                 float num2 = UnityEngine.Random.Range(0f, 1f);
                 num2 = Mathf.Lerp(num2, 1f, num * 0.5f);
+                Log("[TRY ROB ORIGINAL] Evaluate Result - Evaluate Random roll, Combat and Inventory states");
+
                 if (num2 > 0.67f)
                 {
                     __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
@@ -1416,6 +1443,7 @@ namespace CartelEnforcer_IL2Cpp
                     __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_partially_defended"), Message.ESenderType.Other, false, -1), true, true);
                     List<ItemInstance> list = new List<ItemInstance>();
                     float num3 = 1f - Mathf.InverseLerp(0.25f, 0.67f, num2);
+                    Log("[TRY ROB ORIGINAL] Partial Move Items");
                     for (int i = 0; i < __instance.Inventory.ItemSlots.Count; i++)
                     {
                         if (__instance.Inventory.ItemSlots[i].ItemInstance != null)
@@ -1436,6 +1464,8 @@ namespace CartelEnforcer_IL2Cpp
                     return;
                 }
 
+
+                Log("[TRY ROB ORIGINAL] Full Rob Items");
                 __instance.MSGConversation.SendMessage(new Message(__instance.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_loss"), Message.ESenderType.Other, false, -1), true, true);
                 List<ItemInstance> list2 = new List<ItemInstance>();
                 foreach (ItemSlot itemSlot2 in __instance.Inventory.ItemSlots)
@@ -1462,16 +1492,21 @@ namespace CartelEnforcer_IL2Cpp
             [HarmonyPrefix]
             public static bool Prefix(Dealer __instance)
             {
-                if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                
+                if (__instance.RelationData.Unlocked && __instance.IsRecruited)
                 {
-                    Log("[TRY ROB]    Run Custom");
-                    if (!__instance.isInBuilding)
-                        coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
-                }
-                else
-                {
-                    Log("[TRY ROB]    Run original");
-                    Original(__instance);
+                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                    {
+                        Log("[TRY ROB]    Run Custom");
+                        if (!__instance.isInBuilding && !__instance.Health.IsDead && !__instance.Health.IsKnockedOut)
+                            coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
+                    }
+                    else
+                    {
+                        Log("[TRY ROB]    Run original");
+                        Original(__instance);
+                    }
+
                 }
 
                 return false;
@@ -1560,6 +1595,13 @@ namespace CartelEnforcer_IL2Cpp
             // While Both dealer and spawned goon are alive and conscious evaluate every sec, max timeout is 1 minute
             int maxWaitSec = 60;
             int elapsed = 0;
+            List<EMapRegion> mapReg = new();
+            foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
+                mapReg.Add(unlmapReg);
+            bool changeInfluence = false;
+            if (InstanceFinder.IsServer && mapReg.Contains(region))
+                changeInfluence = true;
+
             while (!dealer.Health.IsDead && !dealer.Health.IsKnockedOut &&
                 !goon.Health.IsDead && !goon.Health.IsKnockedOut &&
                 Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) <= 90f && 
@@ -1654,10 +1696,9 @@ namespace CartelEnforcer_IL2Cpp
                 if (dealer.Behaviour.activeBehaviour != null && dealer.Behaviour.activeBehaviour is CombatBehaviour)
                     dealer.Behaviour.CombatBehaviour.End();
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                {
+
+                if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.080f);
-                }
             }
             else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 90f)
             {
@@ -1669,10 +1710,8 @@ namespace CartelEnforcer_IL2Cpp
                     dealer.Behaviour.CombatBehaviour.End();
 
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
-                if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
-                {
+                if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.020f);
-                }
             }
             else if (elapsed >= 60)
             {
@@ -1817,13 +1856,20 @@ namespace CartelEnforcer_IL2Cpp
                         list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
                     }
                 }
-                Log("[TRY ROB]    -Steal!");
                 if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
-
+                {
+                    Log("[TRY ROB]    -Steal!");
+                    void Callback()
+                    {
+                        if (goon != null)
+                            goon.Inventory.Clear();
+                    }
+                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
+                }
+                Log("[TRY ROB]    -Despawn!");
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
-
+                Log("[TRY ROB]    -Reset Event!");
                 if (stayInside != null)
                 {
                     stayInside.gameObject.SetActive(true);
@@ -1867,8 +1913,15 @@ namespace CartelEnforcer_IL2Cpp
                     }
                 }
                 if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
-
+                {
+                    Log("[TRY ROB]    -Steal!");
+                    void Callback()
+                    {
+                        if (goon != null)
+                            goon.Inventory.Clear();
+                    }
+                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
+                }
                 if (stayInside != null)
                 {
                     stayInside.gameObject.SetActive(true);
@@ -2104,7 +2157,8 @@ namespace CartelEnforcer_IL2Cpp
                     try
                     {
                         wep = thomasInstance.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
-                    } catch (InvalidCastException ex)
+                    } 
+                    catch (InvalidCastException ex)
                     {
                         MelonLogger.Warning("Failed to Cast Thomas Gun Weapon Instance: " + ex);
                     }
@@ -2236,7 +2290,7 @@ namespace CartelEnforcer_IL2Cpp
 
             while (driveByActive)
             {
-                yield return new WaitForSeconds(UnityEngine.Random.Range(0.10f, 0.20f));
+                yield return new WaitForSeconds(UnityEngine.Random.Range(0.25f, 0.5f)); // At Max 4 bullets / second, at minimum 2 bullets per second
                 if (!registered) yield break;
                 if (bulletsShot >= maxBulletsShot) break;
 
@@ -2278,7 +2332,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                     else if (distToPlayer < 25f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || ( angleToPlayer < -25f && angleToPlayer > -70f ))
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.2f || (angleToPlayer < -25f && angleToPlayer > -70f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2294,7 +2348,7 @@ namespace CartelEnforcer_IL2Cpp
                     }
                     else if (distToPlayer < 45f)
                     {
-                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f) )
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f || (angleToPlayer < -40f && angleToPlayer > -80f))
                         {
                             thomasInstance.Behaviour.CombatBehaviour.Shoot();
                             bulletsShot++;
@@ -2372,8 +2426,20 @@ namespace CartelEnforcer_IL2Cpp
                 {
                     if (!targetNPCs[random].HasActiveQuest && !targetNPCs[random].HasAskedQuestToday)
                     {
-                        targetNPCs[random].HasActiveQuest = true;
-                        InitMiniQuestDialogue(random);
+                        // If The NPC is not yet unlocked we try to roll a chance
+                        float chance = 1f;
+                        if (!random.RelationData.Unlocked)
+                        {
+                            chance = UnityEngine.Random.Range(0f, 1f);
+                        }
+
+                        // IF NPC is unlocked this will always pass since chance if 1f,
+                        // IF NPC is not unlocked, then there is 30% chance to generate the quest
+                        if (chance > 0.70f)
+                        {
+                            targetNPCs[random].HasActiveQuest = true;
+                            InitMiniQuestDialogue(random);
+                        }
                     }
                 }
                 yield return new WaitForSeconds(UnityEngine.Random.Range(480f, 960f));
@@ -2585,11 +2651,14 @@ namespace CartelEnforcer_IL2Cpp
         {
             lock (cartelItemLock)
             {
+                Log("[CARTEL INV] Lock Acquired");
                 for (int i = 0; i < items.Count; i++)
                 {
                     int realQty = -1;
 
-                    if (items[i] is QualityItemInstance inst)
+                    QualityItemInstance tempQt = items[i].TryCast<QualityItemInstance>();
+
+                    if (tempQt != null)
                     {
                         // Search for existing 
                         int foundIdx = -1;
@@ -2597,19 +2666,21 @@ namespace CartelEnforcer_IL2Cpp
                         {
                             for (int j = 0; j < cartelStolenItems.Count; j++)
                             {
-                                if (inst.ID == items[i].ID && cartelStolenItems[j].Quality == inst.Quality)
+                                if (cartelStolenItems[j].ID == tempQt.ID && cartelStolenItems[j].Quality == tempQt.Quality)
                                 {
                                     foundIdx = j;
+                                    Log($"[CARTEL INV]    Item Already exists, append");
                                     break;
                                 }
                             }
                         }
+                        ProductItemInstance pTemp = items[i].TryCast<ProductItemInstance>();
                         // Is packaging, jars + 5qty, brick +20
-                        if (items[i] is ProductItemInstance packin)
+                        if (pTemp != null)
                         {
-                            if (packin != null && packin.ID != null)
+                            if (pTemp.ID != null)
                             {
-                                switch (packin.ID)
+                                switch (pTemp.ID)
                                 {
                                     case "jar":
                                         realQty = 5;
@@ -2621,6 +2692,7 @@ namespace CartelEnforcer_IL2Cpp
                                         realQty = 1;
                                         break;
                                 }
+                                Log($"[CARTEL INV]   Real Qty: {pTemp.ID} = {realQty}");
                             }
                         }
 
@@ -2629,32 +2701,34 @@ namespace CartelEnforcer_IL2Cpp
                             if (realQty != -1)
                             {
                                 cartelStolenItems[foundIdx].Quantity += items[i].Quantity * realQty;
-                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                             else
                             {
                                 cartelStolenItems[foundIdx].Quantity += items[i].Quantity;
-                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                         }
                         else // not exist
                         {
                             if (realQty != -1)
                             {
-                                cartelStolenItems.Add(inst);
+                                cartelStolenItems.Add(tempQt);
                                 // At end of list change quantity to be same as qty*packaging
                                 cartelStolenItems[cartelStolenItems.Count].Quantity = items[i].Quantity * realQty;
-                                Log($"[CARTEL INV] ADD: {items[i].Name}x{items[i].Quantity * realQty}");
+                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
                             }
                             else
                             {
-                                cartelStolenItems.Add(inst); // Else Qty is already set nothing to do
-                                Log($"[CARTEL INV] ADD: {inst.Quantity}");
+                                cartelStolenItems.Add(tempQt); // Else Qty is already set nothing to do
+                                Log($"[CARTEL INV]    ADD: {tempQt.Quantity}");
                             }
                         }
                     }
                 }
             }
+            Log("[CARTEL INV] Lock Released");
+
             if (cb != null)
                 cb();
             yield return null;
@@ -3154,7 +3228,8 @@ namespace CartelEnforcer_IL2Cpp
             foreach (DriveByTrigger trigItem in driveByLocations)
             {
                 float distanceTo = Vector3.Distance(Player.Local.CenterPointTransform.position, trigItem.triggerPosition);
-                if (distanceTo <= nearest) {
+                if (distanceTo <= nearest) 
+                {
                     trig = trigItem;
                     nearest = distanceTo;
                 }
@@ -3346,7 +3421,7 @@ namespace CartelEnforcer_IL2Cpp
 
                     cube.transform.parent = Map.Instance.transform;
                     cube.transform.localScale = new Vector3(rad, rad, rad);
-                    cube.transform.position = loc.transform.position + new Vector3(0, 25f+rad, 0);
+                    cube.transform.position = loc.transform.position + new Vector3(0, 25f + rad, 0);
                     cube.SetActive(true);
 
                     foreach (Transform tr in loc.AmbushPoints)
@@ -3397,7 +3472,7 @@ namespace CartelEnforcer_IL2Cpp
 
                 sphere.transform.parent = Map.Instance.transform;
                 sphere.transform.localScale = new Vector3(rad * 2, rad * 2, rad * 2);
-                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f+rad*2, 0);
+                sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f + rad * 2, 0);
                 sphere.SetActive(true);
             }
             yield break;

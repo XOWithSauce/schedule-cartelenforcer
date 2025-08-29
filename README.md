@@ -170,7 +170,7 @@ These events only happen when the Cartel is hostile.
 #### Mini-Quests
 
 Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
-- The quest-giving NPCs are chosen randomly every 8-16 hours.
+- The quest-giving NPCs are chosen randomly every 8-16 hours. Random Choice prefers Unlocked NPCs more.
 - **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
 - **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
 - **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
@@ -180,7 +180,7 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 - **Loot Pools:** One of the following two pools is selected for each quest:
     - **Common (80% chance):** 3-10 items chosen from: Cocaine, Meth, Green Crack Seed, OG Kush Seed.
     - **Rare (20% chance):** 1 item chosen from: Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
-    - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel.
+    - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel. This is additional to the Loot Pool selected drop.
 
 ---
 

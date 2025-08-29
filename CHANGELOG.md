@@ -1,3 +1,13 @@
+# Version v1.3.2
+- Changed the Mini Quest system to prefer Unlocked NPCs. If the NPC is Locked, there is only 30% chance to generate the miniquest. Otherwise the random selection and generation will be 100% chance if locked. The Dialogue still has its own randomisation allowing the NPC to decline giving quest.
+- Changed the Drive By shooting speed to slower, from max 10 bullets / second and min 5 bullets / second -> down to max 4 bullets/second and min 2 bullets / second
+    - Drive By event and Death was nearly unavoidable at some locations when triggered, and the shooting logic worked too well and sprayed 5 bullets a second consistently at nearby range... Dying over and over again to same drive by location is not intended behaviour.
+- Fixed a bug where the Stolen Items Persistent system would not find the correct item while trying to save it
+- Fixed miscellanious IL2Cpp bugs encountered in testings
+- Fixed dealer robbing to target only unlocked and recruited dealers (previously locked region dealers got robbed)
+- Fixed dealer robbing targetting sometimes dead or knocked out or inside building dealers
+- OnUpdate method logic fixes
+
 # Version v1.3.1 
 - Fixed a bug where time stops randomly
 - Fixed miscellanious bugs in il2cpp version
