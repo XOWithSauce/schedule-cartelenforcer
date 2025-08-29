@@ -2,10 +2,18 @@
 - Changed the Mini Quest system to prefer Unlocked NPCs. If the NPC is Locked, there is only 30% chance to generate the miniquest. Otherwise the random selection and generation will be 100% chance if locked. The Dialogue still has its own randomisation allowing the NPC to decline giving quest.
 - Changed the Drive By shooting speed to slower, from max 10 bullets / second and min 5 bullets / second -> down to max 4 bullets/second and min 2 bullets / second
     - Drive By event and Death was nearly unavoidable at some locations when triggered, and the shooting logic worked too well and sprayed 5 bullets a second consistently at nearby range... Dying over and over again to same drive by location is not intended behaviour.
-- Fixed a bug where the Stolen Items Persistent system would not find the correct item while trying to save it
-- Fixed miscellanious IL2Cpp bugs encountered in testings
+- Fixed a bug in where the Stolen Items Persistent system would not find the correct item while trying to save it
+- Fixed a bug in IL2Cpp version where the Stolen Items persistent system would cause errors while loading or saving items
+- Fixed a bug in IL2Cpp version where the activity frequency system would fail to cast instances, not causing errors but indexing different activities incorrectly
+- Fixed a bug where the stolen items would be updated while they are being saved causing errors
 - Fixed dealer robbing to target only unlocked and recruited dealers (previously locked region dealers got robbed)
 - Fixed dealer robbing targetting sometimes dead or knocked out or inside building dealers
+- Fixed a coding mistake where the Robbery System time evaluation would not correctly count time, only lasting 12 seconds instead of 60
+- Fixed a coding mistake in the persistent stolen items system where instead of evaluating Packaging ID, it was evaluating Item ID, causing the calculation for Stolen Quantity to be incorrect
+- Fixed a bug where the Intercept Deals in the First Game region would cause errors, because there is no designated cartel dealer for the region
+- Fixed a bug where after Drive By Event Thomas would keep floating in the air where the Car despawned at
+- Tried to fix a bug where the cartel dealer starts bugging out at 4am
+- Fixed other il2cpp bugs and errors
 - OnUpdate method logic fixes
 
 # Version v1.3.1 

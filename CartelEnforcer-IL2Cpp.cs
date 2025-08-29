@@ -324,30 +324,37 @@ namespace CartelEnforcer_IL2Cpp
             List<QualityItemInstance> newQualityItemList = new List<QualityItemInstance>();
             if (stolenItems.items != null && stolenItems.items.Count > 0)
             {
+                MelonLogger.Msg("Serialize Quality");
                 foreach (SerializeStolenItems seri in stolenItems.items)
                 {
                     ItemDefinition def = Registry.GetItem(seri.ID);
                     ItemInstance item = def.GetDefaultInstance(seri.Quantity);
-                    switch (seri.Quality)
+                    QualityItemInstance qtInst = item.TryCast<QualityItemInstance>();
+                    if (qtInst != null)
                     {
-                        case 0:
-                            (item as QualityItemInstance).Quality = EQuality.Trash;
-                            break;
-                        case 1:
-                            (item as QualityItemInstance).Quality = EQuality.Poor;
-                            break;
-                        case 2:
-                            (item as QualityItemInstance).Quality = EQuality.Standard;
-                            break;
-                        case 3:
-                            (item as QualityItemInstance).Quality = EQuality.Premium;
-                            break;
-                        case 4:
-                            (item as QualityItemInstance).Quality = EQuality.Heavenly;
-                            break;
+                        switch (seri.Quality)
+                        {
+                            case 0:
 
+                                qtInst.Quality = EQuality.Trash;
+                                break;
+                            case 1:
+                                qtInst.Quality = EQuality.Poor;
+                                break;
+                            case 2:
+                                qtInst.Quality = EQuality.Standard;
+                                break;
+                            case 3:
+                                qtInst.Quality = EQuality.Premium;
+                                break;
+                            case 4:
+                                qtInst.Quality = EQuality.Heavenly;
+                                break;
+
+                        }
                     }
-                    newQualityItemList.Add((item as QualityItemInstance));
+                   
+                    newQualityItemList.Add(qtInst);
                 }
             }
             return newQualityItemList;
@@ -355,6 +362,7 @@ namespace CartelEnforcer_IL2Cpp
 
         public static void Save(List<QualityItemInstance> stolenItems)
         {
+            
             StolenItemsList itemsList = new();
             itemsList.items = new();
 
@@ -409,7 +417,7 @@ namespace CartelEnforcer_IL2Cpp
         public static ModConfig currentConfig;
         public static ListNewAmbush ambushConfig;
         public static ListNewAmbush gameDefaultAmbush;
-        public static List<QualityItemInstance> cartelStolenItems;
+        public static List<QualityItemInstance> cartelStolenItems = new();
         private static readonly object cartelItemLock = new object(); // for above list
 
         public static List<HrPassParameterMap> actFreqMapping = new();
@@ -683,7 +691,10 @@ namespace CartelEnforcer_IL2Cpp
         {
             public static bool Prefix(SaveManager __instance, string saveFolderPath)
             {
-                ConfigLoader.Save(cartelStolenItems);
+                lock (cartelItemLock)
+                {
+                    ConfigLoader.Save(cartelStolenItems);
+                }
                 return true;
             }
         }
@@ -701,7 +712,10 @@ namespace CartelEnforcer_IL2Cpp
         {
             public static bool Prefix(LoadManager __instance, SaveInfo autoLoadSave = null, Il2CppScheduleOne.UI.MainMenu.MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
             {
-                ConfigLoader.Save(cartelStolenItems);
+                lock (cartelItemLock)
+                {
+                    ConfigLoader.Save(cartelStolenItems);
+                }
                 ExitPreTask();
                 return true;
             }
@@ -929,23 +943,32 @@ namespace CartelEnforcer_IL2Cpp
                     CartelRegActivityHours activityHrs = new();
                     activityHrs.region = (int)act.Region;
 
+                    StealDeadDrop temp1 = inRegAct.TryCast<StealDeadDrop>();
+                    CartelCustomerDeal temp2 = inRegAct.TryCast<CartelCustomerDeal>();
+                    RobDealer temp3 = inRegAct.TryCast<RobDealer>();
+
                     int hours = 0;
                     // Now determine class
-                    if (inRegAct is StealDeadDrop)
+                    if (temp1 != null)
                     {
                         activityHrs.cartelActivityClass = 0;
                         hours = GetActivityHours(currentConfig.deadDropStealFrequency);
                     }
-                    else if (inRegAct is CartelCustomerDeal)
+                    else if (temp2 != null)
                     {
                         activityHrs.cartelActivityClass = 1;
                         hours = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
 
                     }
-                    else // else its RobDealer class
+                    else if (temp3 != null)
                     {
                         activityHrs.cartelActivityClass = 2;
                         hours = GetActivityHours(currentConfig.cartelRobberyFrequency);
+                    }
+                    else
+                    {
+                        Log("Failed to parse Cartel Activity Hours");
+                        continue;
                     }
 
                     activityHrs.hoursUntilEnable = hours;
@@ -1819,9 +1842,9 @@ namespace CartelEnforcer_IL2Cpp
                 changeInfluence = true;
 
             // While not dead or escape has elapsed under 60 seconds
-            int elapsedNav = 0;
+            float elapsedNav = 0f;
             float remainingDist = 100f;
-            while (elapsedNav < 60 &&
+            while (elapsedNav < 60f &&
                 goon.IsConscious &&
                 goon.IsGoonSpawned &&
                 !goon.Health.IsDead &&
@@ -1834,7 +1857,7 @@ namespace CartelEnforcer_IL2Cpp
                 if (currDist < remainingDist)
                     remainingDist = currDist;
                 yield return new WaitForSeconds(0.2f);
-                elapsedNav++;
+                elapsedNav += 0.2f;
             }
 
             if (!goon.Health.IsDead && !goon.Health.IsKnockedOut && remainingDist < 5f)
@@ -1896,7 +1919,7 @@ namespace CartelEnforcer_IL2Cpp
                 
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
-            else if (elapsedNav >= 60 && goon.IsGoonSpawned)
+            else if (elapsedNav >= 60f && goon.IsGoonSpawned)
             {
                 // The escape attempt timed out.
                 Log("[TRY ROB]    Despawned escaping goon due to timeout");
@@ -2274,6 +2297,8 @@ namespace CartelEnforcer_IL2Cpp
             driveByAgent.Navigate(trig.endPosition, null, (Il2CppScheduleOne.Vehicles.AI.VehicleAgent.NavigationCallback)DriveByNavComplete);
             driveByAgent.AutoDriving = true;
 
+            thomasInstance.gameObject.SetActive(true);
+
             coros.Add(MelonCoroutines.Start(DriveByShooting(player)));
             yield return null;
         }
@@ -2372,6 +2397,7 @@ namespace CartelEnforcer_IL2Cpp
             driveByAgent.StopNavigating();
             driveByVeh.Park_Networked(null, driveByParking);
             driveByActive = false;
+            thomasInstance.gameObject.SetActive(false);
             Log("[DRIVE BY] Drive By Complete");
             hoursUntilDriveBy = UnityEngine.Random.Range(16, 48);
         }
@@ -2654,7 +2680,7 @@ namespace CartelEnforcer_IL2Cpp
                 Log("[CARTEL INV] Lock Acquired");
                 for (int i = 0; i < items.Count; i++)
                 {
-                    int realQty = -1;
+                    int realQty = 1;
 
                     QualityItemInstance tempQt = items[i].TryCast<QualityItemInstance>();
 
@@ -2675,12 +2701,13 @@ namespace CartelEnforcer_IL2Cpp
                             }
                         }
                         ProductItemInstance pTemp = items[i].TryCast<ProductItemInstance>();
+                        
                         // Is packaging, jars + 5qty, brick +20
                         if (pTemp != null)
                         {
-                            if (pTemp.ID != null)
+                            if (pTemp.PackagingID != null)
                             {
-                                switch (pTemp.ID)
+                                switch (pTemp.PackagingID)
                                 {
                                     case "jar":
                                         realQty = 5;
@@ -2698,31 +2725,14 @@ namespace CartelEnforcer_IL2Cpp
 
                         if (foundIdx >= 0) // Exists in already stolen items
                         {
-                            if (realQty != -1)
-                            {
-                                cartelStolenItems[foundIdx].Quantity += items[i].Quantity * realQty;
-                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
-                            }
-                            else
-                            {
-                                cartelStolenItems[foundIdx].Quantity += items[i].Quantity;
-                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
-                            }
+                            Log($"[CARTEL INV]    EXISTS ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
+                            cartelStolenItems[foundIdx].Quantity += tempQt.Quantity * realQty;
                         }
                         else // not exist
                         {
-                            if (realQty != -1)
-                            {
-                                cartelStolenItems.Add(tempQt);
-                                // At end of list change quantity to be same as qty*packaging
-                                cartelStolenItems[cartelStolenItems.Count].Quantity = items[i].Quantity * realQty;
-                                Log($"[CARTEL INV]    ADD: {items[i].Name}x{items[i].Quantity * realQty}");
-                            }
-                            else
-                            {
-                                cartelStolenItems.Add(tempQt); // Else Qty is already set nothing to do
-                                Log($"[CARTEL INV]    ADD: {tempQt.Quantity}");
-                            }
+                            Log($"[CARTEL INV]    ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
+                            tempQt.Quantity = tempQt.Quantity * realQty;
+                            cartelStolenItems.Add(tempQt);
                         }
                     }
                 }
@@ -2751,8 +2761,9 @@ namespace CartelEnforcer_IL2Cpp
 
                     ItemDefinition def = Registry.GetItem(randomSelected.ID);
                     ItemInstance item = def.GetDefaultInstance(minQty);
-                    if (item is QualityItemInstance inst)
-                        inst.Quality = cartelStolenItems[randomIndex].Quality;
+                    QualityItemInstance qtInst = item.TryCast<QualityItemInstance>();
+                    if (qtInst != null)
+                        qtInst.Quality = cartelStolenItems[randomIndex].Quality;
 
                     fromPool.Add(item);
 
@@ -2812,7 +2823,7 @@ namespace CartelEnforcer_IL2Cpp
             }
 
             List<Contract> validContracts = new();
-
+            Log("[INTERCEPT] Validate Contracts");
             int i = 0;
             do
             {
@@ -2824,17 +2835,21 @@ namespace CartelEnforcer_IL2Cpp
                 if (trContract != null)
                 {
                     Contract contract = trContract.GetComponent<Contract>();
-                    bool isValid = true;
-                    if (contract.Dealer != null) isValid = false; // Not player
-                    if (occupied.Contains(contract.GUID.ToString())) isValid = false; // Not cartel dealer
-                    if (contract.GetMinsUntilExpiry() > 300) isValid = false; // Only take contracts with less than 5h left
-                    if (contract.GetMinsUntilExpiry() < 90) isValid = false; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
-                    if (contractGuids.Contains(contract.GUID.ToString())) isValid = false; // Only take contracts currently not intercepted
-
-                    if (isValid)
+                    if (contract != null)
                     {
-                        if (!validContracts.Contains(contract))
-                            validContracts.Add(contract);
+                        bool isValid = true;
+                        if (contract.Dealer != null) isValid = false; // Not player
+                        if (contract.Customer == null) isValid = false; // broken??
+                        if (occupied.Contains(contract.GUID.ToString())) isValid = false; // Not cartel dealer
+                        if (contract.GetMinsUntilExpiry() > 300) isValid = false; // Only take contracts with less than 5h left
+                        if (contract.GetMinsUntilExpiry() < 90) isValid = false; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
+                        if (contractGuids.Contains(contract.GUID.ToString())) isValid = false; // Only take contracts currently not intercepted
+
+                        if (isValid)
+                        {
+                            if (!validContracts.Contains(contract))
+                                validContracts.Add(contract);
+                        }
                     }
                 }
                 i++;
@@ -2877,6 +2892,7 @@ namespace CartelEnforcer_IL2Cpp
                 yield break; // No Valid Contracts this time
             }
 
+            Log("[INTERCEPT]    Validated all Contracts");
 
             Contract randomContract = validContracts[UnityEngine.Random.Range(0, validContracts.Count)];
             Customer customer = randomContract.Customer.GetComponent<Customer>();
@@ -2891,7 +2907,11 @@ namespace CartelEnforcer_IL2Cpp
                 }
             }
             selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(region).CartelDealer;
-
+            if (selected == null)
+            {
+                //Log("[INTERCEPT]    Selected Cartel Dealer is null"); // this happens in the first game region
+                selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(EMapRegion.Westville).CartelDealer;
+            }
             // Ensure Cartel Dealer is not dead or knocked out
             if (selected.Health.IsDead || selected.Health.IsKnockedOut) yield break;
             // Ensure NPC is not dead or knocked out
@@ -2899,13 +2919,13 @@ namespace CartelEnforcer_IL2Cpp
             // Ensure Player is not nearby
             float distanceToPlayer = Vector3.Distance(customer.NPC.CenterPointTransform.position, Player.Local.CenterPointTransform.position);
             if (distanceToPlayer < 40f) yield break;
-
+            Log("[INTERCEPT]    Reserved Contract for intercept");
             string cGuid = randomContract.GUID.ToString();
             contractGuids.Add(cGuid);
 
             NPCEvent_StayInBuilding event1 = null;
             NPCSignal_HandleDeal event2 = null;
-
+            Log("[INTERCEPT]    Parsing Action list");
             if (selected.Behaviour.ScheduleManager.ActionList != null)
             {
                 for (int k = 0; k < selected.Behaviour.ScheduleManager.ActionList.Count; k++)
@@ -3024,15 +3044,21 @@ namespace CartelEnforcer_IL2Cpp
                 }
                 if (contractGuids.Contains(cGuid))
                     contractGuids.Remove(cGuid);
+
                 ev2.HasStarted = false;
                 ev2.End();
+                ev2.gameObject.SetActive(false);
                 ev1.enabled = true;
                 ev1.IsActive = true;
                 ev1.HasStarted = true;
                 ev1.Resume();
 
-                interceptingDeal = false;
 
+                interceptingDeal = false;
+                if (dealer.currentContract != null && dealer.currentContract == contract)
+                {
+                    dealer.CustomerContractEnded(contract);
+                }
             }
 
             contract.onQuestEnd.AddListener(new Action<EQuestState>(OnQuestEndEvaluateResult));
@@ -3042,7 +3068,7 @@ namespace CartelEnforcer_IL2Cpp
 
             if (ev1 != null)
             {
-                ev1.StartTime = 0400;
+                ev1.StartTime = 402; // npc starts bugging at midnight if this is at 400??
                 ev1.EndTime = 1800;
                 ev1.End();
                 ev1.HasStarted = false;
@@ -3052,6 +3078,7 @@ namespace CartelEnforcer_IL2Cpp
             {
                 ev2.Started();
                 ev2.HasStarted = true;
+                ev2.gameObject.SetActive(true);
             }
             dealer.CheckAttendStart();
             // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
@@ -3187,8 +3214,10 @@ namespace CartelEnforcer_IL2Cpp
         public static IEnumerator ResetQuestUIEffect(Image fillImg, Image background)
         {
             while (interceptingDeal && registered) { yield return new WaitForSeconds(10f); }
-            background.color = questIconBack;
-            fillImg.overrideSprite = handshake;
+            if (background != null)
+                background.color = questIconBack;
+            if (fillImg != null)
+                fillImg.overrideSprite = handshake;
             Log("[INTERCEPT] Reset QuestUI");
             yield return null;
         }
