@@ -1,5 +1,7 @@
 # Contributing to Development
 
+### [Build Instructions](./BUILD.md)
+
 
 ### Code Principles
 ---
