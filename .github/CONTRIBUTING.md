@@ -51,6 +51,10 @@ Common Example where returned object could cause errors:
 
 ---
 
+Coroutines must sleep in enumerations using the static declared WaitForSeconds objects, when applicable.
+
+---
+
 Code Changes should follow best practices of Unity and follow basic style Guidelines for C#.
 
 Feature additions should take into account network behaviour and in future support multiplayer to some extent, pull requests may be declined due to no networking capability or support.
