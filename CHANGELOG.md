@@ -1,4 +1,23 @@
-# Version v1.3.2
+# Version 1.4.0
+- Code base change now divided to files and conditional statements instead of having over 3k lines in 1 file for 2 different builds
+- Performance boost from object state management and codebase proof reading and fixing
+- Fixed a bug where the Dealer would start targetting itself in combat, resulting in them spinning around and trying to hit themselves. This happened only in robberies and they lost every fight.
+- Changed the Drive By Shooting speed to be static at 4 bullets per second, but can be slower because of randomization
+- Fixed a bug in the IL2Cpp version where the saved items serializer would still not work, again due to coding mistake missing serializer attribute on the class
+- Changed Mini Quest duration to be static 60 seconds instead of random from 60-120
+- Changed Intercept Deals feature grace time before Cartel Dealer starts walking, from random 10-30 seconds to static 30 seconds
+- Removed Debug key to log the inventory contents as it was only used for testing
+- Changed mini quest to only generate when cartel is hostile, previously it generated in other states too but the dialogue option was locked
+- Changed the Release version of the mod to not contain debug logs anymore, meaning that Debug Mode will not Log anything anymore. This reduces filesize by over 50kb and should offer a performance boost. Logging can be enabled by building from source code in GitHub with Debug configuration enabled.
+- Robbery feature now rolls random chance to give robber different weapons: 50% chance to be only fists, 45% chance to be a knife, 5% chance to be a pump shotgun
+- Fixed Robbery feature message robberies targetting dead or inside building dealers, which was unrealistic behaviour
+- Alot of other miscellanious undocumented changes that have happened but forgot to write down, these are mainly for performance boosts and other il2cpp related bugs.
+
+
+
+
+
+# Version 1.3.2
 - Changed the Mini Quest system to prefer Unlocked NPCs. If the NPC is Locked, there is only 30% chance to generate the miniquest. Otherwise the random selection and generation will be 100% chance if locked. The Dialogue still has its own randomisation allowing the NPC to decline giving quest.
 - Changed the Drive By shooting speed to slower, from max 10 bullets / second and min 5 bullets / second -> down to max 4 bullets/second and min 2 bullets / second
     - Drive By event and Death was nearly unavoidable at some locations when triggered, and the shooting logic worked too well and sprayed 5 bullets a second consistently at nearby range... Dying over and over again to same drive by location is not intended behaviour.
@@ -16,7 +35,7 @@
 - Fixed other il2cpp bugs and errors
 - OnUpdate method logic fixes
 
-# Version v1.3.1 
+# Version 1.3.1 
 - Fixed a bug where time stops randomly
 - Fixed miscellanious bugs in il2cpp version
 - Changed the intercept deals timer to tick faster
@@ -26,7 +45,7 @@
 - Fixed the functionality of intercept deal to match readme descripption
 - Added new checks at the end of intercept deal, if the intercept is stopped (contract ends) that increases relationship by 0.25 (0.0 - 5.0)
 
-# Version v1.3.0
+# Version 1.3.0
 - Added 4 new configuration values to allow individual frequency change of Ambush, Dead Drop Steal, Cartel Customer Deal and Cartel Robbery events frequencies
     - Default at 1.0 means that the event frequency is NOT capped at all and can happen every ingame hour (doesnt mean that it will happen every hour)
     - at 0.0 the event can happen only once every 2 ingame days at fastest
@@ -66,7 +85,7 @@
 
 
 
-# Version v1.2.0
+# Version 1.2.0
 - Added Configuration support for changing the Cartel Activity Frequency
     - Value *activityFrequency* in `config.json`
 - Added Configuration support for changing the Minimum Cartel Influence requirements
@@ -85,7 +104,7 @@
 - Changed the Real Robberies to evaluate current Region:
     - If Dealer Robbery is spawned then based on combat outcomes, the Regional Cartel influence will change
 
-# Version v1.1.0
+# Version 1.1.0
 - Added a new feature to enhance the Dealer Robbing Mechanism in the base game
     - When player is within 60 units of a Dealer, that is about to get Robbed the feature gets triggered
     - Dealer will send a Text Message to the Player indicating they are getting robbed and asking for help

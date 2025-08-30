@@ -106,9 +106,75 @@ You can customize the mod's settings through the **config.json** file.
 
 ---
 
+### Events and Activities
+
+<img src="https://i.imgur.com/9umAuV9.png">
+
+#### Realistic Robberies
+
+When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
+- **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 25.
+- **Player flees:** If you run out of range, regional influence increases by 20.
+- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 50.
+
+---
+
+<img src="https://i.imgur.com/xJzpiAK.png">
+
+#### Intercept Deals
+
+This is a new type of event where the Cartel actively attempts to intercept one of your deals.
+- The event can only occur between 6 PM and 4 AM and when the Cartel is hostile.
+- Only deals with less than 5 hours and more than 1 hour and 30 minutes remaining can be intercepted.
+- If the player is within 40 units of the customer, the intercept is canceled.
+- The Cartel Dealer can have your Stolen Items in their inventory
+- **Event Timeline:**
+    - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
+    - A random timer of 30 seconds begins before the Cartel dealer starts their intercept.
+- **Outcomes:**
+    - If you complete the deal within the 30 second grace period, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
+    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
+    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
+
+---
+
+<img src="https://i.imgur.com/iwXBRTJ.gif">
+
+#### Drive-By Events
+
+These events only happen when the Cartel is hostile.
+- Only happens at Night Time from 22:30 to 04:00
+- Thomas will spawn in a car and try to shoot the player.
+- They are triggered when the player is near one of the 11 designated hotspots (common dealing locations, homes, and businesses).
+- These events have a randomized cooldown of 16-48 in-game hours.
+- Their frequency can be adjusted with the `activityFrequency` parameter.
+
+---
+<img src="https://i.imgur.com/BDpS4Kf.png">
+
+#### Mini-Quests
+
+Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
+- The quest-giving NPCs are chosen randomly every 8-16 hours. Random Choice prefers Unlocked NPCs more.
+- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
+- **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
+- **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
+- You have a 60 seconds to find the dead drop.
+- **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 25.
+- **Failure:** If you fail to find it, the items vanish and regional influence increases by 50.
+- **Loot Pools:** One of the following two pools is selected for each quest:
+    - **Common (80% chance):** 3-10 items chosen from: Cocaine, Meth, Green Crack Seed, OG Kush Seed.
+    - **Rare (20% chance):** 1 item chosen from: Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
+    - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel. This is additional to the Loot Pool selected drop.
+
+---
+
+
 ### Debug Mode
 
-In debug mode, you can see various visual cues and use keybinds to test features:
+In debug mode, you can see various visual cues and use keybinds to test features.
+
+> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See GitHub BUILD.md for more info.
 
 - **Cubes**: Visualize ambush positions. Their size corresponds to the detection radius and their color is based on the region. Standing under a cube will eventually trigger an ambush.
 - **Cyan Beams**: Visualize the four spawn points for each cube.
@@ -132,57 +198,10 @@ In debug mode, you can see various visual cues and use keybinds to test features
 
 For multiplayer to function correctly, all players must have the same `default.json`, `ambush.json` and `config.json` content.
 
----
-
-### Events and Activities
-
-#### Realistic Robberies
-
-When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
-- **Robber defeated:** If the robber is killed or knocked out, regional influence decreases by 25.
-- **Player flees:** If you run out of range, regional influence increases by 20.
-- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 50.
-
-#### Intercept Deals
-
-This is a new type of event where the Cartel actively attempts to intercept one of your deals.
-- The event can only occur between 6 PM and 4 AM and when the Cartel is hostile.
-- Only deals with less than 5 hours and more than 1 hour and 30 minutes remaining can be intercepted.
-- If the player is within 40 units of the customer, the intercept is canceled.
-- The Cartel Dealer can have your Stolen Items in their inventory
-- **Event Timeline:**
-    - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
-    - A random timer of 10-30 seconds begins before the Cartel dealer starts their intercept.
-- **Outcomes:**
-    - If you complete the deal within the 10-30 second grace period, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
-    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
-    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
-
-#### Drive-By Events
-
-These events only happen when the Cartel is hostile.
-- Only happens at Night Time from 22:30 to 04:00
-- Thomas will spawn in a car and try to shoot the player.
-- They are triggered when the player is near one of the 11 designated hotspots (common dealing locations, homes, and businesses).
-- These events have a randomized cooldown of 16-48 in-game hours.
-- Their frequency can be adjusted with the `activityFrequency` parameter.
-
-#### Mini-Quests
-
-Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
-- The quest-giving NPCs are chosen randomly every 8-16 hours. Random Choice prefers Unlocked NPCs more.
-- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
-- **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
-- **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
-- You have a limited time (60-120 seconds) to find the dead drop.
-- **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 25.
-- **Failure:** If you fail to find it, the items vanish and regional influence increases by 50.
-- **Loot Pools:** One of the following two pools is selected for each quest:
-    - **Common (80% chance):** 3-10 items chosen from: Cocaine, Meth, Green Crack Seed, OG Kush Seed.
-    - **Rare (20% chance):** 1 item chosen from: Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
-    - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel. This is additional to the Loot Pool selected drop.
+Not all events and activities added by this mod support multiplayer fully and might have bugs on server clients.
 
 ---
+
 
 ### Modifying Spawns
 

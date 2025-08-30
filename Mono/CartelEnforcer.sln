@@ -1,0 +1,22 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CartelEnforcer", "CartelEnforcer.csproj", "{2D247952-E778-4DBD-A16D-137DBE10658C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		MONO|Any CPU = MONO|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{2D247952-E778-4DBD-A16D-137DBE10658C}.MONO|Any CPU.ActiveCfg = Release|Any CPU
+		{2D247952-E778-4DBD-A16D-137DBE10658C}.MONO|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FFC22F98-FE49-4644-8DF1-0B140A9B1336}
+	EndGlobalSection
+EndGlobal

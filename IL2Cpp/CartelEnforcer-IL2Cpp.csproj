@@ -1,0 +1,99 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+		<DebugSymbols>true</DebugSymbols>
+		<DebugType>portable</DebugType>
+		<Optimize>false</Optimize>
+		<DefineConstants>DEBUG;TRACE;IL2CPP</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
+		<DebugType>none</DebugType>
+		<Optimize>true</Optimize>
+		<DefineConstants>TRACE;IL2CPP</DefineConstants>
+	</PropertyGroup>
+	
+	<PropertyGroup>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>disable</Nullable>
+		<LangVersion>default</LangVersion>
+		<TargetFramework>net6.0</TargetFramework>
+
+		<AssemblyVersion>1.0.0.0</AssemblyVersion>
+		<FileVersion>1.4.0.0</FileVersion>
+		<Version>1.4.0</Version>
+		<Product>Cartel Enforcer</Product>
+		<Company>XOWithSauce</Company>
+		<Copyright>Copyright XOWithSauce 2025</Copyright>
+
+		<Authors>XOWithSauce</Authors>
+		<Description>Schedule I Cartel Enforcer Mod</Description>
+		<RepositoryUrl>https://github.com/XOWithSauce/schedule-cartelenforcer</RepositoryUrl>
+		<RepositoryType>git</RepositoryType>
+		<NeutralLanguage>en-US</NeutralLanguage>
+
+		<AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+		<OutputType>Library</OutputType>
+
+		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+		<WarningsAsErrors></WarningsAsErrors>
+		<NoWarn></NoWarn>
+		<EnableNETAnalyzers>true</EnableNETAnalyzers>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
+		<PackageReference Include="Lib.Harmony" Version="2.4.0" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Compile Include="..\Source\**\*.cs" />
+	</ItemGroup>
+	
+	<ItemGroup>
+		<Reference Include="Assembly-CSharp">
+			<HintPath>libs-il2cpp\Assembly-CSharp.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2Cppmscorlib">
+			<HintPath>libs-il2cpp\Il2Cppmscorlib.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppFishNet.Runtime">
+			<HintPath>libs-il2cpp\Il2CppFishNet.Runtime.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppInterop.Runtime">
+			<HintPath>libs-il2cpp\Il2CppInterop.Runtime.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine">
+			<HintPath>libs-il2cpp\UnityEngine.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.CoreModule">
+			<HintPath>libs-il2cpp\UnityEngine.CoreModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.UI">
+			<HintPath>libs-il2cpp\UnityEngine.UI.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.UIModule">
+			<HintPath>libs-il2cpp\UnityEngine.UIModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.PhysicsModule">
+			<HintPath>libs-il2cpp\UnityEngine.PhysicsModule.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.TextMeshPro">
+			<HintPath>libs-il2cpp\Unity.TextMeshPro.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.InputSystem">
+			<HintPath>libs-il2cpp\Unity.InputSystem.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.InputModule">
+			<HintPath>libs-il2cpp\UnityEngine.InputModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.InputLegacyModule">
+			<HintPath>libs-il2cpp\UnityEngine.InputLegacyModule.dll</HintPath>
+		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>libs-il2cpp\Newtonsoft.Json.dll</HintPath>
+		</Reference>
+	</ItemGroup>
+
+</Project>

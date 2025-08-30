@@ -1,0 +1,22 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35919.96
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CartelEnforcer-IL2Cpp", "CartelEnforcer-IL2Cpp.csproj", "{E561C166-467C-4AFA-BECA-CBC968B69045}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		IL2CPP|Any CPU = IL2CPP|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E561C166-467C-4AFA-BECA-CBC968B69045}.IL2CPP|Any CPU.ActiveCfg = Release|Any CPU
+		{E561C166-467C-4AFA-BECA-CBC968B69045}.IL2CPP|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FE598EB8-B0DE-4DB8-82FF-849C897AB887}
+	EndGlobalSection
+EndGlobal
