@@ -19,27 +19,31 @@ Scenarios where to use the conditional expression:
 ```cs
 if (foo is Bar)
 {
-    foo.Run()
+    foo.Run();
 }
+// Alternative
+(foo as Bar).Run();
 ```
-2. We produce IL2Cpp equivalent code to handle it using TryCast
+2. We produce IL2Cpp equivalent code to handle it using TryCast 
 ```cs
 #if MONO
 if (foo is Bar)
 {
-    foo.Run()
+    foo.Run();
 }
+// Alternative
+(foo as Bar).Run();
 #else
 Bar temp = foo.TryCast<Bar>();
 if (temp != null)
 {
-    temp.Run()
+    temp.Run();
 }
 #endif
 ```
 ---
 
-If IntelliSense shows that there is a type mismatch between function return value in IL2Cpp and the Mono version, both versions types need to be respected and object management needs to be aware of the types or parse to a type which is supported by Mono.
+If IntelliSense shows that there is a type mismatch between function return value in IL2Cpp and the Mono version, both versions types need to be respected and object management needs to be aware of the types or alternatively parse to a type which is supported by Mono.
 
 Common Example where returned object could cause errors:
 1. IL2Cpp : `Il2CppArray<Object>` 
@@ -49,7 +53,7 @@ Common Example where returned object could cause errors:
 
 Code Changes should follow best practices of Unity and follow basic style Guidelines for C#.
 
-Feature additions should take into account network behaviour and support multiplayer to some extent, pull requests may be declined due to no networking capability or support.
+Feature additions should take into account network behaviour and in future support multiplayer to some extent, pull requests may be declined due to no networking capability or support.
 
 ---
 
