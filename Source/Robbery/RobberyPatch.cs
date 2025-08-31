@@ -118,15 +118,19 @@ namespace CartelEnforcer
                     num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtilityForNPCs);
                 }
 #else
-                StorableItemDefinition tempDef = itemSlot.ItemInstance.Definition.TryCast<StorableItemDefinition>();
-                if (tempDef != null)
+                if (itemSlot.ItemInstance != null)
                 {
-                    num = Mathf.Max(num, tempDef.CombatUtilityForNPCs);
+                    StorableItemDefinition tempDef = itemSlot.ItemInstance.Definition.TryCast<StorableItemDefinition>();
+                    if (tempDef != null)
+                    {
+                        num = Mathf.Max(num, tempDef.CombatUtilityForNPCs);
+                    }
+                    else
+                    {
+                        Log("[TRY ROB ORIGINAL] Evaluate Result - Temp Definition is null");
+                    }
                 }
-                else
-                {
-                    Log("[TRY ROB ORIGINAL] Evaluate Result - Temp Definition is null");
-                }
+                
 #endif
             }
             float num2 = UnityEngine.Random.Range(0f, 1f);
@@ -702,3 +706,4 @@ namespace CartelEnforcer
         }
     }
 }
+
