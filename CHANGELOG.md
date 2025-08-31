@@ -1,3 +1,8 @@
+
+# Versions 1.4.1 and 1.4.2 for IL2CPP
+- Fixed bug that caused robbery to always throw errors when doing message robbery
+- Fixed bug that caused saving cartel stolen items to throw errors
+
 # Version 1.4.0
 - Code base change now divided to files and conditional statements instead of having over 3k lines in 1 file for 2 different builds
 - Performance boost from object state management and codebase proof reading and fixing
