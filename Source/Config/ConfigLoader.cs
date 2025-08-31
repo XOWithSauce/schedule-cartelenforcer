@@ -277,6 +277,9 @@ namespace CartelEnforcer
                 {
                     string json = File.ReadAllText(Path.Combine(pathCartelStolen, fileName));
                     stolenItems = JsonConvert.DeserializeObject<StolenItemsList>(json);
+                    MelonLogger.Msg(" Loaded Cartel stolen items, count:");
+                    if (stolenItems.items != null)
+                        MelonLogger.Msg(stolenItems.items.Count);
                 }
                 catch (Exception ex)
                 {
@@ -293,34 +296,91 @@ namespace CartelEnforcer
             {
                 foreach (SerializeStolenItems seri in stolenItems.items)
                 {
+                    // Validate fields
+                    if (seri.ID == null || seri.ID == string.Empty)
+                    {
+                        MelonLogger.Msg("Stolen Item ID is null");
+                        continue;
+                    }
+                    else if (seri.Quality < 0 || seri.Quality > 4)
+                    {
+                        MelonLogger.Msg("Stolen Quality not allowed");
+                        continue;
+                    }
+                    else if (seri.Quantity >= int.MaxValue)
+                    {
+                        MelonLogger.Msg("Stolen Quantity is over the max limit");
+                        continue;
+                    }
+
 #if MONO
                     ItemDefinition def = ScheduleOne.Registry.GetItem(seri.ID);
+                    ItemInstance item = def.GetDefaultInstance(seri.Quantity);
+                    if (item is QualityItemInstance inst)
+                    {
+                        switch (seri.Quality)
+                        {
+                            case 0:
+                                inst.Quality = EQuality.Trash;
+                                break;
+                            case 1:
+                                inst.Quality = EQuality.Poor;
+                                break;
+                            case 2:
+                                inst.Quality = EQuality.Standard;
+                                break;
+                            case 3:
+                                inst.Quality = EQuality.Premium;
+                                break;
+                            case 4:
+                                inst.Quality = EQuality.Heavenly;
+                                break;
+                            default:
+                                break;
+                        }
+                        newQualityItemList.Add(inst);
+                    }
+                    else
+                    {
+                        MelonLogger.Msg("Tried to load item thats not quality item instance");
+                    }
 #else
                     ItemDefinition def = Il2CppScheduleOne.Registry.GetItem(seri.ID);
-#endif
                     ItemInstance item = def.GetDefaultInstance(seri.Quantity);
-                    switch (seri.Quality)
+                    QualityItemInstance temp = item.TryCast<QualityItemInstance>();
+                    if (temp != null)
                     {
-                        case 0:
-                            (item as QualityItemInstance).Quality = EQuality.Trash;
-                            break;
-                        case 1:
-                            (item as QualityItemInstance).Quality = EQuality.Poor;
-                            break;
-                        case 2:
-                            (item as QualityItemInstance).Quality = EQuality.Standard;
-                            break;
-                        case 3:
-                            (item as QualityItemInstance).Quality = EQuality.Premium;
-                            break;
-                        case 4:
-                            (item as QualityItemInstance).Quality = EQuality.Heavenly;
-                            break;
-
+                        switch (seri.Quality)
+                        {
+                            case 0:
+                                temp.Quality = EQuality.Trash;
+                                break;
+                            case 1:
+                                temp.Quality = EQuality.Poor;
+                                break;
+                            case 2:
+                                temp.Quality = EQuality.Standard;
+                                break;
+                            case 3:
+                                temp.Quality = EQuality.Premium;
+                                break;
+                            case 4:
+                                temp.Quality = EQuality.Heavenly;
+                                break;
+                            default:
+                                break;
+                        }
+                        newQualityItemList.Add(temp);
                     }
-                    newQualityItemList.Add(item as QualityItemInstance);
+                    else
+                    {
+                        MelonLogger.Msg("Tried to load item thats not quality item instance");
+                    }
+#endif
+
                 }
             }
+
             return newQualityItemList;
         }
 
