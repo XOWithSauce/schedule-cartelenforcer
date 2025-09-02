@@ -61,7 +61,7 @@ namespace CartelEnforcer
                 // Added this piece of code to the original source, everything else inside Original function is original source code or equivalent
                 Log("[TRY ROB ORIGINAL] Sum Loss");
                 if (items.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(items, () => { Log($"[CARTEL INV]    Succesfully stolen {items.Count} unique items"); })));
+                    coros.Add(MelonCoroutines.Start(CartelStealsItems(items)));
 
                 if (items.Count == 0 && cash <= 0f)
                 {
@@ -130,7 +130,6 @@ namespace CartelEnforcer
                         Log("[TRY ROB ORIGINAL] Evaluate Result - Temp Definition is null");
                     }
                 }
-                
 #endif
             }
             float num2 = UnityEngine.Random.Range(0f, 1f);
@@ -196,10 +195,10 @@ namespace CartelEnforcer
             if (__instance.RelationData.Unlocked && __instance.IsRecruited)
             {
                 // Check not in building, dead or knocked out
-                if (!__instance.isInBuilding && !__instance.Health.IsDead && !__instance.Health.IsKnockedOut)
+                if (!__instance.Health.IsDead && !__instance.Health.IsKnockedOut)
                 {
                     Log("[TRY ROB] Started");
-                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled && !__instance.isInBuilding)
                     {
                         Log("[TRY ROB]    Run Custom");
                         coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
@@ -706,4 +705,3 @@ namespace CartelEnforcer
         }
     }
 }
-

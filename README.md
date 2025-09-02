@@ -11,9 +11,10 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [Configuration](#configuration)
 * [Events and Activities](#events-and-activities)
     * [Realistic Robberies](#realistic-robberies)
+    * [Intercept Deals](#intercept-deals)
     * [Drive-By Events](#drive-by-events)
     * [Mini-Quests](#mini-quests)
-    * [Intercept Deals](#intercept-deals)
+    * [End Game Quest](#end-game-quest)
 * [Debug Mode](#debug-mode)
 * [In Multiplayer](#in-multiplayer)
 * [Modifying Spawns](#modifying-spawns)
@@ -28,9 +29,10 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
-- **Intercept Deals:** A new event where a Cartel dealer attempts to intercept player deals.
+- **End Game Quest:** New Quest where you are tasked with taking down a high ranking Cartel Brute.
+- **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
-- **Debug Mode:** Visualize all locations, debug messages, and trigger events manually for testing.
+- **Debug Mode:** Visualize all locations, trigger events manually for testing.
 
 ---
 ### Installation
@@ -50,17 +52,19 @@ You can customize the mod's settings through the **config.json** file.
 
 ```json
 {
-    "debugMode": false,
+    "debugMode": true,
     "activityFrequency": 0.0,
     "activityInfluenceMin": 0.0,
     "ambushFrequency": 1.0,
     "deadDropStealFrequency": 1.0,
     "cartelCustomerDealFrequency": 1.0,
     "cartelRobberyFrequency": 1.0,
+    "cartelDealChance": 0.1,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
     "miniQuestsEnabled": true,
-    "interceptDeals": true
+    "interceptDeals": true,
+    "endGameQuest": true
 }
 ```
 
@@ -91,6 +95,9 @@ You can customize the mod's settings through the **config.json** file.
     - `1.0`: Can happen as often as every 1 in-game hour.
     - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days.
+- **`cartelDealChance`**: Adjusts the likelihood of Cartel Dealers going out and making extra deals.
+    - `1.0`: Cartel Dealers will have 100% chance of going out to an extra deal.
+    - `0.0`: Cartel Dealers will have 0% chance of going out to an extra deal. (Also disables this feature)
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -103,14 +110,18 @@ You can customize the mod's settings through the **config.json** file.
 - **`interceptDeals`**:
     - `true`: Enables the Intercept Deals event.
     - `false`: Disables the event.
-
+- **`endGameQuest`**:
+    - `true`: Enables the generation of End Game Quest.
+    - `false`: Disables the generation.
 ---
 
 ### Events and Activities
 
+---
+
 <img src="https://i.imgur.com/9umAuV9.png">
 
-#### Realistic Robberies
+### Realistic Robberies
 
 When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
 - **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 25.
@@ -121,26 +132,32 @@ When a dealer is being robbed, a robber will spawn and engage them in a fight. Y
 
 <img src="https://i.imgur.com/xJzpiAK.png">
 
-#### Intercept Deals
+### Intercept Deals
 
 This is a new type of event where the Cartel actively attempts to intercept one of your deals.
-- The event can only occur between 6 PM and 4 AM and when the Cartel is hostile.
+- The event can only occur between 16:20 and 04:20 and when the Cartel is hostile.
+- Randomized Frequency of Intercept Deals feature is tied to the Activity Frequency config value
 - Only deals with less than 5 hours and more than 1 hour and 30 minutes remaining can be intercepted.
 - If the player is within 40 units of the customer, the intercept is canceled.
 - The Cartel Dealer can have your Stolen Items in their inventory
 - **Event Timeline:**
     - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
-    - A random timer of 30 seconds begins before the Cartel dealer starts their intercept.
+    - A timer of 30 seconds begins before the Cartel dealer starts their intercept.
 - **Outcomes:**
     - If you complete the deal within the 30 second grace period, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
     - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
     - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
 
+Additionally Intercept Deals Feature has second mechanism:
+- Inside the time window 16:20 - 04:20 Cartel Dealers now have extra chance to make deals, based on the **cartelDealChance** value. These deals are not capped by the **cartelCustomerDealFrequency** and are additional to the base game behaviour.
+- Every time an intercept is calculated (based on activity frequency), all of the Cartel Dealers will have a chance to intercept one of the pending offers.
+
+
 ---
 
 <img src="https://i.imgur.com/iwXBRTJ.gif">
 
-#### Drive-By Events
+### Drive-By Events
 
 These events only happen when the Cartel is hostile.
 - Only happens at Night Time from 22:30 to 04:00
@@ -150,13 +167,15 @@ These events only happen when the Cartel is hostile.
 - Their frequency can be adjusted with the `activityFrequency` parameter.
 
 ---
-<img src="https://i.imgur.com/BDpS4Kf.png">
 
-#### Mini-Quests
+<img src="https://i.imgur.com/NMcosDO.png">
+
+### Mini-Quests
 
 Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 - The quest-giving NPCs are chosen randomly every 8-16 hours. Random Choice prefers Unlocked NPCs more.
 - **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
+- **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the quest.
 - **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
 - **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
 - You have a 60 seconds to find the dead drop.
@@ -169,6 +188,37 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 
 ---
 
+<img src="https://i.imgur.com/UDb9giZ.png">
+
+### End Game Quest
+
+#### Unexpected Alliances
+The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). This Quest can be completed only once per session.
+
+> Note: The *Unexpected Alliances* Quest is in early phase development and is subject to change in content, difficulty and rewards.
+
+- **Quest Prerequirements:**
+    1. Cartel must be Hostile
+    2. Player must have atleast 5 customers unlocked from Suburbia Region
+    3. Player must be atleast Enforcer rank
+
+- Upon paying the $5000 Bribe to Manny, you get a custom active quest:
+    - First you must intercept cartel dead drops twice (the Mini Quest in this document)
+    - After intercepts, you must wait for Manny to arrange a meeting and send a text.
+    - After player attends the meeting and finishes the dialogue they get the final quest step
+    - Kill the Cartel Brute
+        - If you run more than 70 units away from the Brute the Quest will fail
+        - If the Brute runs more than 70 units away from its spawn position the Quest will fail
+        - You have 2 minutes from when the fight starts to kill the Brute
+
+- **Quest Rewards:**
+    - 1000 XP 
+    - You get a Gold Watch and Gold Chain from the Cartel Brute inventory
+    - Customer relationships increase by 5% for all customers
+    - All unlocked regions have their Cartel Influence decreased by 25%
+    - And lastly but most importantly: *Bragging Rights*
+
+---
 
 ### Debug Mode
 
@@ -188,9 +238,9 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + R`: Trigger a Dealer Robbery at the nearest dealer.
     - `Left CTRL + G`: Trigger an instant drive-by at the nearest location.
     - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
-    - `Left CTRL + L`: Log internal mod data to the console.
-    - `Left CTRL + I`: Log inventory content to the console.
+    - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
     - `Left CTRL + T`: Trigger an Intercept Deal event.
+    - `Left CTRL + Y`: Generate the End Game Quest dialogue option for Manny, without checking prerequirements.
 
 ---
 
@@ -257,7 +307,7 @@ You can add or modify custom ambush locations.
 #### Modifying Cartel Stolen Items
 
 1. Open `Mods/CartelEnforcer/CartelItems/(organisation name).json`.
-2. You can only the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id.
+2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
 
 

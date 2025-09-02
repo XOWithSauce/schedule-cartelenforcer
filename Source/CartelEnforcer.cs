@@ -10,6 +10,7 @@ using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
+using static CartelEnforcer.EndGameQuest;
 
 #if MONO
 using ScheduleOne.DevUtilities;
@@ -39,7 +40,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.4.0";
+        public const string Version = "1.5.0";
         public const string DownloadLink = null;
     }
 
@@ -58,6 +59,7 @@ namespace CartelEnforcer
         public static WaitForSeconds Wait05 = new WaitForSeconds(0.5f);
         public static WaitForSeconds Wait2 = new WaitForSeconds(2f);
         public static WaitForSeconds Wait5 = new WaitForSeconds(5f);
+        public static WaitForSeconds Wait10 = new WaitForSeconds(10f);
         public static WaitForSeconds Wait30 = new WaitForSeconds(30f);
         public static WaitForSeconds Wait60 = new WaitForSeconds(60f);
         #endregion
@@ -127,8 +129,21 @@ namespace CartelEnforcer
                     // Left CTRL + T Intercept random deal
                     else if (Input.GetKey(KeyCode.T))
                     {
-                        debounce = true;
-                        MelonCoroutines.Start(OnInputInterceptContract());
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputInterceptContract());
+                        }
+                    }
+
+                    // Left CTRL + Y Gen End quest
+                    else if (Input.GetKey(KeyCode.Y))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputGenerateEndQuest());
+                        }
                     }
                 }
             }
@@ -168,6 +183,8 @@ namespace CartelEnforcer
             currentConfig = ConfigLoader.Load();
 
             cartelStolenItems = ConfigLoader.LoadStolenItems();
+            if (cartelStolenItems.Count == 0)
+                Log("[CARTEL INVENTORY]   Stolen items is 0");
 
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
@@ -182,6 +199,9 @@ namespace CartelEnforcer
                 coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
                 coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
             }
+
+            if (currentConfig.endGameQuest)
+                coros.Add(MelonCoroutines.Start(InitializeEndGameQuest()));
 
             if (currentConfig.debugMode)
                 MelonCoroutines.Start(MakeUI());
@@ -222,6 +242,7 @@ namespace CartelEnforcer
 
         public static IEnumerator InitializeAndEvaluateMiniQuest()
         {
+            yield return Wait10;
             yield return InitMiniQuest();
             Log("Adding DayPass Function for Mini Quest");
 #if MONO
@@ -230,6 +251,26 @@ namespace CartelEnforcer
             NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassNewDiag;
 #endif
             coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
+            yield return null;
+        }
+
+        public static IEnumerator InitializeEndGameQuest()
+        {
+            yield return Wait30;
+            Log("Evaluating End Game Quest Creation");
+            bool hasGeneratedQuest = false;
+            while (registered)
+            {
+                if (PreRequirementsMet() && !completed && !hasGeneratedQuest)
+                {
+                    Log("[END GAME QUEST] End Game Quest creation started");
+                    hasGeneratedQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenDialogOption()));
+                    break;
+                }
+                yield return Wait60;
+            }
+
             yield return null;
         }
 
@@ -258,6 +299,14 @@ namespace CartelEnforcer
             emptyDrops.Clear();
             targetNPCsList.Clear();
             targetNPCs.Clear();
+
+            activeQuest = null;
+            completed = false;
+            StageDeadDropsObserved = 0;
+            fixer = null;
+            bossGoon = null;
+            
+
 #if IL2CPP
             CartelActivities_TryStartActivityPatch.activitiesReadyToStart.Clear();
             CartelActivities_TryStartActivityPatch.validRegionsForActivity.Clear();

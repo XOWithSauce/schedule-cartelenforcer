@@ -50,6 +50,8 @@ namespace CartelEnforcer
         public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
         public float cartelRobberyFrequency = 1.0f;
 
+        public float cartelDealChance = 0.3f;
+
         public bool driveByEnabled = true;
 
         public bool realRobberyEnabled = true;
@@ -57,6 +59,9 @@ namespace CartelEnforcer
         public bool miniQuestsEnabled = true;
 
         public bool interceptDeals = true;
+
+        public bool endGameQuest = true;
+
     }
 
     // Because vector3 isnt just xyz for serialization, we remove everything except xyz from the base object properties

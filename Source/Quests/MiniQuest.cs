@@ -5,8 +5,10 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.EndGameQuest;
 
 #if MONO
+using ScheduleOne.GameTime;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Dialogue;
@@ -17,7 +19,9 @@ using ScheduleOne.Money;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
+using FishNet;
 #else
+using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
@@ -193,7 +197,15 @@ namespace CartelEnforcer
         {
             Log("[MINI QUEST]    Option Chosen");
             float chance = Mathf.Lerp(0.30f, 0.60f, npc.RelationData.NormalizedRelationDelta); // At max rela only 40% chance to refuse
-            if (UnityEngine.Random.Range(0f, 1f) < chance && NetworkSingleton<MoneyManager>.Instance.cashBalance >= 100f)
+            bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= 100f;
+            if ((TimeManager.Instance.CurrentTime >= 1200 || TimeManager.Instance.CurrentTime <= 1800))
+            {
+                // If inside of 12:00 - 18:00 window, Higher likelihood to accept quest and also tell exact location
+                chance = Mathf.Lerp(chance, 1.0f, chance);
+
+            }
+
+            if (UnityEngine.Random.Range(0f, 1f) < chance && hasCash)
             {
                 // Start mini quest
                 Log("[MINI QUEST]    Start Quest");
@@ -210,10 +222,21 @@ namespace CartelEnforcer
                 DeadDrop random = emptyDrops[UnityEngine.Random.Range(0, emptyDrops.Count)];
 
                 string location = "";
+                bool hasPreposition = false;
                 if (UnityEngine.Random.Range(0f, 1f) > chance) // At max rela only 40% chance to tell only region
                     location = random.Region.ToString() + " region";
                 else
+                {
                     location = random.DeadDropName;
+                    location = location.ToLower();
+                    List<string> splits = location.Split(' ').ToList();
+
+                    if (splits.Count > 0 && (splits[0] == "under" || splits[0] == "behind"))
+                    {
+                        hasPreposition = true;
+                    }
+                }
+
 
                 List<ItemInstance> listItems = new();
                 ItemInstance item;
@@ -252,26 +275,32 @@ namespace CartelEnforcer
                 coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc)));
                 controller.handler.ContinueSubmitted();
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
+                string prep = "";
                 switch (UnityEngine.Random.Range(0, 5))
                 {
                     case 0:
-                        controller.handler.WorldspaceRend.ShowText($"I heard them talk about some drop around {location}...", 15f);
+                        prep = hasPreposition ? "" : "around";
+                        controller.handler.WorldspaceRend.ShowText($"I heard them talk about some drop {prep} {location}...", 15f);
                         break;
 
                     case 1:
-                        controller.handler.WorldspaceRend.ShowText($"There are rumours about suspicious actions near {location}!", 15f);
+                        prep = hasPreposition ? "" : "near";
+                        controller.handler.WorldspaceRend.ShowText($"There are rumours about suspicious actions {prep} {location}!", 15f);
                         break;
 
                     case 2:
-                        controller.handler.WorldspaceRend.ShowText($"Yes! I heard them stash something near {location}! You didn't hear this from me, okay?", 15f);
+                        prep = hasPreposition ? "" : "near";
+                        controller.handler.WorldspaceRend.ShowText($"Yes! I heard they stashed something {prep} {location}! You didn't hear this from me, okay?", 15f);
                         break;
 
                     case 3:
-                        controller.handler.WorldspaceRend.ShowText($"I saw one of them hide something in a dead drop around {location}.", 15f);
+                        prep = hasPreposition ? "" : "around";
+                        controller.handler.WorldspaceRend.ShowText($"I saw one of them hide something in a dead drop {prep} {location}.", 15f);
                         break;
 
                     case 4:
-                        controller.handler.WorldspaceRend.ShowText($"Yes and don't come asking anymore! They have been dealing at {location}.", 15f);
+                        prep = hasPreposition ? "" : "at";
+                        controller.handler.WorldspaceRend.ShowText($"Yes and don't come asking anymore! They have been dealing {prep} {location}.", 15f);
                         break;
                 }
             }
@@ -339,6 +368,7 @@ namespace CartelEnforcer
                 opened = true;
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
+                StageDeadDropsObserved += 1;
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             };
 #else
@@ -349,6 +379,7 @@ namespace CartelEnforcer
                 opened = true;
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
+                StageDeadDropsObserved += 1;
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             }
             onOpenedAction = (UnityEngine.Events.UnityAction)WrapOnOpenCallback;

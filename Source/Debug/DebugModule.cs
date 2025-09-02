@@ -7,10 +7,12 @@ using static CartelEnforcer.DriveByEvent;
 using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
+using static CartelEnforcer.EndGameQuest;
 using System.Diagnostics;
 
 
 #if MONO
+using ScheduleOne.Quests;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
@@ -21,6 +23,7 @@ using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI;
 using TMPro;
 #else
+using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
@@ -47,6 +50,16 @@ namespace CartelEnforcer
         {
             if (currentConfig.debugMode)
                 MelonLogger.Msg(msg);
+        }
+
+        public static IEnumerator OnInputGenerateEndQuest()
+        {
+            Log("Generating Quest");
+            yield return Wait2;
+            coros.Add(MelonCoroutines.Start(GenDialogOption()));
+            debounce = false;
+            Log("Generating Quest Done");
+            yield return null;
         }
 
         // Debug tool starts instant driveby on nearest and logs info

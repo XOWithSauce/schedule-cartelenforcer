@@ -238,7 +238,7 @@ namespace CartelEnforcer
             float tickRate = 60f;
             if (currentConfig.activityFrequency > 0.0f) // If number is higher than 0, set tick rate to be rougly 10 times faster at 1.0
                 tickRate = Mathf.Lerp(defaultRate, defaultRate / 10, currentConfig.activityFrequency);
-            WaitForSeconds WaitCalculated = new WaitForSeconds(tickRate / actFreqMapping.Count);// So we arrive at the end of list around the full time length of tick rate, less cluttering big chunk changes more like overtime one by one we adjust the frequencies
+            WaitForSeconds WaitCalculated = new WaitForSeconds(tickRate / actFreqMapping.Count);// So we arrive at the end of list around the full time length of tick rate, less cluttering big chunk changes more like overtime one by one we adjust the hourpass cooldowns
 
             // Else condition here is that Activity Frequency is at minimum -1.0, where tick rate should be 10 times slower
             // But this doesnt work for tickrate because HourPass functions in classes add automatically

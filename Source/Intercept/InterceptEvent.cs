@@ -6,6 +6,8 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using System;
+
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -54,20 +56,76 @@ namespace CartelEnforcer
 
         public static bool interceptingDeal = false;
 
+        private static void SetupDealers()
+        {
+            Log("Configuring Cartel Dealer Event values");
+            foreach (CartelDealer dealer in allCartelDealers)
+            {
+                dealer.Movement.MoveSpeedMultiplier = 1.8f;
+
+                NPCEvent_StayInBuilding event1 = null;
+                NPCSignal_HandleDeal event2 = null;
+                if (dealer.Behaviour.ScheduleManager.ActionList != null)
+                {
+                    foreach (NPCAction action in dealer.Behaviour.ScheduleManager.ActionList)
+                    {
+#if MONO
+                        if (action is NPCEvent_StayInBuilding ev1)
+                            event1 = ev1;
+
+                        else if (action is NPCSignal_HandleDeal ev2)
+                            event2 = ev2;
+#else
+                        NPCEvent_StayInBuilding ev1_temp = action.TryCast<NPCEvent_StayInBuilding>();
+                        if (ev1_temp != null)
+                        {
+                            event1 = ev1_temp;
+                        }
+                        else
+                        {
+                            NPCSignal_HandleDeal ev2_temp = action.TryCast<NPCSignal_HandleDeal>();
+                            if (ev2_temp != null)
+                            {
+                                event2 = ev2_temp;
+                            }
+                        }
+#endif
+                    }
+
+                    if (event1 != null)
+                    {
+                        event1.StartTime = 420;
+                        event1.EndTime = 1620;
+                        event1.Duration = 720;
+                        event1.End();
+                        event1.HasStarted = false;
+                        event1.enabled = false;
+                    }
+                    else if (event2 != null)
+                    {
+                        event2.MaxDuration = 45;
+                        event2.StartTime = 1620;
+                    }
+                }
+            }
+            Log("Done Configuring Cartel Dealer Event values");
+        }
+
         public static IEnumerator EvaluateCartelIntercepts()
         {
             yield return Wait5;
             allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
+            SetupDealers();
             Log("Starting Cartel Intercepts Evaluation");
-            float frequency = 90f;
+            float frequency = 120f;
             if (currentConfig.activityFrequency >= 0.0f)
                 frequency = Mathf.Lerp(frequency, 60f, currentConfig.activityFrequency);
             else
-                frequency = Mathf.Lerp(frequency, 480f, -currentConfig.activityFrequency);
+                frequency = Mathf.Lerp(frequency, 240f, -currentConfig.activityFrequency);
 
-            WaitForSeconds WaitRandom1 = new WaitForSeconds(UnityEngine.Random.Range(frequency, frequency * 2f));
-            WaitForSeconds WaitRandom2 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 1.2f, frequency * 2f));
-            WaitForSeconds WaitRandom3 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 1.5f, frequency * 2.5f));
+            WaitForSeconds WaitRandom1 = new WaitForSeconds(UnityEngine.Random.Range(frequency, frequency * 1.5f));
+            WaitForSeconds WaitRandom2 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 1.3f, frequency * 2f));
+            WaitForSeconds WaitRandom3 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 2f, frequency * 3f));
 
             while (registered)
             {
@@ -82,8 +140,8 @@ namespace CartelEnforcer
                 }
                 if (!registered) yield break;
 
-                // from 6pm to 4am only
-                if (!(TimeManager.Instance.CurrentTime >= 1800 || TimeManager.Instance.CurrentTime <= 400))
+                // from 4pm to 4am only
+                if (!(TimeManager.Instance.CurrentTime >= 1620 || TimeManager.Instance.CurrentTime <= 420))
                     continue;
 
 #if MONO
@@ -95,13 +153,64 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     continue;
 #endif
-
-
                 if (!interceptingDeal)
                 {
                     coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
                 }
+
+                yield return Wait5; // Give time to first intercept player deals
+
+                // Roll random range for toggling the deal signal for all cartel dealers, now it makes sense because this would override the basic cartel customer deal at activityFrequency 1.0 its again "every hour" and if cartelCustomerDealFrequency is at default 1.0 it should be allowed
+                // Note that deals assigned by this are additive to normal cartel customer deals
+                coros.Add(MelonCoroutines.Start(StartActiveSignal()));
+
             }
+        }
+
+        public static IEnumerator StartActiveSignal()
+        {
+            foreach (CartelDealer d in allCartelDealers)
+            {
+                yield return Wait5; // Short sleep to allow signals to assign contract per dealer
+                if (d.Health.IsDead || d.Health.IsKnockedOut) continue;
+                if (d.ActiveContracts.Count == 0)
+                {
+                    if (UnityEngine.Random.Range(0f, 1f) < currentConfig.cartelDealChance)
+                    {
+                        Log("[INTERCEPT] Intercepting active deal request for: " + d.name);
+                        d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                    }
+                    else
+                    {
+                        // Has no contract but is in time window,
+                        if (!d.isInBuilding)
+                        {
+                            // and is outside meaning just afk standing
+                            // then we must resume the stay inside behaviour manually...
+                            // this way it obeys to the custom timeframe AND also goes back inside whhen needed...
+#if MONO
+                            if (d.Behaviour.ScheduleManager.ActionList[1] is NPCEvent_StayInBuilding ev1)
+                            {
+                                ev1.Resume();
+                            }
+#else
+                            NPCEvent_StayInBuilding ev1_temp = d.Behaviour.ScheduleManager.ActionList[1].TryCast<NPCEvent_StayInBuilding>();
+                            if (ev1_temp != null)
+                            {
+                                ev1_temp.Resume();
+                            }
+#endif
+                        }
+                    }
+                }
+                else
+                {
+                    // hAs contract
+                    continue;
+                }
+            }
+
+            yield return null;
         }
 
         public static IEnumerator StartInterceptDeal()
@@ -123,6 +232,7 @@ namespace CartelEnforcer
             int i = 0;
             do
             {
+                yield return Wait025;
                 if (i >= NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount)
                 {
                     Log("[INTERCEPT]    - Check Ended");
@@ -172,6 +282,8 @@ namespace CartelEnforcer
                 bool exists = false;
                 foreach (QuestHUDUI item in current)
                 {
+                    // throttle here because it can lag alot with high contract count, max parse 4 per second
+                    yield return Wait025;
                     if (!registered) yield break;
                     if (item.Quest == contract)
                     {
@@ -302,7 +414,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
             bool changeInfluence = ShouldChangeInfluence(region);
 
-            if (customer.CurrentContract == null) // If player managed to complete it within that timeframe
+            if (customer.CurrentContract == null || contract == null) // If player managed to complete it within that timeframe
             {
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
@@ -395,13 +507,15 @@ namespace CartelEnforcer
             if (ev1 != null)
             {
                 ev1.StartTime = 420;
-                ev1.EndTime = 1800;
+                ev1.EndTime = 1620;
+                ev1.Duration = 720;
                 ev1.End();
                 ev1.HasStarted = false;
                 ev1.enabled = false;
             }
             if (ev2 != null)
             {
+                ev2.MaxDuration = 120;
                 ev2.Started();
                 ev2.HasStarted = true;
                 ev2.gameObject.SetActive(true);

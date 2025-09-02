@@ -1,3 +1,13 @@
+# Version 1.5.0
+- Added a new end game mission that can be acquired from Manny (a.k.a. Fixer in Warehouse)
+- Added new Configuration values cartelDealChance and endGameQuest
+- Added new functionality to the mod where Cartel Dealers will now go out of their homes to deal more, based on the cartel deal chance and activity frequency. This is additional to the normal customer dealings they have. This functionality will be ran alongside the interceptDeals configuration value since its behaviour is similiar.
+- Added new functionality to the mod to override Cartel Dealer behaviour and daily events timeline. They now leave their homes at earliest 16:20 and will stop dealing at 4:20.
+- Intercept event base frequency raised to 120 up from 90, now intercepts will happen a bit less at default activity frequency. Intercept event Lowest frequency was lowered to 240 from 480. Now at activity frequency -1.0 intercepts will happen more.
+- Changed Mini Quests feature to be better chance at 12:00 - 18:00 to give quests by the NPC (business hours rumours)
+- Changed the logic of Players hired Dealers getting robbed, back to allowing Dealers getting robbed if they are inside building but outside the range where the real robberies event can run, this will inadvertedly increase the amount of player hired dealers getting robbed.
+- Fixed the Mini Quests dialogue incorrectly displaying 2 prepositions in the phrase
+- Tried to fix intercept event throwing errors if player invalidates contract by completing it early into the feature
 
 # Versions 1.4.1 and 1.4.2 for IL2CPP
 - Fixed bug that caused robbery to always throw errors when doing message robbery
