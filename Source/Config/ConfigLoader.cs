@@ -282,9 +282,6 @@ namespace CartelEnforcer
                 {
                     string json = File.ReadAllText(Path.Combine(pathCartelStolen, fileName));
                     stolenItems = JsonConvert.DeserializeObject<StolenItemsList>(json);
-                    MelonLogger.Msg(" Loaded Cartel stolen items, count:");
-                    if (stolenItems.items != null)
-                        MelonLogger.Msg(stolenItems.items.Count);
                 }
                 catch (Exception ex)
                 {

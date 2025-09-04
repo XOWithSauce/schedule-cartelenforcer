@@ -195,10 +195,10 @@ namespace CartelEnforcer
             if (__instance.RelationData.Unlocked && __instance.IsRecruited)
             {
                 // Check not in building, dead or knocked out
-                if (!__instance.Health.IsDead && !__instance.Health.IsKnockedOut)
+                if (!__instance.Health.IsDead && !__instance.Health.IsKnockedOut && !__instance.isInBuilding)
                 {
                     Log("[TRY ROB] Started");
-                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled && !__instance.isInBuilding)
+                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
                     {
                         Log("[TRY ROB]    Run Custom");
                         coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));

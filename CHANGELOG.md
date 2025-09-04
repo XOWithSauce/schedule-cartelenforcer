@@ -1,3 +1,14 @@
+# Version 1.5.1
+- Added new Manor End game quest
+- Fixed cartel dealers standing still in their apartment doors, now they will try to travel to random locations and should consistently deal
+- Changed cartel dealers start time to be randomized between 16:20 and 16:59
+- Fixed an issue where cartel dealer would not automatically take contracts pending for player 
+- Fixed an isse where cartel dealer would not automatically take contracts active for player dealers
+- Fixed a critical issue where players unlocked customers could get removed from the static Customer instance unlocked customers
+- Fixed a logic issue with end game quests where the dialogue index was not saved so there was a possibility to accidentally remove incorrect dialogue option
+- Fixed a critical issue where rarely in IL2CPP the End Game Quest entries would not get correctly mapped or the entry original objects get garbage collected, then the pointer to that quest entry object during the quest is a random pointer to the games memory and this caused multiple types of errors where Quest proceeding will cause the game to start casting random memory locations to IEnumerable
+- Reverted the change in v1.5.0 where dealers get robbed inside building, back to dealers not getting robbed inside buildings due to community feedback
+
 # Version 1.5.0
 - Added a new end game mission that can be acquired from Manny (a.k.a. Fixer in Warehouse)
 - Added new Configuration values cartelDealChance and endGameQuest

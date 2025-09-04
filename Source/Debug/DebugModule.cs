@@ -52,6 +52,16 @@ namespace CartelEnforcer
                 MelonLogger.Msg(msg);
         }
 
+        public static IEnumerator OnInputGenerateManorQuest()
+        {
+            Log("Generating Manor Quest");
+            yield return Wait2;
+            coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
+            debounce = false;
+            Log("Generating Quest Done");
+            yield return null;
+        }
+
         public static IEnumerator OnInputGenerateEndQuest()
         {
             Log("Generating Quest");

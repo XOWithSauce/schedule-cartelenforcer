@@ -12,7 +12,9 @@ using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
 
+
 #if MONO
+using ScheduleOne.NPCs;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
 using ScheduleOne.Persistence;
@@ -22,6 +24,7 @@ using ScheduleOne.UI;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
 #endif
@@ -40,7 +43,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.0";
+        public const string Version = "1.5.1";
         public const string DownloadLink = null;
     }
 
@@ -145,6 +148,17 @@ namespace CartelEnforcer
                             MelonCoroutines.Start(OnInputGenerateEndQuest());
                         }
                     }
+
+                    // Left CTRL + U Gen Manor quest
+                    else if (Input.GetKey(KeyCode.Y))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputGenerateManorQuest());
+                        }
+                    }
+
                 }
             }
         }
@@ -259,6 +273,7 @@ namespace CartelEnforcer
             yield return Wait30;
             Log("Evaluating End Game Quest Creation");
             bool hasGeneratedQuest = false;
+            bool hasGeneratedManorQuest = false;
             while (registered)
             {
                 if (PreRequirementsMet() && !completed && !hasGeneratedQuest)
@@ -266,7 +281,12 @@ namespace CartelEnforcer
                     Log("[END GAME QUEST] End Game Quest creation started");
                     hasGeneratedQuest = true;
                     coros.Add(MelonCoroutines.Start(GenDialogOption()));
-                    break;
+                }
+                if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest)
+                {
+                    Log("[END GAME QUEST] Manor Quest creation started");
+                    hasGeneratedManorQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
                 }
                 yield return Wait60;
             }
@@ -302,16 +322,18 @@ namespace CartelEnforcer
 
             activeQuest = null;
             completed = false;
+            manorCompleted = false;
             StageDeadDropsObserved = 0;
             fixer = null;
             bossGoon = null;
-            
+            ray = null;
+            activeManorQuest = null;
 
 #if IL2CPP
             CartelActivities_TryStartActivityPatch.activitiesReadyToStart.Clear();
             CartelActivities_TryStartActivityPatch.validRegionsForActivity.Clear();
 #endif
-        }
+    }
 
         [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
         public static class SaveManager_Save_String_Patch

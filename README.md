@@ -14,7 +14,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Intercept Deals](#intercept-deals)
     * [Drive-By Events](#drive-by-events)
     * [Mini-Quests](#mini-quests)
-    * [End Game Quest](#end-game-quest)
+    * [End Game Quests](#end-game-quests)
 * [Debug Mode](#debug-mode)
 * [In Multiplayer](#in-multiplayer)
 * [Modifying Spawns](#modifying-spawns)
@@ -29,7 +29,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
-- **End Game Quest:** New Quest where you are tasked with taking down a high ranking Cartel Brute.
+- **End Game Quests:** 2 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
@@ -38,8 +38,9 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 ### Installation
 
 1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/).
-2. Manually download the correct .zip file and unzip it.
-3. Copy the **.dll file** and the **Cartel Enforcer** folder into your **Mods** folder.
+2. With **Melon Loader** install version **0.7.0** for Schedule I (0.7.1 is incompatible in IL2CPP)
+3. Manually download the correct .zip file and unzip it.
+4. Copy the **.dll file** and the **Cartel Enforcer** folder into your **Mods** folder.
 
 ---
 
@@ -52,7 +53,7 @@ You can customize the mod's settings through the **config.json** file.
 
 ```json
 {
-    "debugMode": true,
+    "debugMode": false,
     "activityFrequency": 0.0,
     "activityInfluenceMin": 0.0,
     "ambushFrequency": 1.0,
@@ -97,7 +98,7 @@ You can customize the mod's settings through the **config.json** file.
     - `-1.0`: Can happen at most once every 4 in-game days.
 - **`cartelDealChance`**: Adjusts the likelihood of Cartel Dealers going out and making extra deals.
     - `1.0`: Cartel Dealers will have 100% chance of going out to an extra deal.
-    - `0.0`: Cartel Dealers will have 0% chance of going out to an extra deal. (Also disables this feature)
+    - `0.0`: Cartel Dealers will have 0% chance of going out to an extra deal.
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -150,7 +151,7 @@ This is a new type of event where the Cartel actively attempts to intercept one 
 
 Additionally Intercept Deals Feature has second mechanism:
 - Inside the time window 16:20 - 04:20 Cartel Dealers now have extra chance to make deals, based on the **cartelDealChance** value. These deals are not capped by the **cartelCustomerDealFrequency** and are additional to the base game behaviour.
-- Every time an intercept is calculated (based on activity frequency), all of the Cartel Dealers will have a chance to intercept one of the pending offers.
+- Every time an intercept is calculated (based on activity frequency), all of the Cartel Dealers will have a chance to intercept one players pending offers or one of your dealers active deals.
 
 
 ---
@@ -188,11 +189,13 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 
 ---
 
+## End Game Quests
+
+
 <img src="https://i.imgur.com/UDb9giZ.png">
 
-### End Game Quest
-
 #### Unexpected Alliances
+
 The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). This Quest can be completed only once per session.
 
 > Note: The *Unexpected Alliances* Quest is in early phase development and is subject to change in content, difficulty and rewards.
@@ -220,6 +223,36 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 
 ---
 
+<img src="https://i.imgur.com/esO142K.png">
+
+### Infiltrate Manor
+
+The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 when they are smoking a cigarette near the bank. This Quest can be completed only once per session.
+
+> Note: The *Infiltrate Manor* Quest is in early phase development and is subject to change in content, difficulty and rewards.
+
+- **Quest Prerequirements:**
+    1. Cartel must be Hostile
+    2. Player must have atleast 5 customers unlocked from Suburbia Region
+    3. Player must be atleast Enforcer rank
+
+- Upon paying the $2500 Bribe to Ray, you get a custom active quest:
+    - First you must investigate the forest near Manor
+    - After investigating, return to Ray to obtain more information
+    - Wait for Night to arrive before breaking into Manor
+    - Break in through the back door of Manor
+    - Kill Manor Goons and steal their loot
+    - Investigate the Manor Upstairs rooms
+    - Leave the Manor before police arrive
+
+- **Quest Rewards:**
+    - 850 XP 
+    - You get money and rarely Silver Chains or Watches from Manor Goons
+    - Ray will give you -15% discount from all properties and businesses until the game is exited
+    - All unlocked regions have their Cartel Influence decreased by 15%
+
+---
+
 ### Debug Mode
 
 In debug mode, you can see various visual cues and use keybinds to test features.
@@ -240,7 +273,8 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
     - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
     - `Left CTRL + T`: Trigger an Intercept Deal event.
-    - `Left CTRL + Y`: Generate the End Game Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Manny, without checking prerequirements.
 
 ---
 

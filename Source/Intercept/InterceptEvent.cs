@@ -6,7 +6,6 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
-using System;
 
 
 #if MONO
@@ -56,7 +55,7 @@ namespace CartelEnforcer
 
         public static bool interceptingDeal = false;
 
-        private static void SetupDealers()
+        public static void SetupDealers()
         {
             Log("Configuring Cartel Dealer Event values");
             foreach (CartelDealer dealer in allCartelDealers)
@@ -92,35 +91,75 @@ namespace CartelEnforcer
 #endif
                     }
 
+                    void onStayInsideEnd()
+                    {
+                        dealer.SetIsAcceptingDeals(true);
+                        MapRegionData mapRegionData = Singleton<Map>.instance.Regions[UnityEngine.Random.Range(0, Singleton<Map>.instance.Regions.Length)];
+                        DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
+                        dealer.Movement.SetDestination(walkDest.CustomerStandPoint.position);
+                        if (!dealer.IsAcceptingDeals)
+                            dealer.SetIsAcceptingDeals(true);
+                        Log("[INTERCEPT] Cartel dealer walking to Interest point");
+                        GetQuickContract(dealer);
+                    }
+
+                    void onHandOverComplete()
+                    {
+                        if (dealer.ActiveContracts.Count == 0)
+                        {
+                            MapRegionData mapRegionData = Singleton<Map>.instance.Regions[UnityEngine.Random.Range(0, Singleton<Map>.instance.Regions.Length)];
+                            DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
+                            dealer.Movement.SetDestination(walkDest.CustomerStandPoint.position);
+                            if (!dealer.IsAcceptingDeals)
+                                dealer.SetIsAcceptingDeals(true);
+                            Log("[INTERCEPT] Cartel dealer walking to Interest point");
+                        }
+
+                    }
+
+                    int eventSwapTime = UnityEngine.Random.Range(1620, 1659);
+
                     if (event1 != null)
                     {
                         event1.StartTime = 420;
-                        event1.EndTime = 1620;
+                        event1.EndTime = eventSwapTime;
                         event1.Duration = 720;
                         event1.End();
                         event1.HasStarted = false;
                         event1.enabled = false;
+#if MONO
+                        event1.onEnded = (Action)Delegate.Combine(event1.onEnded, new Action(onStayInsideEnd));
+
+#else
+                        event1.onEnded += (Il2CppSystem.Action)onStayInsideEnd;
+#endif
                     }
                     else if (event2 != null)
                     {
-                        event2.MaxDuration = 45;
-                        event2.StartTime = 1620;
+                        event2.MaxDuration = 720;
+                        event2.StartTime = eventSwapTime;
+#if MONO
+                        event2.onEnded = (Action)Delegate.Combine(event2.onEnded, new Action(onHandOverComplete));
+#else
+                        event2.onEnded += (Il2CppSystem.Action)onHandOverComplete;
+#endif
                     }
                 }
             }
-            Log("Done Configuring Cartel Dealer Event values");
+            Log("    Done Configuring Cartel Dealer Event values");
         }
 
         public static IEnumerator EvaluateCartelIntercepts()
         {
             yield return Wait5;
             allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
+            Log("Setup Cartel Dealers");
             SetupDealers();
             Log("Starting Cartel Intercepts Evaluation");
             float frequency = 120f;
-            if (currentConfig.activityFrequency >= 0.0f)
+            if (currentConfig.activityFrequency > 0.0f)
                 frequency = Mathf.Lerp(frequency, 60f, currentConfig.activityFrequency);
-            else
+            else if (currentConfig.activityFrequency < 0.0f)
                 frequency = Mathf.Lerp(frequency, 240f, -currentConfig.activityFrequency);
 
             WaitForSeconds WaitRandom1 = new WaitForSeconds(UnityEngine.Random.Range(frequency, frequency * 1.5f));
@@ -153,55 +192,165 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     continue;
 #endif
+                coros.Add(MelonCoroutines.Start(StartActiveSignal()));
+
                 if (!interceptingDeal)
                 {
                     coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
                 }
-
-                yield return Wait5; // Give time to first intercept player deals
-
-                // Roll random range for toggling the deal signal for all cartel dealers, now it makes sense because this would override the basic cartel customer deal at activityFrequency 1.0 its again "every hour" and if cartelCustomerDealFrequency is at default 1.0 it should be allowed
-                // Note that deals assigned by this are additive to normal cartel customer deals
-                coros.Add(MelonCoroutines.Start(StartActiveSignal()));
 
             }
         }
 
         public static IEnumerator StartActiveSignal()
         {
+            Dealer[] allDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(); // todo simplify this generates useless overhead
+            List<Dealer> parsedDealers = new(); // temporary state for parsing
+            List<string> guidAssignedContracts = new();
+
+
             foreach (CartelDealer d in allCartelDealers)
             {
                 yield return Wait5; // Short sleep to allow signals to assign contract per dealer
                 if (d.Health.IsDead || d.Health.IsKnockedOut) continue;
                 if (d.ActiveContracts.Count == 0)
                 {
-                    if (UnityEngine.Random.Range(0f, 1f) < currentConfig.cartelDealChance)
+                    bool actionTaken = false;
+                    if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
                     {
-                        Log("[INTERCEPT] Intercepting active deal request for: " + d.name);
-                        d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-                    }
-                    else
-                    {
-                        // Has no contract but is in time window,
-                        if (!d.isInBuilding)
+                        if (UnityEngine.Random.Range(0f, 1f) < currentConfig.cartelDealChance)
                         {
-                            // and is outside meaning just afk standing
-                            // then we must resume the stay inside behaviour manually...
-                            // this way it obeys to the custom timeframe AND also goes back inside whhen needed...
-#if MONO
-                            if (d.Behaviour.ScheduleManager.ActionList[1] is NPCEvent_StayInBuilding ev1)
+                            Log("[INTERCEPT] Checking PlayerDealer active deal for: " + d.name);
+                            parsedDealers = allDealers.ToList();
+
+                            // Pick one valid contract
+                            Contract contract = null;
+                            Dealer currentDealer = null;
+                            do
                             {
-                                ev1.Resume();
-                            }
-#else
-                            NPCEvent_StayInBuilding ev1_temp = d.Behaviour.ScheduleManager.ActionList[1].TryCast<NPCEvent_StayInBuilding>();
-                            if (ev1_temp != null)
+                                yield return Wait05;
+                                if (parsedDealers.Count == 0) break;
+
+                                currentDealer = parsedDealers[UnityEngine.Random.Range(0, parsedDealers.Count)];
+                                if (currentDealer.DealerType != EDealerType.PlayerDealer)
+                                {
+                                    // Remove cartel dealers as we go
+                                    parsedDealers.Remove(currentDealer);
+                                    continue;
+                                }
+
+                                // is Normal dealer, check contracts
+                                if (currentDealer.ActiveContracts.Count == 0)
+                                {
+                                    // Remove ones with no contracts
+                                    parsedDealers.Remove(currentDealer);
+                                    continue;
+                                }
+
+                                // We have ActiveContracts List atleast one element, get one
+                                contract = currentDealer.ActiveContracts[UnityEngine.Random.Range(0, currentDealer.ActiveContracts.Count)];
+                                if (guidAssignedContracts.Contains(contract.GUID.ToString()))
+                                {
+                                    // Somehow with luck the contract was already assigned to cartel dealer in previous iteration
+                                    contract = null;
+                                    // Remove just for safety reasons and make iteration simpler
+                                    parsedDealers.Remove(currentDealer);
+                                    continue;
+                                }
+
+                                // else contract != null -> break
+
+                            } while (contract == null || parsedDealers.Count > 0);
+
+                            if (contract != null && currentDealer != null)
                             {
-                                ev1_temp.Resume();
+                                actionTaken = true;
+                                guidAssignedContracts.Add(contract.GUID.ToString());
+                                d.AddContract(contract);
+                                d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                                Log("[INTERCEPT] Cartel Dealer now intercepting PlayerDealer active deal stolen from: " + currentDealer.FirstName);
+                                break;
                             }
-#endif
+                            else
+                            {
+                                Log("[INTERCEPT] No valid contracts or dealers found");
+                            }
                         }
                     }
+                    else // Pick customer with null dealer, no active deal and a pending offer
+                    {
+                        if (UnityEngine.Random.Range(0f, 1f) < currentConfig.cartelDealChance)
+                        {
+                            List<Customer> cList = new();
+                            for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
+                            {
+                                cList.Add(Customer.UnlockedCustomers[i]);
+                            }
+
+                            do
+                            {
+                                Customer c = cList[UnityEngine.Random.Range(0, cList.Count)];
+                                if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null)
+                                {
+                                    ContractInfo contractInfo = new();
+                                    contractInfo.DeliveryLocation = c.offeredContractInfo.DeliveryLocation;
+                                    contractInfo.DeliveryLocationGUID = c.offeredContractInfo.DeliveryLocationGUID;
+                                    contractInfo.Payment = c.offeredContractInfo.Payment;
+                                    contractInfo.Expires = c.offeredContractInfo.Expires;
+                                    contractInfo.DeliveryWindow = c.offeredContractInfo.DeliveryWindow;
+                                    contractInfo.PickupScheduleIndex = c.offeredContractInfo.PickupScheduleIndex;
+                                    contractInfo.ExpiresAfter = c.offeredContractInfo.ExpiresAfter;
+                                    contractInfo.IsCounterOffer = c.offeredContractInfo.IsCounterOffer;
+                                    contractInfo.Products = c.offeredContractInfo.Products;
+
+                                    c.ExpireOffer();
+                                    c.offeredContractInfo = contractInfo;
+
+                                    Log("[INTERCEPT]   Taking pending offer to dealer");
+                                    EDealWindow window = d.GetDealWindow();
+                                    Contract contract = c.ContractAccepted(window, false, d);
+                                    if (contract != null)
+                                    {
+                                        d.AddContract(contract);
+                                        d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                                        actionTaken = true;
+                                    }
+                                    else
+                                        Log("Failed to generate contract");
+                                    break;
+                                }
+                                else
+                                {
+                                    cList.Remove(c);
+                                }
+
+                            } while (cList.Count > 0);
+                        }
+                    }
+
+
+                    if (!actionTaken)
+                    {
+                        Log("[INTERCEPT] No action taken");
+                        // Has no contract but is in time window, and random roll didnt award the contract
+                        if (!d.isInBuilding && !d.Movement.hasDestination)
+                        {
+                            Log("[INTERCEPT] Not in building no destination");
+
+                            // and is outside meaning just afk standing
+
+                            MapRegionData mapRegionData = Singleton<Map>.instance.Regions[UnityEngine.Random.Range(0, Singleton<Map>.instance.Regions.Length)];
+                            DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
+                            d.Movement.SetDestination(walkDest.CustomerStandPoint.position);
+                            if (!d.IsAcceptingDeals)
+                                d.SetIsAcceptingDeals(true);
+                            Log("[INTERCEPT] Cartel dealer walking to Interest point");
+                            yield return Wait05;
+                            d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+
+                        }
+                    }
+                    
                 }
                 else
                 {
@@ -211,6 +360,74 @@ namespace CartelEnforcer
             }
 
             yield return null;
+        }
+
+        public static IEnumerator GetQuickContract(CartelDealer dealer)
+        {
+            Log("[INTERCEPT] Get quick contract");
+            bool contractTaken = false;
+            if (dealer.ActiveContracts.Count == 0)
+            {
+                List<Customer> cList = new();
+                for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
+                {
+                    cList.Add(Customer.UnlockedCustomers[i]);
+                }
+                do
+                {
+                    yield return Wait05;
+                    Customer c = cList[UnityEngine.Random.Range(0, cList.Count)];
+                    if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null)
+                    {
+                        Log("[INTERCEPT]   Quick Contract pending offer");
+                        ContractInfo contractInfo = new();
+                        contractInfo.DeliveryLocation = c.offeredContractInfo.DeliveryLocation;
+                        contractInfo.DeliveryLocationGUID = c.offeredContractInfo.DeliveryLocationGUID;
+                        contractInfo.Payment = c.offeredContractInfo.Payment;
+                        contractInfo.Expires = c.offeredContractInfo.Expires;
+                        contractInfo.DeliveryWindow = c.offeredContractInfo.DeliveryWindow;
+                        contractInfo.PickupScheduleIndex = c.offeredContractInfo.PickupScheduleIndex;
+                        contractInfo.ExpiresAfter = c.offeredContractInfo.ExpiresAfter;
+                        contractInfo.IsCounterOffer = c.offeredContractInfo.IsCounterOffer;
+                        contractInfo.Products = c.offeredContractInfo.Products;
+
+                        c.ExpireOffer();
+                        c.offeredContractInfo = contractInfo;
+
+                        Log("[INTERCEPT]   Taking pending offer to dealer");
+                        EDealWindow window = dealer.GetDealWindow();
+                        Contract contract = c.ContractAccepted(window, false, dealer);
+                        if (contract != null)
+                        {
+                            dealer.AddContract(contract);
+                            dealer.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                            contractTaken = true;
+                        }
+                        else
+                            Log("Failed to generate contract");
+                        break;
+                    }
+                    else
+                    {
+                        cList.Remove(c);
+                    }
+
+                } while (cList.Count > 0);
+
+                if (!contractTaken && !dealer.Movement.hasDestination)
+                {
+                    MapRegionData mapRegionData = Singleton<Map>.instance.Regions[UnityEngine.Random.Range(0, Singleton<Map>.instance.Regions.Length)];
+                    DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
+                    dealer.Movement.SetDestination(walkDest.CustomerStandPoint.position);
+                    if (!dealer.IsAcceptingDeals)
+                        dealer.SetIsAcceptingDeals(true);
+                }
+            }
+            else
+            {
+                dealer.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+            }
+
         }
 
         public static IEnumerator StartInterceptDeal()
@@ -515,7 +732,8 @@ namespace CartelEnforcer
             }
             if (ev2 != null)
             {
-                ev2.MaxDuration = 120;
+                ev2.MaxDuration = 720;
+                ev2.StartTime = 1620;
                 ev2.Started();
                 ev2.HasStarted = true;
                 ev2.gameObject.SetActive(true);
