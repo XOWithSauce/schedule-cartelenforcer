@@ -1,3 +1,6 @@
+# Version 1.5.3
+- Hotfix a mistake in previous version where the Cartel Dealer would still send messages to player
+
 # Version 1.5.2
 - Changed the Cartel Dealer logic to be its own system and is now driven by config values, toggleable by enhancedDealers = true, a separate system now from intercept deals, both should work intertwined with same cartel dealer objects
 - Added new event Cartel Gatherings where Cartel Goons chill outside during daytime.
