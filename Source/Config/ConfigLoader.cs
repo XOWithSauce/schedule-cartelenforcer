@@ -4,6 +4,7 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using UnityEngine;
 using static CartelEnforcer.CartelInventory;
+using static CartelEnforcer.DealerActivity;
 
 
 #if MONO
@@ -50,8 +51,6 @@ namespace CartelEnforcer
         public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
         public float cartelRobberyFrequency = 1.0f;
 
-        public float cartelDealChance = 0.3f;
-
         public bool driveByEnabled = true;
 
         public bool realRobberyEnabled = true;
@@ -60,7 +59,12 @@ namespace CartelEnforcer
 
         public bool interceptDeals = true;
 
+        public bool enhancedDealers = true;
+        
+        public bool cartelGatherings = true;
+
         public bool endGameQuest = true;
+        public float endGameQuestMonologueSpeed = 1f; // clamped to 1 0 at 0 dialogue speed is signifigantly slower, at 1 normal
 
     }
 
@@ -91,7 +95,9 @@ namespace CartelEnforcer
         private static string pathModConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "config.json");
         private static string pathAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "ambush.json");
         private static string pathDefAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "default.json");
+        private static string pathDealerConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Dealers", "dealer.json");
         private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
+
 
         #region Mod Config 
         public static ModConfig Load()
@@ -105,6 +111,7 @@ namespace CartelEnforcer
                     config = JsonConvert.DeserializeObject<ModConfig>(json);
                     config.activityFrequency = Mathf.Clamp(config.activityFrequency, -1.0f, 1.0f); // Ensure limits
                     config.activityInfluenceMin = Mathf.Clamp(config.activityInfluenceMin, -1.0f, 1.0f); // Ensure limits
+                    config.endGameQuestMonologueSpeed = Mathf.Clamp(config.endGameQuestMonologueSpeed, 0f, 1f);
                 }
                 catch (Exception ex)
                 {
@@ -414,8 +421,40 @@ namespace CartelEnforcer
 
 
         }
-#endregion
+        #endregion
+
+        #region Cartel Dealer config
+        public static CartelDealerConfig LoadDealerConfig()
+        {
+            CartelDealerConfig config;
+            if (File.Exists(pathDealerConfig))
+            {
+                try
+                {
+                    string json = File.ReadAllText(pathDealerConfig);
+                    config = JsonConvert.DeserializeObject<CartelDealerConfig>(json);
+                    config.SafetyThreshold = Mathf.Clamp(config.SafetyThreshold, -1.0f, 1.0f); // Ensure limits
+                    config.DealerActivityIncreasePerDay = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.1f, 1f); // Ensure limits
+                    config.CartelDealerMoveSpeedMultiplier = Mathf.Clamp(config.CartelDealerMoveSpeedMultiplier, 0.1f, 3f);
+                    config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10, 2000);
+                    config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
+                    config.StealPlayerPendingChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
+
+                }
+                catch (Exception ex)
+                {
+                    config = new CartelDealerConfig();
+                    MelonLogger.Warning("Failed to read CartelEnforcer config: " + ex);
+                }
+            }
+            else
+            {
+                config = new CartelDealerConfig();
+            }
+            return config;
+        }
+        #endregion
 
     }
-#endregion
+    #endregion
 }

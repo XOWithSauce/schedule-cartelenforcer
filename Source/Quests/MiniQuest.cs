@@ -105,10 +105,11 @@ namespace CartelEnforcer
         public static IEnumerator EvaluateMiniQuestCreation()
         {
             Log("Starting Mini Quest Dialogue Random Generation");
-            WaitForSeconds upperWait = new WaitForSeconds(UnityEngine.Random.Range(960f, 1440f));
-            WaitForSeconds lowerWait = new WaitForSeconds(UnityEngine.Random.Range(480f, 750f));
+            WaitForSeconds upperWait = new WaitForSeconds(UnityEngine.Random.Range(240f, 360f));
+            WaitForSeconds lowerWait = new WaitForSeconds(UnityEngine.Random.Range(90f, 120f));
             bool questGenerated = false;
             bool pass = false;
+
             while (registered)
             {
 #if MONO
@@ -137,7 +138,7 @@ namespace CartelEnforcer
                             {
                                 chance = UnityEngine.Random.Range(0f, 1f);
                             }
-                            if (chance > 0.70f)
+                            if (chance > 0.20f)
                             {
                                 targetNPCs[random].HasActiveQuest = true;
                                 InitMiniQuestDialogue(random);
@@ -160,7 +161,11 @@ namespace CartelEnforcer
             DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
             string text = "";
-            float paid = Mathf.Lerp(500f, 100f, npc.RelationData.NormalizedRelationDelta);
+            float paid = 500f;
+            if (npc.RelationData != null)
+                paid = Mathf.Lerp(500f, 100f, npc.RelationData.NormalizedRelationDelta);
+            if (float.IsNaN(paid))
+                paid = 500f;
             paid = Mathf.Round(paid / 20f) * 20f;
 
             switch (UnityEngine.Random.Range(0, 3))

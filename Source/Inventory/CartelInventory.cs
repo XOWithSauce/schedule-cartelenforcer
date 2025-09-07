@@ -29,7 +29,7 @@ namespace CartelEnforcer
     public static class CartelInventory
     {
 
-        public static List<QualityItemInstance> cartelStolenItems;
+        public static List<QualityItemInstance> cartelStolenItems = new();
         public static readonly object cartelItemLock = new object(); // for above list
 
         public static IEnumerator CartelStealsItems(List<ItemInstance> items, Action cb = null)

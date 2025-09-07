@@ -488,9 +488,6 @@ namespace CartelEnforcer
             if (!goon.Behaviour.CombatBehaviour.enabled)
                 goon.Behaviour.CombatBehaviour.Enable_Networked(null);
 
-            if (goon.IgnoreImpacts)
-                goon.IgnoreImpacts = false;
-
             if (goon.IsGoonSpawned)
                 goon.Despawn();
             yield return null;
@@ -537,7 +534,6 @@ namespace CartelEnforcer
             Log($"[TRY ROB]    Distance: {distance}");
             goon.Behaviour.ScheduleManager.EnableSchedule();
             goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-            goon.IgnoreImpacts = true;
             goon.Behaviour.GetBehaviour("Follow Schedule").Enable();
 
             goon.Movement.GetClosestReachablePoint(destination, out Vector3 closest);
@@ -616,9 +612,6 @@ namespace CartelEnforcer
                 if (!goon.Behaviour.CombatBehaviour.Enabled)
                     goon.Behaviour.CombatBehaviour.Enable_Networked(null);
 
-                if (goon.IgnoreImpacts)
-                    goon.IgnoreImpacts = false;
-
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
             {
@@ -669,9 +662,6 @@ namespace CartelEnforcer
 
                 if (!goon.Behaviour.CombatBehaviour.Enabled)
                     goon.Behaviour.CombatBehaviour.Enable_Networked(null);
-
-                if (goon.IgnoreImpacts)
-                    goon.IgnoreImpacts = false;
 
                 if (goon.IsGoonSpawned)
                     goon.Despawn();

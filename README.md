@@ -14,12 +14,15 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Intercept Deals](#intercept-deals)
     * [Drive-By Events](#drive-by-events)
     * [Mini-Quests](#mini-quests)
-    * [End Game Quests](#end-game-quests)
+    * [Cartel Gatherings](#cartel-gatherings)
+* [End Game Quests](#end-game-quests)
+    * [Unexpected Alliances](#unexpected-alliances)
+    * [Infiltrate Manor](#infiltrate-manor) 
+* [Modifying Cartel Dealers](#enhanced-cartel-dealers)
 * [Debug Mode](#debug-mode)
 * [In Multiplayer](#in-multiplayer)
 * [Modifying Spawns](#modifying-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
-
 ---
 
 ### Features
@@ -31,6 +34,8 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
 - **End Game Quests:** 2 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
+- **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed.
+- **Enhanced Cartel Dealers:** Cartel dealers are now officially bug fixed in this mod and they will roam the map by default. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
 
@@ -60,12 +65,14 @@ You can customize the mod's settings through the **config.json** file.
     "deadDropStealFrequency": 1.0,
     "cartelCustomerDealFrequency": 1.0,
     "cartelRobberyFrequency": 1.0,
-    "cartelDealChance": 0.1,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
     "miniQuestsEnabled": true,
     "interceptDeals": true,
-    "endGameQuest": true
+    "enhancedDealers": true,
+    "cartelGatherings": true,
+    "endGameQuest": true,
+    "endGameQuestMonologueSpeed": 1.0
 }
 ```
 
@@ -95,10 +102,7 @@ You can customize the mod's settings through the **config.json** file.
 - **`cartelRobberyFrequency`**: Adjusts the frequency of Cartel Robbery events.
     - `1.0`: Can happen as often as every 1 in-game hour.
     - `0.0`: Can happen at most once every 2 in-game days.
-    - `-1.0`: Can happen at most once every 4 in-game days.
-- **`cartelDealChance`**: Adjusts the likelihood of Cartel Dealers going out and making extra deals.
-    - `1.0`: Cartel Dealers will have 100% chance of going out to an extra deal.
-    - `0.0`: Cartel Dealers will have 0% chance of going out to an extra deal.
+    - `-1.0`: Can happen at most once every 4 in-game days
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -111,14 +115,22 @@ You can customize the mod's settings through the **config.json** file.
 - **`interceptDeals`**:
     - `true`: Enables the Intercept Deals event.
     - `false`: Disables the event.
+- **`enhancedDealers`**:
+    - `true`: Enables the Enhanced Cartel Dealers feature
+    - `false`: Disables the feature.
+- **`cartelGatherings`**:
+    - `true`: Enables the Cartel Gatherings event
+    - `false`: Disables the event.
 - **`endGameQuest`**:
     - `true`: Enables the generation of End Game Quest.
     - `false`: Disables the generation.
+- **`endGameQuestMonologueSpeed`**:
+    - `1.0`: Monologue messages are displayed for roughly 5 seconds
+    - `0.0`: Monologue messages are displayed for roughly 10 seconds
 ---
 
-### Events and Activities
+## Events and Activities
 
----
 
 <img src="https://i.imgur.com/9umAuV9.png">
 
@@ -149,10 +161,6 @@ This is a new type of event where the Cartel actively attempts to intercept one 
     - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
     - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
 
-Additionally Intercept Deals Feature has second mechanism:
-- Inside the time window 16:20 - 04:20 Cartel Dealers now have extra chance to make deals, based on the **cartelDealChance** value. These deals are not capped by the **cartelCustomerDealFrequency** and are additional to the base game behaviour.
-- Every time an intercept is calculated (based on activity frequency), all of the Cartel Dealers will have a chance to intercept one players pending offers or one of your dealers active deals.
-
 
 ---
 
@@ -174,7 +182,7 @@ These events only happen when the Cartel is hostile.
 ### Mini-Quests
 
 Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
-- The quest-giving NPCs are chosen randomly every 8-16 hours. Random Choice prefers Unlocked NPCs more.
+- The quest-giving NPCs are chosen randomly every 4-6 ingame hours. Random Choice prefers Unlocked NPCs more.
 - **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
 - **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the quest.
 - **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
@@ -189,12 +197,25 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 
 ---
 
+<img src="https://i.imgur.com/PYf7vk8.png">
+
+### Cartel Gatherings
+
+Cartel Gatherings occur around the map and are dynamic in frequency and hostility. The gatherings are adapted based on Cartel Dealers deaths. Killing Cartel Dealers causes gatherings to become more frequent and more hostile. Gatherings primarily occur around the daytime in groups of 3 Cartel Goons.
+- Killing the gathering Cartel Goons will lower regional cartel influence by 25
+- If Gathering is not interrupted by player for 2 ingame hours, regional influence will rise by 5
+
+---
+
 ## End Game Quests
 
+All end game quests scale in difficulty based on the total cartel influence across all regions. Higher total influence will result in enemies having more HP and being overall more lethal and harder to kill. XP Rewards are also scaled based on the total cartel influence to compensate for difficulty.
+
+---
 
 <img src="https://i.imgur.com/UDb9giZ.png">
 
-#### Unexpected Alliances
+### Unexpected Alliances
 
 The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). This Quest can be completed only once per session.
 
@@ -202,7 +223,7 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 
 - **Quest Prerequirements:**
     1. Cartel must be Hostile
-    2. Player must have atleast 5 customers unlocked from Suburbia Region
+    2. Player must have Suburbia region unlocked
     3. Player must be atleast Enforcer rank
 
 - Upon paying the $5000 Bribe to Manny, you get a custom active quest:
@@ -212,12 +233,13 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
     - Kill the Cartel Brute
         - If you run more than 70 units away from the Brute the Quest will fail
         - If the Brute runs more than 70 units away from its spawn position the Quest will fail
-        - You have 2 minutes from when the fight starts to kill the Brute
+        - The Brute enters a Rage Stage when low on HP, starting to drink Cuke to regain health and having random sprint speed boosts
 
 - **Quest Rewards:**
-    - 1000 XP 
-    - You get a Gold Watch and Gold Chain from the Cartel Brute inventory
-    - Customer relationships increase by 5% for all customers
+    - XP Based on Total Cartel Influence (850 - 1700 XP)
+    - You get a Gold Watch, Gold Chain and shotgun shells from the Cartel Brute inventory
+    - Cartel Brute has a ~33% chance to drop a Shotgun
+    - Customer relationships increase by 5% for all unlocked customers
     - All unlocked regions have their Cartel Influence decreased by 25%
     - And lastly but most importantly: *Bragging Rights*
 
@@ -227,13 +249,13 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 
 ### Infiltrate Manor
 
-The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 when they are smoking a cigarette near the bank. This Quest can be completed only once per session.
+The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 when they are smoking a cigarette near the courthouse. This Quest can be completed only once per session.
 
 > Note: The *Infiltrate Manor* Quest is in early phase development and is subject to change in content, difficulty and rewards.
 
 - **Quest Prerequirements:**
     1. Cartel must be Hostile
-    2. Player must have atleast 5 customers unlocked from Suburbia Region
+    2. Player must have Suburbia region unlocked
     3. Player must be atleast Enforcer rank
 
 - Upon paying the $2500 Bribe to Ray, you get a custom active quest:
@@ -242,14 +264,60 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
     - Wait for Night to arrive before breaking into Manor
     - Break in through the back door of Manor
     - Kill Manor Goons and steal their loot
-    - Investigate the Manor Upstairs rooms
+    - Investigate the Manor Upstairs rooms and find Thomas' safe
     - Leave the Manor before police arrive
 
 - **Quest Rewards:**
-    - 850 XP 
-    - You get money and rarely Silver Chains or Watches from Manor Goons
+    - XP Based on Total Cartel Influence (600 - 1200 XP)
     - Ray will give you -15% discount from all properties and businesses until the game is exited
     - All unlocked regions have their Cartel Influence decreased by 15%
+    - Thomas' safe is filled in order to up to 5 items max from the loot table below
+
+| Item | Drop Chance | Quantity | Notes |
+| :--- | :--- | :--- | :--- |
+| M1911 Magazine | **100%** | 1 | This item is a guaranteed drop. |
+| M1911 Pistol | **33.4%** | 1 | |
+| Cocaine | **10%** | 12-20 |  |
+| Gold Bar | **5%** | 1-3 | This drop prevents cash from spawning. |
+| Cash | High Chance | $800-$4000 | Will spawn if a gold bar does not. The amount is rounded to the nearest $100. |
+| Silver Watch | **20%** | 1 |  |
+| Silver Chain | **20%** | 1 |  |
+| Stolen Cartel Item | **80%** | 1 | Only spawns if the `cartelStolenItems` pool has items. |
+
+---
+
+### Enhanced Cartel Dealers
+You can customize the Cartel Dealers' settings through the **dealer.json** file.
+
+1. Open the **CartelEnforcer/Dealers** folder inside your **Mods** directory.
+2. Open the **dealer.json** file. Its contents by default are:
+
+```json
+{
+  "CartelDealerMoveSpeedMultiplier": 1.65,
+  "CartelDealerHP": 200.0,
+  "CartelDealerWeapon": "M1911",
+  "StealDealerContractChance": 0.2,
+  "StealPlayerPendingChance": 0.2,
+  "DealerActivityDecreasePerKill": 0.25,
+  "DealerActivityIncreasePerDay": 0.15,
+  "SafetyThreshold": -0.7,
+  "SafetyEnabled": true,
+  "FreeTimeWalking": true
+}
+```
+
+- **`CartelDealerMoveSpeedMultiplier`**: Adjusts the **movement speed** of Cartel Dealers (Range 0.1 - 3.0)
+- **`CartelDealerHP`**: Sets the **total health points** for a Cartel dealer (Range 10.0 - 2000.0)
+- **`CartelDealerWeapon`**: Specifies the **weapon** used by Cartel dealers. Supported values are: "M1911", "Knife" and "Shotgun".
+- **`StealDealerContractChance`**: Controls the **probability** for the Cartel Dealer stealing Players hired dealers active contracts. (Range 0.0 - 1.0)
+- **`StealPlayerPendingChance`**: Controls the **probability** for the Cartel Dealer stealing Players pending deal requests. (Range 0.0 - 1.0)
+- **`DealerActivityDecreasePerKill`**: A decrease in dealer activity for **each kill** the player makes. (Range 0.0 - 1.0)
+- **`DealerActivityIncreasePerDay`**: An increase in dealer activity for **each in-game day** that passes. (Range 0.0 - 1.0)
+- **`SafetyThreshold`**: Defines the **minimum value** required for a dealers to stop leaving their houses. This will cause them to stay inside if too many dealers are killed. (Range -1.0 - 1.0)
+- **`SafetyEnabled`**: When set to `true`, this enables the usage of **SafetyThreshold**.
+- **`FreeTimeWalking`**: When `true`, dealers will **randomly walk around** when they are not performing an active task. When `false`, they will remain stationary at their apartment door when spawning.
+
 
 ---
 
@@ -257,7 +325,7 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 
 In debug mode, you can see various visual cues and use keybinds to test features.
 
-> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See GitHub BUILD.md for more info.
+> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See [GitHub BUILD.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/BUILD.md) for more info.
 
 - **Cubes**: Visualize ambush positions. Their size corresponds to the detection radius and their color is based on the region. Standing under a cube will eventually trigger an ambush.
 - **Cyan Beams**: Visualize the four spawn points for each cube.
@@ -275,6 +343,9 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + T`: Trigger an Intercept Deal event.
     - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
     - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + I`: Place a non buildable safe (Do not use, left for future debugging and testing purposes)
+    - `Left CTRL + O`: Replaces the current Goon Pool with extended version (Do not use, left for future debugging and testing purposes)
+    - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
 
 ---
 
@@ -344,9 +415,8 @@ You can add or modify custom ambush locations.
 2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
 
-
 ---
-> **Note:** The `config.json` and `default.json` files will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
+> **Note:** The `config.json`, `default.json` and persistent cartel stolen items files will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
 
 ---
 

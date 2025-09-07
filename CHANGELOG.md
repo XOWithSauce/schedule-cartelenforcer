@@ -1,3 +1,39 @@
+# Version 1.5.2
+- Changed the Cartel Dealer logic to be its own system and is now driven by config values, toggleable by enhancedDealers = true, a separate system now from intercept deals, both should work intertwined with same cartel dealer objects
+- Added new event Cartel Gatherings where Cartel Goons chill outside during daytime.
+- Added logic to extend the spawnable cartel goon amount from 5 -> 10 to support Cartel Gatherings reserving always atleast 3
+- Added to Infiltrate Manor quest logic to spawn a small safe with loot inside of it in upstairs rooms
+- Added new value for changing the End Game Quests Monologue speed to slow it down
+- Added a new drop to the Unexpected Alliances boss, it can now drop a shotgun with 33% chance, additionally now always drops shotgun shells
+- Added new feature to the Unexpected Alliances boss, a Rage Stage where the boss starts drinking Cuke to regain health, also additionally can start sprinting faster towards player
+- Added new Timeout caps to Infiltrate Manor quest where it has to be completed by 03:59 or it fails
+- Changed Infiltrate Manor end game quest to fail if Police spots player inside manor
+- Changed End Game Quests to scale in difficulty, based on all regions influence in total. Higher overall influence will result in higher difficulty.
+- Changed End Game Quests XP Reward to scale with the same difficulty scalar.
+- Changed the Infiltrate Manor Quest to only open the Manor door after the Break In quest state has been activated
+- Changed the Loot Pick order for Infiltrate Manor Quest rewards so that the Safe can be filled with more rare items first
+- Changed both end game quests minimum requirement to be 1 customer from Suburbia region instead of 5
+- Increased the amount of Mini Quests generated each day, from an average of 1 dialogue per day to roughly 4 dialogues per day
+- Increased the chance of generating Mini Quests for locked customers from 30% to 80%
+- Removed the 30% chance to skip messaging for Manny in Unexpected Alliances quest
+- Fixed a bug where Mini Quest dialogue option would display NaN
+- Fixed a bug where Real Robbery feature robber would be invincible while escaping
+- Fixed a bug where after Infiltrate Manor quest the door was not reset closed
+- Fixed a bug where the Manor Goons would stop combat early
+- Fixed a bug where the Hourpass functions of end game quests would not get removed properly
+- Added safeguards to the end game quests min pass methods which dont seem to get deleted from MinPass functions in Time Manager
+- Fixed a bug where in Unexpected Alliances end game quest the Contact NPC will go inside a building and turn invisible
+- Fixed a bug where in Unexpected Alliances end game quest Despawning the Contact NPC would cause errors
+- Fixed a bug where in end game quests longer battles or not seeing player for long enough would cause enemies to lose aggro 
+- Fixed a bug where end game quest would not be removed from the active quests causing errors when game is saved after completion
+- Fixed a bug in Infiltrate Manor quest where Ray would not reset back to their normal schedule of smoking next to courthouse from 18:15-19:00, but 18:15-22:00
+- Fixed a bug in end game quests where enemies would drop their weapons when hit with forceful impact
+- Fixed a bug where Cartel Dealers would message player when not having product
+- Fixed a bug where Cartel Dealers would cause Player Relations with Customers to rise before being unlocked
+- Fixed a bug in influence system where it would try to reduce or add influence from northtown
+- Fixed a bug where Cartel Goons would sometimes when spawning to world, have their gravity enabled while despawned under map, causing them to fall infinitely under the map while despawned.
+- 
+
 # Version 1.5.1
 - Added new Manor End game quest
 - Fixed cartel dealers standing still in their apartment doors, now they will try to travel to random locations and should consistently deal

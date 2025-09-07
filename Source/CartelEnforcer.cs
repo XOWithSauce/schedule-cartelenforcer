@@ -11,15 +11,23 @@ using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
-
+using static CartelEnforcer.DealerActivity;
+using static CartelEnforcer.CartelGathering;
 
 #if MONO
+using ScheduleOne.Property;
+using ScheduleOne.Cartel;
 using ScheduleOne.NPCs;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
+using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.Persistence;
 using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
+using FishNet.Managing.Object;
+using FishNet.Managing;
+using FishNet.Object;
+
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
@@ -27,6 +35,13 @@ using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.Property;
+using Il2CppScheduleOne.Cartel;
+using Il2CppFishNet.Managing.Object;
+using Il2CppFishNet.Managing;
+using Il2CppFishNet.Object;
+using Il2CppScheduleOne.NPCs.Schedules;
+
 #endif
 
 
@@ -150,7 +165,7 @@ namespace CartelEnforcer
                     }
 
                     // Left CTRL + U Gen Manor quest
-                    else if (Input.GetKey(KeyCode.Y))
+                    else if (Input.GetKey(KeyCode.U))
                     {
                         if (!debounce)
                         {
@@ -159,6 +174,35 @@ namespace CartelEnforcer
                         }
                     }
 
+                    // Left CTRL + I Place safe
+                    else if (Input.GetKey(KeyCode.I))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputPlaceSafe());
+                        }
+                    }
+
+                    // Left CTRL + O Test array replace
+                    else if (Input.GetKey(KeyCode.O))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputReplaceGoonPool());
+                        }
+                    }
+                    // Left CTRL + P Gathering Spawn
+                    else if (Input.GetKey(KeyCode.P))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            hoursUntilNextGathering = 1;
+                            MelonCoroutines.Start(TryStartGathering());
+                        }
+                    }
                 }
             }
         }
@@ -217,8 +261,25 @@ namespace CartelEnforcer
             if (currentConfig.endGameQuest)
                 coros.Add(MelonCoroutines.Start(InitializeEndGameQuest()));
 
+            if (currentConfig.enhancedDealers)
+            {
+                dealerConfig = ConfigLoader.LoadDealerConfig();
+                coros.Add(MelonCoroutines.Start(EvaluateDealerState()));
+            }
+
+            if (currentConfig.cartelGatherings)
+            {
+#if MONO
+                NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTryGather;
+#else
+                NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTryGather;
+#endif
+            }
+
             if (currentConfig.debugMode)
                 MelonCoroutines.Start(MakeUI());
+
+            coros.Add(MelonCoroutines.Start(ExtendGoonPool()));
         }
 
         public static IEnumerator InitializeAndEvaluateDriveBy()
@@ -271,6 +332,19 @@ namespace CartelEnforcer
         public static IEnumerator InitializeEndGameQuest()
         {
             yield return Wait30;
+            RV rv = UnityEngine.Object.FindObjectOfType<RV>();
+            Transform target = rv.transform.Find("RV/rv/Small Safe");
+            if (target == null)
+            {
+                Log("No RV target to copy safe prefab from");
+            }
+            else
+            {
+                GameObject prefab = UnityEngine.Object.Instantiate(target.gameObject, null);
+                prefab.SetActive(false);
+                safePrefab = prefab;
+            }
+
             Log("Evaluating End Game Quest Creation");
             bool hasGeneratedQuest = false;
             bool hasGeneratedManorQuest = false;
@@ -294,6 +368,79 @@ namespace CartelEnforcer
             yield return null;
         }
 
+        public static IEnumerator ExtendGoonPool()
+        {
+            GoonPool goonPool = NetworkSingleton<Cartel>.Instance.GoonPool;
+            CartelGoon[] originalGoons = goonPool.goons;
+
+            NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
+            PrefabObjects spawnablePrefabs = netManager.SpawnablePrefabs;
+            NetworkObject nob = null;
+            for (int i = 0; i < spawnablePrefabs.GetObjectCount(); i++)
+            {
+                NetworkObject prefab = spawnablePrefabs.GetObject(true, i);
+                if (prefab?.gameObject?.name == "CartelGoon")
+                {
+                    nob = prefab;
+                    break;
+                }
+            }
+
+
+            Log("Swapping array count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
+
+            int originalCount = originalGoons.Length;
+
+            int extra = 5;
+            int newCount = originalCount + extra;
+
+            CartelGoon[] newGoons = new CartelGoon[newCount];
+
+            System.Array.Copy(originalGoons, newGoons, originalCount);
+
+            CartelGoon goonPrefab = originalGoons.FirstOrDefault();
+
+            if (goonPrefab != null)
+            {
+                for (int i = originalCount; i < newCount; i++)
+                {
+                    NetworkObject nobNew = UnityEngine.Object.Instantiate<NetworkObject>(nob);
+                    CartelGoon newGoon = nobNew.GetComponent<CartelGoon>();
+                    newGoon.transform.parent = NPCManager.Instance.NPCContainer;
+                    NPCManager.NPCRegistry.Add(newGoon);
+                    yield return Wait05;
+                    netManager.ServerManager.Spawn(nobNew);
+                    yield return Wait05;
+                    newGoon.gameObject.SetActive(true);
+                    yield return Wait2;
+                    newGoon.Movement.enabled = true;
+                    newGoon.gameObject.SetActive(true);
+                    newGoon.Despawn();
+                    newGoons[i] = newGoon;
+                    goonPool.unspawnedGoons.Add(newGoon);
+                }
+                goonPool.goons = newGoons;
+            }
+
+            foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.goons)
+            {
+                if (goon.Health.IsDead || goon.Health.IsKnockedOut)
+                    goon.Health.Revive();
+                yield return Wait01;
+                // fix having unassigned values here otherwise they afk on first spawn (maybe not needed after doing the nob instantiate instead of unity engine obj)
+                if (goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_StayInBuilding stayInside)
+                {
+                    stayInside.Resume();
+                }
+                goon.IsGoonSpawned = true;
+                yield return Wait05;
+                goon.Despawn();
+                goon.Despawn_Client();
+
+            }
+            Log("Array swapped now count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
+        }
+
         #endregion
 
         #region Harmony Patches for Saving and Coroutine safety
@@ -306,8 +453,7 @@ namespace CartelEnforcer
                 if (coro != null)
                     MelonCoroutines.Stop(coro);
             }
-            driveByActive = false;
-            interceptingDeal = false;
+
             coros.Clear();
             // Now mostly just the different mod related lists that got populated in init, reset and clear to repopulate everything on new load
             mapReg.Clear();
@@ -319,15 +465,32 @@ namespace CartelEnforcer
             emptyDrops.Clear();
             targetNPCsList.Clear();
             targetNPCs.Clear();
+            manorGoons.Clear();
+            manorGoonGuids.Clear();
+            spawnedGatherGoons.Clear();
 
+            // Now the created states and any boolean flags for events
+            // QUests
             activeQuest = null;
             completed = false;
-            manorCompleted = false;
-            StageDeadDropsObserved = 0;
-            fixer = null;
-            bossGoon = null;
-            ray = null;
             activeManorQuest = null;
+            manorCompleted = false;
+            fixer = null;
+            ray = null;
+            bossGoon = null;
+            fixerDiagIndex = 0;
+            rayChoiceIndex = 0;
+
+            // Mini quests and events
+            StageDeadDropsObserved = 0;
+            driveByActive = false;
+            interceptingDeal = false;
+            interceptor = null;
+            startedCombat = false;
+            areGoonsGathering = false;
+
+            currentDealerActivity = 0f;
+            previousDealerActivity = 0f;
 
 #if IL2CPP
             CartelActivities_TryStartActivityPatch.activitiesReadyToStart.Clear();
@@ -335,7 +498,7 @@ namespace CartelEnforcer
 #endif
     }
 
-        [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
+    [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
         public static class SaveManager_Save_String_Patch
         {
             public static bool Prefix(SaveManager __instance, string saveFolderPath)

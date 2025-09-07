@@ -24,6 +24,9 @@ namespace CartelEnforcer
         public static bool ShouldChangeInfluence(EMapRegion region)
         {
             bool changeInfluence = false;
+
+            if (region == EMapRegion.Northtown)
+                changeInfluence = false;
 #if MONO
             if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
                 changeInfluence = true;

@@ -8,9 +8,14 @@ using UnityEngine.UI;
 using UnityEngine.AI;
 
 using static CartelEnforcer.CartelEnforcer;
+using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.EndGameQuest;
+using static CartelEnforcer.InfluenceOverrides;
+using HarmonyLib;
+
+
 
 #if MONO
 using ScheduleOne.Police;
@@ -22,6 +27,7 @@ using ScheduleOne.ItemFramework;
 using ScheduleOne.Economy;
 using ScheduleOne.Interaction;
 using ScheduleOne.Levelling;
+using ScheduleOne.Storage;
 using ScheduleOne.Money;
 using ScheduleOne.Map;
 using ScheduleOne.Cartel;
@@ -67,8 +73,7 @@ using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
 using Il2CppFishNet.Managing;
 using Il2CppScheduleOne.Property;
-using Il2CppScheduleOne.ObjectScripts;
-using static Il2CppScheduleOne.UI.Items.FilterConfigPanel.SearchCategory;
+using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.NPCs.Other;
 using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.Levelling;
@@ -78,9 +83,41 @@ using Il2CppInterop.Runtime.Injection;
 
 namespace CartelEnforcer
 {
+
+    // Fix shotgun ragdolls + flinches, but only for manor goons and boss
+
+    [HarmonyPatch(typeof(NPC), "ProcessImpactForce")]
+    public static class NPC_ProcessImpactForce_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(NPC __instance, Vector3 forcePoint, Vector3 forceDirection, ref float force)
+        {
+            // because after quest complete it auto disables object we check that the quest is active and not completed
+            if (activeQuest != null && activeQuest.gameObject.activeSelf) 
+            {
+                if (bossGoon != null && bossGoon.GUID == __instance.GUID)
+                {
+                    force = 10f;
+                }
+            }
+
+            if (activeManorQuest != null && activeManorQuest.gameObject.activeSelf)
+            {
+                if (manorGoonGuids.Count > 0 && manorGoonGuids.Contains(__instance.GUID.ToString()))
+                {
+                    force = 10f;
+                }
+            }
+
+
+            return true;
+        }
+
+    }
+
+
     public static class EndGameQuest
     {
-
         #region End Game Quest Unexpected Alliances
         public static bool completed = false;
         public static int StageDeadDropsObserved = 0;
@@ -126,7 +163,7 @@ namespace CartelEnforcer
                 }
             }
 #endif
-            if (numUnlocked < 5)
+            if (numUnlocked < 1)
                 return false;
 
             if ((int)NetworkSingleton<LevelManager>.Instance.Rank < 5) // If not atleast enforcer rank
@@ -213,32 +250,43 @@ namespace CartelEnforcer
             controller.AddDialogueChoice(choice);
             yield return null;
         }
+        public static IEnumerator DisposeContactChoice(DialogueController controller)
+        {
+            yield return Wait05;
+            if (!registered) yield break;
 
+            var oldChoices = controller.Choices;
+            oldChoices.RemoveAt(0);
+            controller.Choices = oldChoices;
+            Log("[END GAME QUEST]    Disposed Choice");
+            yield return null;
+        }
         public static void OnOptionSelected(DialogueController controller, Action cb)
         {
             controller.handler.ContinueSubmitted();
-            MelonCoroutines.Start(DisposeChoice(controller));
+            MelonCoroutines.Start(DisposeContactChoice(controller));
             MelonCoroutines.Start(ContactDialogue(controller, cb));
         }
 
         public static IEnumerator ContactDialogue(DialogueController controller, Action cb)
         {
+            float lerpWait = Mathf.Lerp(10f, 5f, currentConfig.endGameQuestMonologueSpeed);
+            WaitForSeconds waitObj = new WaitForSeconds(lerpWait);
             List<string> dialog = dialogOptions[UnityEngine.Random.Range(0, dialogOptions.Count)];
             controller.npc.PlayVO(EVOLineType.Concerned);
-            controller.handler.WorldspaceRend.ShowText("It doesn't matter who I am. We have a bigger issue at our hands.", 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText("It doesn't matter who I am. We have a bigger issue at our hands.", lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Acknowledge);
-            controller.handler.WorldspaceRend.ShowText("The cartel has been running Hyland Point for too long.", 5f);
-            yield return Wait5;
-            controller.handler.WorldspaceRend.ShowText("We have intel that Thomas' high ranking soldier is nearby that house up the dirt road.", 5f);
-            yield return Wait5;
-            controller.handler.WorldspaceRend.ShowText("This is not your basic goon, they are a Brute. One of the best soldiers he has.", 5f);
-            yield return Wait5;
-            controller.handler.WorldspaceRend.ShowText("Go and take them down. I'll make sure nobody comes snooping around.", 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText("The cartel has been running Hyland Point for too long.", lerpWait);
+            yield return waitObj;
+            controller.handler.WorldspaceRend.ShowText("We have intel that Thomas' high ranking soldier is nearby that house up the dirt road.", lerpWait);
+            yield return waitObj;
+            controller.handler.WorldspaceRend.ShowText("This is not your basic goon, they are a Brute. One of the best soldiers he has.", lerpWait);
+            yield return waitObj;
+            controller.handler.WorldspaceRend.ShowText("Go and take them down. I'll make sure nobody comes snooping around.", lerpWait);
+            yield return waitObj;
 
-            // Walk away + despawn??
-
+            Log("Running callback");
             if (cb != null)
                 cb();
             yield return null;
@@ -274,17 +322,19 @@ namespace CartelEnforcer
         };
         public static IEnumerator EventInstructions(DialogueController controller)
         {
+            float lerpWait = Mathf.Lerp(10f, 5f, currentConfig.endGameQuestMonologueSpeed);
+            WaitForSeconds waitObj = new WaitForSeconds(lerpWait);
             List<string> dialog = dialogOptions[UnityEngine.Random.Range(0, dialogOptions.Count)];
-            controller.handler.WorldspaceRend.ShowText(dialog[0], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[0], lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Think);
-            controller.handler.WorldspaceRend.ShowText(dialog[1], 5f);
-            yield return Wait5;
-            controller.handler.WorldspaceRend.ShowText(dialog[2], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[1], lerpWait);
+            yield return waitObj;
+            controller.handler.WorldspaceRend.ShowText(dialog[2], lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Acknowledge);
-            controller.handler.WorldspaceRend.ShowText(dialog[3], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[3], lerpWait);
+            yield return waitObj;
 
             yield return null;
         }
@@ -294,8 +344,6 @@ namespace CartelEnforcer
             GameObject newQuestObject = new GameObject();
             Log("Add Component");
             activeQuest = newQuestObject.AddComponent<Quest_DefeatEnforcer>();
-            Log("HandleInit");
-            yield return MelonCoroutines.Start(HandleInit(activeQuest));
             newQuestObject.SetActive(true);
             activeQuest.enabled = true;
             Log("SetupSelf");
@@ -303,19 +351,11 @@ namespace CartelEnforcer
 
             yield return null;
         }
-        private static IEnumerator HandleInit(Quest_DefeatEnforcer quest)
-        {
-#if MONO
-            quest.InitializeQuest("Unexpected Alliances", "Investigate and intercept Cartel Activity", Array.Empty<QuestEntryData>(), Guid.NewGuid().ToString());
-#else
-            //Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<QuestEntryData> entryData = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<QuestEntryData>(0);
-            //quest.InitializeQuest("Unexpected Alliances", "Investigate and intercept Cartel Activity", entryData, Il2CppSystem.Guid.NewGuid().ToString());
-#endif
-            yield return null;
-        }
         public static IEnumerator QuestReward(CartelGoon goon)
         {
             yield return Wait025;
+            goon.Inventory.Clear();
+
             Func<string, ItemDefinition> GetItem;
 
 #if MONO
@@ -330,6 +370,16 @@ namespace CartelEnforcer
             ItemDefinition defChain = GetItem("goldchain");
             ItemInstance goldChain = defChain.GetDefaultInstance(1);
             goon.Inventory.InsertItem(goldChain, true);
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.666f)
+            {
+                ItemDefinition defGun = GetItem("pumpshotgun");
+                ItemInstance gunInst = defGun.GetDefaultInstance(1);
+                goon.Inventory.InsertItem(gunInst, true);
+            }
+            ItemDefinition defShell = GetItem("shotgunshell");
+            ItemInstance shell = defShell.GetDefaultInstance(UnityEngine.Random.Range(4, 10));
+            goon.Inventory.InsertItem(shell, true);
 
             // Change globally customer relation
 #if MONO
@@ -355,6 +405,7 @@ namespace CartelEnforcer
             {
                 foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
                 {
+                    if (unlmapReg == EMapRegion.Northtown) continue;
                     yield return Wait5; // play animation
                     float current = NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(unlmapReg).Influence;
                     if (current > 0.0f)
@@ -363,7 +414,7 @@ namespace CartelEnforcer
                         float delta = current - result;
                         float rounded = Mathf.Round(delta * 100) / 100;
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(unlmapReg, -rounded);
-                    } 
+                    }
                 }
             }
 
@@ -381,7 +432,9 @@ namespace CartelEnforcer
                 bossGoon = null;
             }
 
- 
+            Quest.Quests.Remove(activeQuest);
+            activeQuest.gameObject.SetActive(false);
+
             yield return null;
         }
         #endregion
@@ -392,6 +445,9 @@ namespace CartelEnforcer
         public static bool manorCompleted = false;
         public static int rayChoiceIndex = 0;
         public static Vector3 standPos = new(70.96f, 1.46f, 16.03f);
+        public static GameObject safePrefab = null;
+        public static List<CartelGoon> manorGoons = new();
+        public static List<string> manorGoonGuids = new();
 
         public static IEnumerator GenManorDialogOption()
         {
@@ -427,7 +483,7 @@ namespace CartelEnforcer
         {
             controller.handler.ContinueSubmitted();
 
-            bool inTimeWindow = NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1815 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1900;
+            bool inTimeWindow = NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1815 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1858;
 
             bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= 2500f;
             bool isInPos = (Vector3.Distance(ray.CenterPoint, standPos) < 0.4f);
@@ -502,18 +558,20 @@ namespace CartelEnforcer
 
         public static IEnumerator EventManorInstructions(DialogueController controller)
         {
+            float lerpWait = Mathf.Lerp(10f, 5f, currentConfig.endGameQuestMonologueSpeed);
+            WaitForSeconds waitObj = new WaitForSeconds(lerpWait);
             List<string> dialog = dialogManorOptions[UnityEngine.Random.Range(0, dialogManorOptions.Count)];
             controller.npc.PlayVO(EVOLineType.Acknowledge);
-            controller.handler.WorldspaceRend.ShowText(dialog[0], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[0], lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Concerned);
-            controller.handler.WorldspaceRend.ShowText(dialog[1], 5f);
-            yield return Wait5;
-            controller.handler.WorldspaceRend.ShowText(dialog[2], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[1], lerpWait);
+            yield return waitObj;
+            controller.handler.WorldspaceRend.ShowText(dialog[2], lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Surprised);
-            controller.handler.WorldspaceRend.ShowText(dialog[3], 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText(dialog[3], lerpWait);
+            yield return waitObj;
 
             yield return null;
         }
@@ -523,23 +581,11 @@ namespace CartelEnforcer
             GameObject newQuestObject = new GameObject();
             Log("Add Component");
             activeManorQuest = newQuestObject.AddComponent<Quest_InfiltrateManor>();
-            Log("HandleInit");
-            yield return MelonCoroutines.Start(HandleManorInit(activeManorQuest));
             newQuestObject.SetActive(true);
             activeManorQuest.enabled = true;
             Log("SetupSelf");
             activeManorQuest.SetupSelf();
 
-            yield return null;
-        }
-        private static IEnumerator HandleManorInit(Quest_InfiltrateManor quest)
-        {
-#if MONO
-            quest.InitializeQuest("Unexpected Alliances", "Investigate and intercept Cartel Activity", Array.Empty<QuestEntryData>(), Guid.NewGuid().ToString());
-#else
-            //Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<QuestEntryData> entryData = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppReferenceArray<QuestEntryData>(0);
-            //quest.InitializeQuest("Unexpected Alliances", "Investigate and intercept Cartel Activity", entryData, Il2CppSystem.Guid.NewGuid().ToString());
-#endif
             yield return null;
         }
 
@@ -561,33 +607,64 @@ namespace CartelEnforcer
             }
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnQuestChosenWrapped);
 #endif
-            controller.AddDialogueChoice(choice);
+            rayChoiceIndex = controller.AddDialogueChoice(choice);
             yield return null;
         }
         public static void OnSecondDialogChosen(DialogueController controller, Action cb)
         {
             controller.handler.ContinueSubmitted();
 
-            MelonCoroutines.Start(DisposeChoice(controller));
+            MelonCoroutines.Start(DisposeRaySecondChoice(controller));
             MelonCoroutines.Start(PlaySecondRayDialog(controller, cb));
         }
+        public static IEnumerator DisposeRaySecondChoice(DialogueController controller)
+        {
+            yield return Wait05;
+            if (!registered) yield break;
+
+            var oldChoices = controller.Choices;
+            oldChoices.RemoveAt(rayChoiceIndex);
+            controller.Choices = oldChoices;
+            Log("[END GAME QUEST]    Disposed Choice");
+
+            yield return Wait30;
+#if MONO
+            (ray.Behaviour.ScheduleManager.ActiveAction as NPCEvent_LocationBasedAction).EndTime = 1800;
+            (ray.Behaviour.ScheduleManager.ActiveAction as NPCEvent_LocationBasedAction).Duration = 60;
+            (ray.Behaviour.ScheduleManager.ActiveAction as NPCEvent_LocationBasedAction).Start();
+#else
+            NPCEvent_LocationBasedAction temp = ray.Behaviour.ScheduleManager.ActiveAction.TryCast<NPCEvent_LocationBasedAction>();
+            if (temp != null)
+            {
+                temp.EndTime = 1800;
+                temp.Duration = 60;
+            }
+#endif
+            ray.Behaviour.ScheduleManager.EnableSchedule();
+            yield return null;
+        }
+
         public static IEnumerator PlaySecondRayDialog(DialogueController controller, Action cb)
         {
+            float lerpWait = Mathf.Lerp(10f, 5f, currentConfig.endGameQuestMonologueSpeed);
+            WaitForSeconds waitObj = new WaitForSeconds(lerpWait);
+
+            float lerpWaitLong = Mathf.Lerp(15f, 7f, currentConfig.endGameQuestMonologueSpeed);
+            WaitForSeconds waitObjLong = new WaitForSeconds(lerpWaitLong);
+
             controller.npc.PlayVO(EVOLineType.No);
-            controller.handler.WorldspaceRend.ShowText("I don't think so. The whole place is fenced off.", 5f);
-            yield return Wait5;
+            controller.handler.WorldspaceRend.ShowText("I don't think so. The whole place is fenced off.", lerpWait);
+            yield return waitObj;
             controller.npc.PlayVO(EVOLineType.Think);
-            controller.handler.WorldspaceRend.ShowText("If you manage to make it over the fence, there is a way for me to get you inside.", 7f);
-            yield return Wait5;
-            yield return Wait2;
-            controller.handler.WorldspaceRend.ShowText("Here, take my master key. It's from back when the Manor was built.", 6f);
+            controller.handler.WorldspaceRend.ShowText("If you manage to make it over the fence, there is a way for me to get you inside.", lerpWaitLong);
+            yield return waitObjLong;
+            controller.handler.WorldspaceRend.ShowText("Here, take my master key. It's from back when the Manor was built.", lerpWait + 2f);
             yield return Wait2;
             controller.npc.PlayVO(EVOLineType.Acknowledge);
             controller.npc.SetAnimationTrigger("GrabItem");
-            yield return Wait2;
-            yield return Wait2;
+            yield return waitObj;
             controller.handler.WorldspaceRend.ShowText("It won't work on the main entrance, but try the back door.", 5f);
-            yield return Wait5;
+            yield return waitObj;
 
             if (cb != null)
                 cb();
@@ -615,6 +692,7 @@ namespace CartelEnforcer
             {
                 foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
                 {
+                    if (unlmapReg == EMapRegion.Northtown) continue;
                     yield return Wait5; // play animation
                     float current = NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(unlmapReg).Influence;
                     if (current > 0.0f)
@@ -626,6 +704,10 @@ namespace CartelEnforcer
                     }
                 }
             }
+
+            Quest.Quests.Remove(activeManorQuest);
+            activeManorQuest.gameObject.SetActive(false);
+
 
             yield return null;
         }
@@ -650,7 +732,17 @@ namespace CartelEnforcer
         private bool contactMade = false;
         private RectTransform rtIcon;
         private bool bossCombatBegun = false;
+        private bool rageStageStarted = false;
         private int fightElapsed = 0;
+        private float questDifficultyScalar;
+
+
+        // store the combat variables
+        private float GiveUpRange = 0f;
+        private float GiveUpTime = 0f;
+        private int GiveUpAfterSuccessfulHits = 0;
+        private float DefaultSearchTime = 0f;
+
 
 #if IL2CPP
         // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries is il2cpp system ienumerable but expecting system ienumerable?
@@ -679,12 +771,20 @@ namespace CartelEnforcer
         public void SetupSelf()
         {
             Log("SetupSelfStart");
-            
+            // calc difficulty scalar
+            float allInfluence = 0f;
+            foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
+            {
+                allInfluence += data.Influence;
+            }
+            float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
+            questDifficultyScalar = 1f + allInfluenceNormalized;
+
             Log("QuestInit");
             this.name = "Quest_DefeatEnforcer";
             Expires = false;
             title = "Unexpected Alliances";
-            CompletionXP = 1000;
+            CompletionXP = Mathf.RoundToInt(850f * questDifficultyScalar);
             Description = "Investigate and intercept Cartel Activity";
             TrackOnBegin = true;
             autoInitialize = false;
@@ -763,19 +863,29 @@ namespace CartelEnforcer
             }
             investigate.onComplete.AddListener((UnityEngine.Events.UnityAction)OnInvestigateComplete);
 
+
+
+
             contact.SetEntryTitle("Wait for Manny to contact you.");
             contact.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             contact.PoILocation.name = "ContactEntry_POI";
             contact.PoILocation.transform.SetParent(contact.transform);
             contact.PoILocation.transform.position = new Vector3(128.27f, 1.56f, 88.96f);
-            //contact.CreatePoI();
             contact.AutoUpdatePoILocation = true;
             contact.SetState(EQuestState.Inactive, false);
             contact.ParentQuest = this;
             contact.CompleteParentQuest = false;
             void OnContactComplete()
             {
-                QuestEntry_DefeatBoss.Begin();
+                Log("Entry Start");
+                if (QuestEntry_DefeatBoss.State != EQuestState.Active)
+                    QuestEntry_DefeatBoss.Begin();
+                Log("Entry POI");
+                if (QuestEntry_DefeatBoss.PoI != null)
+                    QuestEntry_DefeatBoss.PoI.gameObject.SetActive(false);
+                Log("Compass");
+                if (QuestEntry_DefeatBoss.compassElement != null)
+                    QuestEntry_DefeatBoss.compassElement.Visible = false;
                 contact.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnContactComplete);
             }
             contact.onComplete.AddListener((UnityEngine.Events.UnityAction)OnContactComplete);
@@ -784,30 +894,27 @@ namespace CartelEnforcer
             defeat.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             defeat.PoILocation.name = "DefeatEntry_POI";
             defeat.PoILocation.transform.SetParent(defeat.transform);
-            defeat.PoILocation.transform.position = new Vector3(156.38f, 6.40f, 123.95f);
-            //defeat.CreatePoI();
+            defeat.PoILocation.transform.position = new Vector3(156.38f, 6.70f, 123.95f);
             defeat.AutoUpdatePoILocation = true;
             defeat.SetState(EQuestState.Inactive, false);
             defeat.ParentQuest = this;
             defeat.CompleteParentQuest = false;
-            //void OnDefeatComplete()
-            //{
-            //
-            //    defeat.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnDefeatComplete);
-            //}
-            //defeat.onComplete.AddListener((UnityEngine.Events.UnityAction)OnDefeatComplete);
+
 
             Quest.Quests.Add(this);
-
+            Log("InitSaveable");
+            this.InitializeSaveable();
+            Log("Init saveable done");
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
 #endif
-            instance.onMinutePass.Add(new Action(this.MinPass)); // Is this already added on the InitializeQuest method??
+            instance.onMinutePass.Add(new Action(this.MinPass));
             coros.Add(MelonCoroutines.Start(StartQuestDetail()));
         }
+
         private IEnumerator StartQuestDetail() // todo fixme this dumb
         {
             StageDeadDropsObserved = 0;
@@ -815,12 +922,26 @@ namespace CartelEnforcer
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
             SetupHudUI();
 
-            QuestEntry_Investigate.compassElement.Visible = false;
-            QuestEntry_Investigate.PoI.gameObject.SetActive(false);
+            if (hudUI != null)
+            {
+                if (hudUI.MainLabel != null)
+                    this.hudUI.MainLabel.text = "Unexpected Alliances";
+                this.hudUI.gameObject.SetActive(true);
+            }
 
-            this.hudUI.MainLabel.text = "Unexpected Alliances";
+            if (QuestEntry_Investigate != null)
+            {
+                QuestEntry_Investigate.CreateCompassElement();
+                if (QuestEntry_Investigate.compassElement != null)
+                    QuestEntry_Investigate.compassElement.Visible = false;
+
+                if (QuestEntry_Investigate.PoI != null)
+                    QuestEntry_Investigate.PoI.gameObject.SetActive(false);
+            }
+
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
+
             yield return null;
         }
 
@@ -930,7 +1051,8 @@ namespace CartelEnforcer
             copNet.gameObject.SetActive(true);
             myNpc.Health.Invincible = true;
             myNpc.Behaviour.CombatBehaviour.Disable_Networked(null);
-            
+            myNpc.Behaviour.CombatBehaviour.enabled = false;
+
             myNpc.intObj.onHovered.RemoveAllListeners();
             myNpc.intObj.SetMessage("Talk");
             myNpc.intObj.interactionState = InteractableObject.EInteractableState.Default;
@@ -1021,14 +1143,13 @@ namespace CartelEnforcer
             if (offc.Avatar.onSettingsLoaded != null)
                 offc.Avatar.onSettingsLoaded.Invoke();
 
-#endregion
+            #endregion
+            Log("Set offc stats");
             offc.Movement.Agent.enabled = false;
             Vector3 spawnPos = QuestEntry_WaitForContact.PoILocation.position;
             offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
-            offc.Movement.Stop();
             offc.Behaviour.ScheduleManager.DisableSchedule();
             offc.Awareness.VisionCone.VisionEnabled = false;
-            offc.Movement.PauseMovement();
             offc.ChatterEnabled = false;
             offc.Movement.Agent.enabled = true;
             yield return Wait2;
@@ -1037,6 +1158,11 @@ namespace CartelEnforcer
             offc.Movement.Agent.enabled = true;
             offc.Avatar.gameObject.SetActive(true);
             offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
+            offc.Movement.WarpToNavMesh();
+            yield return Wait01;
+            offc.Movement.Stop();
+            offc.Movement.Agent.enabled = false;
+            offc.Movement.enabled = false;
             offc.transform.rotation = Quaternion.Euler(0f, 160f, 0f);
 
             void OnDialogComplete()
@@ -1047,7 +1173,6 @@ namespace CartelEnforcer
             }
             Action callback = new Action(OnDialogComplete);
             MelonCoroutines.Start(GenContactDialog(myNpc, callback));
-
 
             Log("Send Message");
             fixer.MSGConversation.SendMessage(new Message("I set up a meeting for you. He is waiting near the church.", Message.ESenderType.Other, false, -1), true, true);
@@ -1060,8 +1185,14 @@ namespace CartelEnforcer
         public IEnumerator RunContactDespawn(NPC npc, NetworkObject obj, NetworkManager mgr)
         {
             yield return Wait30;
-            NPCManager.NPCRegistry.Remove(npc);
-            mgr.ServerManager.Despawn(obj);
+            if (!registered) yield break;
+
+            //if (obj != null)
+                //mgr.ServerManager.Despawn(obj);
+
+            if (npc != null)
+                NPCManager.NPCRegistry.Remove(npc);
+
             if (npc != null)
                 if (npc.gameObject != null)
                     GameObject.Destroy(npc.gameObject);
@@ -1070,74 +1201,37 @@ namespace CartelEnforcer
 
         private IEnumerator RunBossSpawn()
         {
+            Log("Boss Spawning");
             Vector3 spawnPos = QuestEntry_DefeatBoss.PoILocation.position;
             CartelGoon _bossGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
-
+            bossGoon = _bossGoon;
+            bossGoon.Health.Revive();
+            yield return Wait05;
             _bossGoon.Behaviour.ScheduleManager.DisableSchedule();
             // because for some reason the avatar goes off and same with nav
-            yield return Wait2;
+
+            yield return Wait05;
+            if (_bossGoon.isInBuilding)
+            {
+                Log("Exit Building!!");
+                _bossGoon.ExitBuilding();
+            }
             if (!_bossGoon.Avatar.gameObject.activeSelf) _bossGoon.Avatar.gameObject.SetActive(true);
             if (_bossGoon.Movement.Agent != null && _bossGoon.Movement.Agent.enabled == false) _bossGoon.Movement.Agent.enabled = true;
 
-            #region Cracked Shotgun
-            _bossGoon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
-            yield return Wait05;
-#if MONO
-            if (_bossGoon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
-            {
-                wep.MaxUseRange = 30f;
-                wep.MinUseRange = 0.4f;
-                wep.HitChance_MaxRange = 0.1f;
-                wep.HitChance_MinRange = 0.7f;
-                wep.MaxFireRate = 2.6f;
-                wep.CooldownDuration = 0.8f;
-                wep.Damage = 55f;
-                wep.ReloadTime = 2.3f;
-                wep.RaiseTime = 1.3f;
-                wep.ImpactForce = 28f;
-                wep.AimTime_Max = 1.2f;
-                wep.RepositionAfterHit = true;
-            }
-#else
-            AvatarRangedWeapon wep = null;
-            try
-            {
-                wep = _bossGoon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
-            } 
-            catch (InvalidCastException ex)
-            {
-                MelonLogger.Warning("Failed to Cast Thomas Gun Weapon Instance: " + ex);
-            }
-
-            if (wep != null)
-            {
-                wep.MaxUseRange = 30f;
-                wep.MinUseRange = 0.4f;
-                wep.HitChance_MaxRange = 0.1f;
-                wep.HitChance_MinRange = 0.7f;
-                wep.MaxFireRate = 2.6f;
-                wep.CooldownDuration = 0.8f;
-                wep.Damage = 55f;
-                wep.ReloadTime = 2.3f;
-                wep.RaiseTime = 1.3f;
-                wep.ImpactForce = 28f;
-                wep.AimTime_Max = 1.2f;
-                wep.RepositionAfterHit = true;
-            }
-#endif
-#endregion
-            Log("Setup Boss Weapon");
+            
             yield return Wait05;
             #region Movement and Health
-            _bossGoon.Health.MaxHealth = 420f;
-            _bossGoon.Health.Health = 420f;
-            _bossGoon.Health.Revive();
+            _bossGoon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(620f, 1260f, questDifficultyScalar - 1f) / 10f) * 10f;
+            _bossGoon.Health.Health = Mathf.Round(Mathf.Lerp(620f, 1260f, questDifficultyScalar - 1f) / 10f) * 10f;
             _bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
+            _bossGoon.SetScale(1.35f);
             #endregion
             Log("Setup Boss Move & Health");
             yield return Wait05;
+            coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+
             #region Avatar
-            _bossGoon.transform.localScale = new Vector3(1.3f, 1.3f, 1.3f);
 
             var originalAccessorySettings = _bossGoon.Avatar.CurrentSettings.AccessorySettings;
 #if MONO
@@ -1186,31 +1280,176 @@ namespace CartelEnforcer
             #endregion
             Log("Setup Boss Avatar");
             // because for some reason the avatar goes off and same with nav
-            yield return Wait2;
-            _bossGoon.ExitBuilding();
+            if (_bossGoon.isInBuilding)
+            {
+                _bossGoon.ExitBuilding();
+            }
             _bossGoon.Movement.Warp(spawnPos);
+            if (_bossGoon.Health.IsKnockedOut || _bossGoon.Health.IsDead)
+            {
+                _bossGoon.Health.Revive();
+            }
+            yield return Wait05;
             if (!_bossGoon.Avatar.gameObject.activeSelf) _bossGoon.Avatar.gameObject.SetActive(true);
             if (_bossGoon.Movement.Agent != null && _bossGoon.Movement.Agent.enabled == false) _bossGoon.Movement.Agent.enabled = true;
 
-            bossGoon = _bossGoon;
+            if (GiveUpRange == 0f)
+            {
+                GiveUpRange = _bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
+                GiveUpTime = _bossGoon.Behaviour.CombatBehaviour.GiveUpTime;
+                GiveUpAfterSuccessfulHits = _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
+                DefaultSearchTime = _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
+            }
+
+            _bossGoon.Behaviour.CombatBehaviour.GiveUpRange = 60f;
+            _bossGoon.Behaviour.CombatBehaviour.GiveUpTime = 160f;
+            _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 80;
+            _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = 160f;
 
             void OnBossDied()
             {
-                QuestEntry_DefeatBoss.Complete();
                 completed = true;
                 MelonCoroutines.Start(QuestReward(bossGoon));
                 this.Complete(true);
+                CleanupListeners();
 
                 bossGoon.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnBossDied);
             }
             bossGoon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)OnBossDied);
 
-            QuestEntry_DefeatBoss.CreateCompassElement();
+            //Log("Create Compass Element");
+            //QuestEntry_DefeatBoss.CreateCompassElement();
+            yield return null;
+        }
+
+        private IEnumerator EquipBossWeapon()
+        {
+            #region Cracked Shotgun
+            bossGoon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
+            yield return Wait05;
+            if (bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
+            {
+
+    #if MONO
+                if (bossGoon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+                {
+
+                    wep.MaxUseRange = Mathf.Round(25f * questDifficultyScalar);
+                    wep.MinUseRange = 0.4f;
+                    wep.HitChance_MaxRange = Mathf.Lerp(0.08f, 0.15f, questDifficultyScalar - 1f);
+                    wep.HitChance_MinRange = Mathf.Lerp(0.65f, 0.85f, questDifficultyScalar - 1f);
+                    wep.MaxFireRate = 2.6f - (questDifficultyScalar-1f);
+                    wep.CooldownDuration = 0.8f;
+                    wep.Damage = 55f;
+                    wep.ReloadTime = 2.3f;
+                    wep.RaiseTime = 1.3f;
+                    wep.ImpactForce = 28f;
+                    wep.AimTime_Max = 1.2f;
+                    wep.RepositionAfterHit = true;
+                }
+    #else
+                AvatarRangedWeapon wep = null;
+                try
+                {
+                    wep = bossGoon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
+                } 
+                catch (InvalidCastException ex)
+                {
+                    MelonLogger.Warning("Failed to Cast Gun Weapon Instance: " + ex);
+                }
+
+                if (wep != null)
+                {
+                    wep.MaxUseRange = Mathf.Round(25f * questDifficultyScalar);
+                    wep.MinUseRange = 0.4f;
+                    wep.HitChance_MaxRange = Mathf.Lerp(0.08f, 0.15f, questDifficultyScalar - 1f);
+                    wep.HitChance_MinRange = Mathf.Lerp(0.65f, 0.85f, questDifficultyScalar - 1f);
+                    wep.MaxFireRate = 2.6f - (questDifficultyScalar-1f);
+                    wep.CooldownDuration = 0.8f;
+                    wep.Damage = 55f;
+                    wep.ReloadTime = 2.3f;
+                    wep.RaiseTime = 1.3f;
+                    wep.ImpactForce = 28f;
+                    wep.AimTime_Max = 1.2f;
+                    wep.RepositionAfterHit = true;
+                }
+#endif
+            }
+
+            if (bossGoon.Behaviour.CombatBehaviour.DefaultWeapon == null && bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
+                bossGoon.Behaviour.CombatBehaviour.DefaultWeapon = bossGoon.Behaviour.CombatBehaviour.currentWeapon;
+#endregion
+            Log("Setup Boss Weapon");
+        }
+
+        private IEnumerator RunRageStage()
+        {
+            DrinkItem drinkAct = bossGoon.transform.Find("Aux/Drink").GetComponent<DrinkItem>();
+            Log("RunRage Stage");
+            while (registered)
+            {
+                yield return Wait2;
+                if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
+
+                if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
+                    bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+                if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null)
+                {
+                    coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+                }
+
+                if (UnityEngine.Random.Range(0f, 1f) > 0.95f)
+                {
+                    if (drinkAct != null)
+                    {
+                        bossGoon.Movement.PauseMovement();
+                        drinkAct.Begin();
+                        for (int i = 0; i < 3; i++)
+                        {
+                            yield return Wait2;
+                            if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) yield break;
+                            bossGoon.Health.Health += Mathf.RoundToInt(Mathf.Lerp(50f, 85f, questDifficultyScalar - 1f));
+                        }
+                        drinkAct.End();
+                    }
+                    else
+                    {
+                        Log("DrinkAction is null");
+                    }
+                    Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
+                    yield return Wait01;
+                    bossGoon.Movement.ResumeMovement();
+
+                    if (bossGoon.Behaviour.CombatBehaviour.Target == null)
+                        bossGoon.Behaviour.CombatBehaviour.SetTarget(null, p.GetComponent<ICombatTargetable>().NetworkObject);
+                    if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
+                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                    yield return Wait01;
+                    coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+                }
+                yield return Wait05;
+                if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
+
+                if (UnityEngine.Random.Range(0f, 1f) > 0.95f)
+                {
+                    for (int i = 0; i < 6; i++)
+                    {
+                        yield return Wait05;
+                        if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
+
+                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 1f, 0.1f);
+                    }
+                    bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
+                }
+            }
+
             yield return null;
         }
 
         public override void MinPass()
         {
+            if (!registered || completed) return; // because in il2cpp it doesnt just work to remove listener
 #if MONO
             base.MinPass(); // Is this necessary in mono or does cause recursion??
 
@@ -1234,12 +1473,13 @@ namespace CartelEnforcer
             }
             else if (QuestEntry_DefeatBoss.State == EQuestState.Active)
             {
-                if (bossGoon != null)
+                if (bossGoon != null && !completed)
                 {
-                    QuestEntry_DefeatBoss.SetEntryTitle($"Defeat the Cartel Brute | HP:{bossGoon.Health.Health}");
+                    Log("MinPass QE Defeat Boss");
+                    QuestEntry_DefeatBoss.SetEntryTitle($"Defeat the Cartel Brute \nHP:{Mathf.RoundToInt(bossGoon.Health.Health)}");
                     Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
 
-                    if (dist < 13f && !bossCombatBegun)
+                    if (dist < 16f && !bossCombatBegun)
                     {
                         bossCombatBegun = true;
                         bossGoon.Behaviour.CombatBehaviour.SetTarget(null, p.GetComponent<ICombatTargetable>().NetworkObject);
@@ -1250,21 +1490,41 @@ namespace CartelEnforcer
                     {
                         fightElapsed++;
 
-                        // Check distance of boss to player & Check distance of Boss to the area & check elapsed time under 2min
-                        if (dist > 70f || Vector3.Distance(bossGoon.CenterPoint, QuestEntry_DefeatBoss.PoILocation.position) > 70f || fightElapsed > 120)
-                        {
-                            // Player Out of range or Boss is over 70 units from spawn pos or time has elapsed over 2min
 
-                            QuestEntry_DefeatBoss.SetState(EQuestState.Failed, true);
+                        if (!rageStageStarted)
+                        {
+                            if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
+                                bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+                            if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null || bossGoon.Behaviour.CombatBehaviour.IsCurrentWeaponMelee())
+                            {
+                                coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+                            }
+
+                            if (bossGoon.Health.Health < 230f || fightElapsed > 40)
+                            {
+                                rageStageStarted = true;
+                                coros.Add(MelonCoroutines.Start(RunRageStage()));
+                            }
+                        }
+                        if (rageStageStarted)
+                        {
+
+                        }
+
+                        // Check distance of boss to player & Check distance of Boss to the area & check elapsed time under 5min
+                        if (dist > 70f || Vector3.Distance(bossGoon.CenterPoint, QuestEntry_DefeatBoss.PoILocation.position) > 70f || fightElapsed > 300)
+                        {
+                            // Player Out of range or Boss is over 70 units from spawn pos or time has elapsed over 5min
+
                             completed = true;
-                            this.Fail(true);
                             bossGoon.Despawn();
                             ResetGoonBoss();
+                            this.Fail(true);
+                            CleanupListeners();
                         }
 
                     }
-
-
 
                 }
             }
@@ -1287,19 +1547,14 @@ namespace CartelEnforcer
                 if (!contactMade)
                 {
                     Log("State WaitContact");
-                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 59 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 199)
+                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 0 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 100)
                     {
-                        // 30% chance to skip messaging tonight
-                        float chanceToSkip = 0.30f;
-                        if (UnityEngine.Random.Range(0f, 1f) > chanceToSkip)
-                        {
-                            contactMade = true;
-                            QuestEntry_WaitForContact.compassElement.Visible = true;
-                            QuestEntry_WaitForContact.PoI.gameObject.SetActive(true);
-                            // What to do here, spawn the cop there under a light 
-                            // send text msg
-                            coros.Add(MelonCoroutines.Start(ContactSpawn()));
-                        }
+                        contactMade = true;
+                        QuestEntry_WaitForContact.compassElement.Visible = true;
+                        QuestEntry_WaitForContact.PoI.gameObject.SetActive(true);
+                        // What to do here, spawn the cop there under a light 
+                        // send text msg
+                        coros.Add(MelonCoroutines.Start(ContactSpawn()));
                     }
                 }
                 else
@@ -1325,11 +1580,30 @@ namespace CartelEnforcer
                 bossGoon.Movement.MoveSpeedMultiplier = 0.8f;
                 bossGoon.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
                 bossGoon.Behaviour.ScheduleManager.EnableSchedule();
+
+                bossGoon.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
+                bossGoon.Behaviour.CombatBehaviour.GiveUpTime = GiveUpTime;
+                bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
+                bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
             }
 
             return;
         }
 
+        private void CleanupListeners()
+        {
+            Log("Cleanup listeners");
+            TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+            if (instance == null) return;
+
+#if MONO
+            instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
+            instance.onMinutePass.Remove((Action)this.MinPass);
+#else
+            instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
+            instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
+#endif
+        }
 
         public QuestEntry QuestEntry_Investigate;
 
@@ -1354,6 +1628,17 @@ namespace CartelEnforcer
 
         private GameObject UiPrefab = null;
         private RectTransform rtIcon;
+        private static Quaternion doorOrigRot;
+        private GameObject spawnedSafe = null;
+        private float questDifficultyScalar = 1f;
+        private int manorGoonsAlive = 4;
+
+        // store the combat variables
+        private float GiveUpRange = 0f;
+        private float GiveUpTime = 0f;
+        private int GiveUpAfterSuccessfulHits = 0;
+        private float DefaultSearchTime = 0f;
+
 
         private List<Vector3> forestSearchLocs = new()
         {
@@ -1364,8 +1649,6 @@ namespace CartelEnforcer
         };
         private int forestPosSearched = 0; // indexing for above search location one by one update compass
 
-        private List<CartelGoon> manorGoons = new();
-        private int manorGoonsAlive = 4;
         private Dictionary<Vector3, bool> roomsPositions = new()
         {
             { new Vector3(166.58f, 15.61f, -52.99f), false },
@@ -1374,6 +1657,27 @@ namespace CartelEnforcer
             { new Vector3(166.58f, 15.61f, -61.00f), false }
         };
         private int roomsVisited = 0;
+
+        class SafeSpawnSpot
+        {
+
+            public Vector3 spawnSpot;
+            public Vector3 eulerAngles;
+            public SafeSpawnSpot(Vector3 pos, Vector3 rot)
+            {
+                spawnSpot = pos;
+                eulerAngles = rot;
+            }
+        }
+
+        private List<SafeSpawnSpot> lootSafeSpawns = new()
+        {
+            new SafeSpawnSpot(new Vector3(153.63f, 14.24f, -56.13f), new Vector3(0f, 0f, 0f)),
+            new SafeSpawnSpot(new Vector3(159.43f, 14.24f, -57.73f), new Vector3(0f, 90f, 0f)),
+            new SafeSpawnSpot(new Vector3(173.43f, 14.24f, -57.89f), new Vector3(0f, 180f, 0f)),
+            new SafeSpawnSpot(new Vector3(166.56f, 14.24f, -51.41f), new Vector3(0f, 75f, 0f)),
+            new SafeSpawnSpot(new Vector3(153.46f, 15.28f, -54.77f), new Vector3(0f, 335f, 0f)),
+        };
 
 #if IL2CPP
         // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries is il2cpp system ienumerable but expecting system ienumerable?
@@ -1402,12 +1706,20 @@ namespace CartelEnforcer
         public void SetupSelf()
         {
             Log("SetupSelfStart");
+            // calc difficulty scalar
+            float allInfluence = 0f;
+            foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
+            {
+                allInfluence += data.Influence;
+            }
+            float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
+            questDifficultyScalar = 1f + allInfluenceNormalized;
 
             Log("QuestInit");
             this.name = "Quest_InfiltrateManor";
             Expires = false;
             title = "Infiltrate Manor";
-            CompletionXP = 850;
+            CompletionXP = Mathf.RoundToInt(600f * questDifficultyScalar);
             Description = "Find info about Thomas Benzie and break into Manor";
             TrackOnBegin = true;
             autoInitialize = false;
@@ -1419,6 +1731,9 @@ namespace CartelEnforcer
             onQuestBegin = new UnityEvent();
             onQuestEnd = new UnityEvent<EQuestState>();
             onTrackChange = new UnityEvent<bool>();
+
+            
+
 
 #if MONO
             this.SetGUID(Guid.NewGuid());
@@ -1640,6 +1955,9 @@ namespace CartelEnforcer
 
 
             Quest.Quests.Add(this);
+            Log("InitSaveable");
+            this.InitializeSaveable();
+            Log("Init saveable done");
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
@@ -1647,7 +1965,8 @@ namespace CartelEnforcer
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
 #endif
-            instance.onMinutePass.Add(new Action(this.MinPass)); // Is this already added on the InitializeQuest method??
+            instance.onMinutePass.Add(new Action(this.MinPass));
+
             coros.Add(MelonCoroutines.Start(StartQuestDetail()));
         }
 
@@ -1676,7 +1995,6 @@ namespace CartelEnforcer
             
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
-            
             yield return null;
         }
 
@@ -1717,6 +2035,7 @@ namespace CartelEnforcer
                 Log("Manor DOORCONTAINER in container is NULL");
                 yield break;
             }
+            doorOrigRot = doorContainer.transform.localRotation;
             Log("Fetched original Door Container");
             InteractableObject exteriorIntObj = doorContainer.GetChild(0).GetComponent<InteractableObject>();
             InteractableObject interiorIntObj = doorContainer.GetChild(1).GetComponent<InteractableObject>();
@@ -1724,8 +2043,11 @@ namespace CartelEnforcer
 
             void onDoorInteracted()
             {
-                coros.Add(MelonCoroutines.Start(LerpDoorRotation(doorContainer, QuestEntry_BreakIn.Complete)));
-                exteriorIntObj.onInteractStart.RemoveListener((UnityEngine.Events.UnityAction)onDoorInteracted);
+                if (QuestEntry_BreakIn.State == EQuestState.Active)
+                {
+                    coros.Add(MelonCoroutines.Start(LerpDoorRotation(doorContainer, QuestEntry_BreakIn.Complete)));
+                    exteriorIntObj.onInteractStart.RemoveListener((UnityEngine.Events.UnityAction)onDoorInteracted);
+                }
             }
             exteriorIntObj.message = "Open Door";
             exteriorIntObj.onInteractStart.AddListener((UnityEngine.Events.UnityAction)onDoorInteracted);
@@ -1771,15 +2093,162 @@ namespace CartelEnforcer
                 }
             }
 
+            int index = UnityEngine.Random.Range(0, lootSafeSpawns.Count);
+            spawnedSafe = UnityEngine.Object.Instantiate(safePrefab, Map.Instance.transform);
+            
+            spawnedSafe.transform.position = lootSafeSpawns[index].spawnSpot;
+            spawnedSafe.transform.rotation = Quaternion.Euler(lootSafeSpawns[index].eulerAngles);
+            yield return Wait2;
+            if (!spawnedSafe.activeSelf)
+                spawnedSafe.SetActive(true);
+            yield return Wait2;
+            spawnedSafe.SetActive(true);
+
+            Safe safeComp = spawnedSafe.GetComponent<Safe>();
+            StorageDoorAnimation doorAnim = spawnedSafe.GetComponent<StorageDoorAnimation>();
+            doorAnim.Open();
+            yield return Wait05;
+            doorAnim.Close();
+
+            void SecondaryTrigger()
+            {
+                if (QuestEntry_SearchResidence.State == EQuestState.Active)
+                    QuestEntry_SearchResidence.Complete();
+                safeComp.onOpened.RemoveListener((UnityEngine.Events.UnityAction)SecondaryTrigger);
+            }
+            safeComp.onOpened.AddListener((UnityEngine.Events.UnityAction)SecondaryTrigger);
+            safeComp.StorageEntitySubtitle = "Thomas' Safe";
+
+            Func<string, ItemDefinition> GetItem;
+
+#if MONO
+            GetItem = ScheduleOne.Registry.GetItem;
+#else
+            GetItem = Il2CppScheduleOne.Registry.GetItem;
+#endif
+            int maxSlotsToFill = 5;
+            int currentSlots = 0;
+            if (UnityEngine.Random.Range(0f, 1f) > 0.666f)
+            {
+                ItemDefinition defGun = GetItem("m1911");
+                ItemInstance gunInst = defGun.GetDefaultInstance(1);
+                safeComp.InsertItem(gunInst, true);
+                currentSlots++;
+            }
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.90f)
+            {
+                ItemDefinition defCoke = GetItem("cocaine");
+                ItemInstance cokeInst = defCoke.GetDefaultInstance(UnityEngine.Random.Range(12, 20));
+                safeComp.InsertItem(cokeInst, true);
+                currentSlots++;
+            }
+
+            ItemDefinition defMag = GetItem("m1911mag");
+            ItemInstance magInst = defMag.GetDefaultInstance(1);
+            safeComp.InsertItem(magInst, true);
+            currentSlots++;
+
+            bool goldBarInserted = false;
+            if (UnityEngine.Random.Range(0f, 1f) > 0.95f && currentSlots <= maxSlotsToFill)
+            {
+                int goldBarQty = UnityEngine.Random.Range(1, 4);
+                ItemDefinition goldBarDef = GetItem("goldbar");
+                ItemInstance goldBar = goldBarDef.GetDefaultInstance(goldBarQty);
+                safeComp.InsertItem(goldBar, true);
+                goldBarInserted = true;
+                currentSlots++;
+            }
+            if (currentSlots <= maxSlotsToFill && !goldBarInserted)
+            {
+                ItemDefinition defCash = GetItem("cash");
+                int qty = 0;
+                if (UnityEngine.Random.Range(0f, 1f) > 0.666f)
+                    qty = UnityEngine.Random.Range(1000, 4000);
+                else
+                    qty = UnityEngine.Random.Range(800, 3000);
+
+                qty = (int)Math.Round((double)qty / 100) * 100;
+                if (qty > 2000)
+                    defCash.StackLimit = qty;
+
+                ItemInstance cashInstance = defCash.GetDefaultInstance(1);
+
+#if MONO
+                if (cashInstance is CashInstance inst)
+                {
+                    inst.Balance = qty;
+                }
+#else
+                CashInstance tempInst = cashInstance.TryCast<CashInstance>();
+                if (tempInst != null)
+                {
+                    tempInst.Balance = qty;
+                }
+#endif
+                safeComp.InsertItem(cashInstance, true);
+                currentSlots++;
+            }
+
+            if (cartelStolenItems.Count > 0 && currentSlots <= maxSlotsToFill && UnityEngine.Random.Range(0f, 1f) > 0.20f)
+            {
+                List<ItemInstance> fromPool = GetFromPool(1);
+                if (fromPool.Count > 0)
+                {
+                    safeComp.InsertItem(fromPool[0], true);
+                    currentSlots++;
+                }
+            }
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.80f && currentSlots <= maxSlotsToFill)
+            {
+                ItemDefinition defWatch = GetItem("silverwatch");
+                ItemInstance watchInst = defWatch.GetDefaultInstance(1);
+                safeComp.InsertItem(watchInst, true);
+                currentSlots++;
+            }
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.80f && currentSlots <= maxSlotsToFill)
+            {
+                ItemDefinition defChain = GetItem("silverchain");
+                ItemInstance chainInst = defChain.GetDefaultInstance(1);
+                safeComp.InsertItem(chainInst, true);
+                currentSlots++;
+            }
+
 
             yield return null;
         }
 
         private IEnumerator CleanupManor()
         {
-            // revert everythign setup manor does except the door thingy thats ok to keep
+            yield return Wait60;
             Manor manor = UnityEngine.Object.FindObjectOfType<Manor>(true);
-            manor.transform.Find("Doors").gameObject.SetActive(true);
+            Transform doorsTr = manor.transform.Find("Doors");
+            if (doorsTr != null)
+            {
+                doorsTr.gameObject.SetActive(true);
+            }
+            else
+            {
+                Log("Manor Doors is null");
+            }
+
+            Transform door = manor.OriginalContainer.transform.Find("MansionDoor (1)");
+            if (door == null)
+            {
+                Log("Manor DOOR in orig container is NULL");
+                Transform doorContainer = door.Find("Container");
+                if (doorContainer == null)
+                {
+                    Log("Manor DOORCONTAINER in container is NULL");
+                }
+                else
+                {
+                    if (doorOrigRot != null)
+                        doorContainer.transform.localRotation = doorOrigRot;
+                }
+            }
 
             List<Transform> rooms = new()
             {
@@ -1809,12 +2278,24 @@ namespace CartelEnforcer
                 goon.Movement.MoveSpeedMultiplier = 1f;
                 goon.Health.MaxHealth = 100f;
                 goon.Health.Health = 100f;
+
+                goon.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
+                goon.Behaviour.CombatBehaviour.GiveUpTime = GiveUpTime;
+                goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
+                goon.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
+
+                goon.Behaviour.ScheduleManager.EnableSchedule();
+
                 if (goon.Health.IsDead)
                     goon.Health.Revive();
                 if (goon.IsSpawned)
                     goon.Despawn();
-
             }
+            manorGoons.Clear();
+            manorGoonGuids.Clear();
+            if (spawnedSafe != null)
+                UnityEngine.Object.Destroy(spawnedSafe);
+            spawnedSafe = null;
 
             yield return null;
         }
@@ -1846,8 +2327,6 @@ namespace CartelEnforcer
 
         private IEnumerator SpawnManorGoons()
         {
-            ItemInstance item;
-            Func<string, ItemDefinition> GetItem;
             Log("Roompos Keys to list");
             List<Vector3> roomPositionsList = roomsPositions.Keys.ToList();
 
@@ -1857,20 +2336,29 @@ namespace CartelEnforcer
                 do
                 {
 #if MONO
+                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
                     NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
 #else
                     int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1;
                     if (count != -1)
+                    {
+                        NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Health.Revive();
                         NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Despawn();
+                    }
+                    else
+                    {
+                        break;
+                    }
 #endif
                 } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 3);
             }
 
             for (int i = 0; i < NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count; i++)
             {
-                if (i > 4) break;
+                if (i > 3) break;
                 Log("SpawnGoon");
                 CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(roomPositionsList[i]);
+                goon.Behaviour.ScheduleManager.DisableSchedule();
                 if (!goon.gameObject.activeSelf)
                 {
                     goon.gameObject.SetActive(true);
@@ -1880,18 +2368,91 @@ namespace CartelEnforcer
                     goon.Avatar.gameObject.SetActive(true);
                     goon.Avatar.enabled = true;
                 }
-                goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+                
+
+                Log("Search time default: " + goon.Behaviour.CombatBehaviour.DefaultSearchTime);
+                coros.Add(MelonCoroutines.Start(SetupGoonWeapon(goon)));
+                goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(80f * questDifficultyScalar, 130f * questDifficultyScalar)));
+                Log("Set HP and movespeed");
+                goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(200f, 350f, questDifficultyScalar - 1f));
+                goon.Health.Health = Mathf.Round(Mathf.Lerp(200f, 350f, questDifficultyScalar - 1f));
+                goon.Movement.MoveSpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.3f, 1.5f), 1.75f, questDifficultyScalar-1f);
                 yield return Wait025;
                 if (!registered) yield break;
+                
+                void onCombatBehEnd()
+                {
+                    // Because sometimes it seems that they just end prematurely for no reason, check if is alive and not knocked out
+                    if (!goon.Health.IsKnockedOut && !goon.Health.IsDead && Player.Local.Health.CurrentHealth > 0f)
+                    {
+                        goon.Behaviour.CombatBehaviour.SetTarget(null, Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
+                        goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                        if (goon.Behaviour.CombatBehaviour.currentWeapon == null)
+                        {
+                            coros.Add(MelonCoroutines.Start(SetupGoonWeapon(goon)));
+                        }
+                    }
+                    else
+                    {
+                        goon.Behaviour.CombatBehaviour.onEnd.RemoveListener((UnityEngine.Events.UnityAction)onCombatBehEnd);
+                    }
+                }
+                goon.Behaviour.CombatBehaviour.onEnd.AddListener((UnityEngine.Events.UnityAction)onCombatBehEnd);
+
+                void onGoonDie()
+                {
+                    manorGoonsAlive--;
+                    goon.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)onGoonDie);
+                }
+                goon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)onGoonDie);
+
+                if (GiveUpRange == 0f)
+                {
+                    GiveUpRange = goon.Behaviour.CombatBehaviour.GiveUpRange;
+                    GiveUpTime = goon.Behaviour.CombatBehaviour.GiveUpTime;
+                    GiveUpAfterSuccessfulHits = goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
+                    DefaultSearchTime = goon.Behaviour.CombatBehaviour.DefaultSearchTime;
+                }
+
+                goon.Behaviour.CombatBehaviour.GiveUpRange = 60f;
+                goon.Behaviour.CombatBehaviour.GiveUpTime = 160f;
+                goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 60;
+                goon.Behaviour.CombatBehaviour.DefaultSearchTime = 120f;
+
+                goon.Behaviour.CombatBehaviour.SetTarget(null, Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
+                goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                manorGoons.Add(goon);
+                manorGoonGuids.Add(goon.GUID.ToString());
+            }
+
+            manorGoonsAlive = manorGoons.Count();
+
+            yield return null;
+        }
+
+        private IEnumerator SetupGoonWeapon(CartelGoon goon)
+        {
+            goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+            yield return Wait05;
+            if (!registered) yield break;
+
+            if (goon.Behaviour.CombatBehaviour.currentWeapon != null)
+            {
 #if MONO
                 if (goon.Behaviour.CombatBehaviour.currentWeapon is AvatarMeleeWeapon wep)
                 {
-                    wep.AttackRadius = wep.AttackRadius * UnityEngine.Random.Range(1.2f, 1.8f);
-                    wep.AttackRange = wep.AttackRange * UnityEngine.Random.Range(1.2f, 1.8f);
-                    wep.MaxUseRange = 2.3f;
+                    float min = 1.35f;
+                    float max = 1.75f;
+                    float dmgMin = 18f;
+                    float dmgMax = 30f;
+                    float t = questDifficultyScalar - 1f;
+
+                    wep.AttackRadius = wep.AttackRadius * Mathf.Lerp(min, max, t);
+                    wep.AttackRange = wep.AttackRange * Mathf.Lerp(min, max, t);
+                    wep.MaxUseRange = 2.7f;
                     wep.MinUseRange = 0.01f;
-                    wep.CooldownDuration = wep.AttackRange * UnityEngine.Random.Range(1.0f, 3.0f);
-                    wep.Damage = Mathf.Round(UnityEngine.Random.Range(18f, 28f));
+                    wep.CooldownDuration = UnityEngine.Random.Range(0.7f, 1.5f);
+                    wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
                 }
 #else
                 AvatarMeleeWeapon wep = null;
@@ -1907,60 +2468,24 @@ namespace CartelEnforcer
 
                 if (wep != null)
                 {
-                    wep.AttackRadius = wep.AttackRadius * UnityEngine.Random.Range(1.2f, 1.6f);
-                    wep.AttackRange = wep.AttackRange * UnityEngine.Random.Range(1.0f, 1.5f);
-                    wep.MaxUseRange = 2.3f;
+                    float min = 1.35f;
+                    float max = 1.75f;
+                    float dmgMin = 18f;
+                    float dmgMax = 30f;
+                    float t = questDifficultyScalar - 1f;
+
+                    wep.AttackRadius = wep.AttackRadius * Mathf.Lerp(min, max, t);
+                    wep.AttackRange = wep.AttackRange * Mathf.Lerp(min, max, t);
+                    wep.MaxUseRange = 2.7f;
                     wep.MinUseRange = 0.01f;
-                    wep.CooldownDuration = wep.AttackRange * UnityEngine.Random.Range(1.0f, 3.0f);
-                    wep.Damage = Mathf.Round(UnityEngine.Random.Range(13f, 25f));
+                    wep.CooldownDuration = UnityEngine.Random.Range(0.7f, 1.5f);
+                    wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
                 }
 #endif
 
-                goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(100f, 600f)));
-                Log("Set HP and movespeed");
-                goon.Health.MaxHealth = 200f;
-                goon.Health.Health = 200f;
-                goon.Movement.MoveSpeedMultiplier = UnityEngine.Random.Range(1.4f, 1.75f);
-
-#if MONO
-                GetItem = ScheduleOne.Registry.GetItem;
-#else
-                GetItem = Il2CppScheduleOne.Registry.GetItem;
-#endif
-                if (UnityEngine.Random.Range(0f, 1f) > 0.666f)
-                {
-                    if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
-                    {
-                        ItemDefinition def = GetItem("silverwatch");
-                        item = def.GetDefaultInstance(1);
-                        goon.Inventory.InsertItem(item, true);
-                    }
-                    else
-                    {
-                        ItemDefinition def = GetItem("silverchain");
-                        item = def.GetDefaultInstance(1);
-                        goon.Inventory.InsertItem(item, true);
-                    }
-                }
-
-                yield return Wait025;
-                if (!registered) yield break;
-                goon.Behaviour.CombatBehaviour.SetTarget(null, Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
-                goon.Behaviour.CombatBehaviour.Enable_Networked(null);
-
-                void onGoonDie()
-                {
-                    manorGoonsAlive--;
-                    goon.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)onGoonDie);
-                }
-
-                goon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)onGoonDie);
-                manorGoons.Add(goon);
+                if (goon.Behaviour.CombatBehaviour.currentWeapon != null && goon.Behaviour.CombatBehaviour.DefaultWeapon == null)
+                    goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
             }
-
-            manorGoonsAlive = manorGoons.Count();
-
-            yield return null;
         }
 
         #region Quest prefabs
@@ -2035,6 +2560,7 @@ namespace CartelEnforcer
 
         public override void MinPass()
         {
+            if (!registered || manorCompleted) return;
 #if MONO
             base.MinPass();
 
@@ -2059,6 +2585,8 @@ namespace CartelEnforcer
                 if (Vector3.Distance(Player.Local.CenterPointTransform.position, forestSearchLocs[forestPosSearched]) < 5f)
                 {
                     forestPosSearched++;
+                    QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the hillside forest near Manor ({forestPosSearched}/4)");
+
                     if (forestPosSearched < forestSearchLocs.Count)
                     {
                         QuestEntry_InvestigateWoods.SetPoILocation(forestSearchLocs[forestPosSearched]);
@@ -2073,6 +2601,8 @@ namespace CartelEnforcer
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2200)
                 {
                     this.Fail(true);
+                    CleanupListeners();
+                    manorCompleted = true;
                 }
             }
             else if (QuestEntry_ReturnToRay.State == EQuestState.Active)
@@ -2080,6 +2610,8 @@ namespace CartelEnforcer
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2200)
                 {
                     this.Fail(true);
+                    CleanupListeners();
+                    manorCompleted = true;
                 }
             }
             else if (QuestEntry_DefeatManorGoons.State == EQuestState.Active)
@@ -2088,10 +2620,32 @@ namespace CartelEnforcer
                 {
                     QuestEntry_DefeatManorGoons.Complete();
                 }
+                if (Vector3.Distance(QuestEntry_BreakIn.PoILocation.position, Player.Local.CenterPointTransform.position) > 70f)
+                {
+                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    manorCompleted = true;
+                    this.Fail();
+                    CleanupListeners();
+                }
+
+                if (TimeManager.Instance.CurrentTime >= 2200 || TimeManager.Instance.CurrentTime <= 359)
+                {
+                    // in time window do nothing
+                    
+                }
+                else
+                {
+                    Log("Fail Timeout Manor Infiltration Quest");
+                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    manorCompleted = true;
+                    this.Fail(true);
+                    CleanupListeners();
+                    // Means that from state start you have atleast 6 hours to complete from 22:00 to 3:59
+                }
             }
             else if (QuestEntry_SearchResidence.State == EQuestState.Active)
             {
-                QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the upstairs rooms ({roomsVisited}/4)");
+                QuestEntry_SearchResidence.SetEntryTitle($"Investigate the upstairs rooms ({roomsVisited}/4)");
 
                 bool allRoomsVisited = true;
                 foreach (var roomEntry in roomsPositions)
@@ -2124,21 +2678,47 @@ namespace CartelEnforcer
                 {
                     QuestEntry_SearchResidence.Complete();
                 }
+
+                if (TimeManager.Instance.CurrentTime >= 2200 || TimeManager.Instance.CurrentTime <= 359)
+                {
+                    // in time window do nothing
+
+                }
+                else
+                {
+                    Log("Fail Timeout Manor Infiltration Quest");
+                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    manorCompleted = true;
+                    this.Fail(true);
+                    CleanupListeners();
+
+                    // Means that from state start you have atleast 6 hours to complete from 22:00 to 3:59
+                }
             }
             else if (QuestEntry_EscapeManor.State == EQuestState.Active)
             {
                 if (Player.Local.CrimeData.CurrentPursuitLevel == PlayerCrimeData.EPursuitLevel.None)
                 {
                     // Not being hunted
-                    if (Vector3.Distance(QuestEntry_BreakIn.PoILocation.position, Player.Local.CenterPointTransform.position) > 60f)
+                    if (Vector3.Distance(QuestEntry_BreakIn.PoILocation.position, Player.Local.CenterPointTransform.position) > 70f)
                     {
-                        QuestEntry_EscapeManor.Complete();
                         // Far enough escaped from the back door position
                         coros.Add(MelonCoroutines.Start(CleanupManor()));
                         coros.Add(MelonCoroutines.Start(QuestManorReward()));
                         manorCompleted = true;
                         this.Complete();
+                        CleanupListeners();
+
                     }
+                }
+
+                if (Player.Local.CrimeData.CurrentPursuitLevel != PlayerCrimeData.EPursuitLevel.None && Player.Local.CrimeData.CurrentPursuitLevel != PlayerCrimeData.EPursuitLevel.Investigating)
+                {
+                    // Not none and not investigating means that player has been spotted by police atleast once
+                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    manorCompleted = true;
+                    this.Fail();
+                    CleanupListeners();
                 }
             }
         }
@@ -2160,6 +2740,21 @@ namespace CartelEnforcer
             
 
         }
+
+        private void CleanupListeners()
+        {
+            TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+            if (instance == null) return;
+
+#if MONO
+            instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
+            instance.onMinutePass.Remove((Action)this.MinPass);
+#else
+            instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
+            instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
+#endif
+        }
+
 
         private QuestEntry QuestEntry_InvestigateWoods;
         private QuestEntry QuestEntry_ReturnToRay;
