@@ -1,6 +1,6 @@
 # Contributing to Development
 
-### [Build Instructions](.github/BUILD.md)
+### [Build Instructions](https://github.com/XOWithSauce/schedule-cartelenforcer/edit/main/.github/BUILD.md)
 
 
 ### Code Principles
