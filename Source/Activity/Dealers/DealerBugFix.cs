@@ -117,24 +117,9 @@ namespace CartelEnforcer
         [HarmonyPrefix]
         public static bool Prefix(Dealer __instance, Contract contract)
         {
-#if MONO
-                if (__instance is CartelDealer)
-                {
-
-                    if (!__instance.ActiveContracts.Contains(contract))
-                    {
-                        return false;
-                    }
-                    __instance.ActiveContracts.Remove(contract);
-                    contract.SetDealer(null);
-                    __instance.Invoke("SortContracts", 0.05f);
-                    return false;
-                }
-
-#else
-            CartelDealer temp = __instance.TryCast<CartelDealer>();
-            if (temp != null)
+            if (__instance.DealerType == EDealerType.CartelDealer)
             {
+
                 if (!__instance.ActiveContracts.Contains(contract))
                 {
                     return false;
@@ -144,7 +129,6 @@ namespace CartelEnforcer
                 __instance.Invoke("SortContracts", 0.05f);
                 return false;
             }
-#endif
 
             return true;
         }
