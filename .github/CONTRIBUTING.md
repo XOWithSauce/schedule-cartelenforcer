@@ -1,6 +1,6 @@
 # Contributing to Development
 
-### [Build Instructions](./BUILD.md)
+### [Build Instructions](.github/BUILD.md)
 
 
 ### Code Principles
