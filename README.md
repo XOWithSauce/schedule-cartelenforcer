@@ -18,11 +18,13 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [End Game Quests](#end-game-quests)
     * [Unexpected Alliances](#unexpected-alliances)
     * [Infiltrate Manor](#infiltrate-manor) 
-* [Modifying Cartel Dealers](#enhanced-cartel-dealers)
-* [Debug Mode](#debug-mode)
-* [In Multiplayer](#in-multiplayer)
+* [Modifying Cartel Dealers](#modifying-cartel-dealers)
 * [Modifying Spawns](#modifying-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
+* [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
+* [Debug Mode](#debug-mode)
+* [In Multiplayer](#in-multiplayer)
+
 ---
 
 ### Features
@@ -181,11 +183,15 @@ These events only happen when the Cartel is hostile.
 
 ### Mini-Quests
 
-Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
-- The quest-giving NPCs are chosen randomly every 4-6 ingame hours. Random Choice prefers Unlocked NPCs more.
-- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a 40% chance (at best relations) to a 70% chance (at worst relations).
-- **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the quest.
-- **Payment:** The cost to get a tip is now dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
+Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, Jeff, Dan, Jeremy, Marco or Herbert).
+- The quest-giving NPCs are chosen randomly every 4 ingame hours. Random Choice prefers Unlocked NPCs more.
+- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a base 20% chance (at worst relations) to a base 50% chance (at best relations).
+- **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the __Intercept Cartel Dead Drop__ quest.
+- **Payment:** The cost to get a tip is dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
+- **Cartel Gathering Effect:** When asking for rumours during time which cartel is gathering, there is higher likelyhood of the NPC Revealing the __active Gathering Location__ instead of giving a quest.
+
+#### Intercept Cartel Dead Drop
+
 - **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
 - You have a 60 seconds to find the dead drop.
 - **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 25.
@@ -199,11 +205,18 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, or Jeff).
 
 <img src="https://i.imgur.com/PYf7vk8.png">
 
+
 ### Cartel Gatherings
 
-Cartel Gatherings occur around the map and are dynamic in frequency and hostility. The gatherings are adapted based on Cartel Dealers deaths. Killing Cartel Dealers causes gatherings to become more frequent and more hostile. Gatherings primarily occur around the daytime in groups of 3 Cartel Goons.
-- Killing the gathering Cartel Goons will lower regional cartel influence by 25
-- If Gathering is not interrupted by player for 2 ingame hours, regional influence will rise by 5
+Cartel Gatherings are a regional task that appear frequently and even during the early game, before the cartel becomes hostile. Their locations are picked from all unlocked regions, with new locations unlocking as you progress through the game. 
+
+You can reveal these gathering locations by bribing certain mini quest NPCs.
+
+Gatherings include a "loot goblin" goon carrying stolen items and money if the cartel has stolen from your dealers. Goons have varied behaviors, including random animations and voice lines, and they occasionally rotate. If player gets nearby they will get annoyed and eventually turn hostile.
+
+- Gathering lasts for 3 hours after which the goons go away
+- Killing a gathering will now decrease regional cartel influence by 50.
+- If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
 
 ---
 
@@ -286,7 +299,7 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 
 ---
 
-### Enhanced Cartel Dealers
+### Modifying Cartel Dealers
 You can customize the Cartel Dealers' settings through the **dealer.json** file.
 
 1. Open the **CartelEnforcer/Dealers** folder inside your **Mods** directory.
@@ -316,47 +329,10 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 - **`DealerActivityIncreasePerDay`**: An increase in dealer activity for **each in-game day** that passes. (Range 0.0 - 1.0)
 - **`SafetyThreshold`**: Defines the **minimum value** required for a dealers to stop leaving their houses. This will cause them to stay inside if too many dealers are killed. (Range -1.0 - 1.0)
 - **`SafetyEnabled`**: When set to `true`, this enables the usage of **SafetyThreshold**.
-- **`FreeTimeWalking`**: When `true`, dealers will **randomly walk around** when they are not performing an active task. When `false`, they will remain stationary at their apartment door when spawning.
+- **`FreeTimeWalking`**: When `true`, dealers will **randomly walk around** when they are not performing an active task. When `false`, they will remain stationary at their apartment door when spawning. This also controls their walking during time which cartel is not hostile.
 
 
 ---
-
-### Debug Mode
-
-In debug mode, you can see various visual cues and use keybinds to test features.
-
-> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See [GitHub BUILD.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/BUILD.md) for more info.
-
-- **Cubes**: Visualize ambush positions. Their size corresponds to the detection radius and their color is based on the region. Standing under a cube will eventually trigger an ambush.
-- **Cyan Beams**: Visualize the four spawn points for each cube.
-- **Orange Spheres**: Show the locations of drive-by events triggers. Standing under the Sphere will eventually trigger a Drive-By.
-
-<img src="https://i.imgur.com/xEt43yQ.png">
-
-<img src="https://i.imgur.com/7x5l97m.png">
-
-- **Keybinds:**
-    - `Left CTRL + R`: Trigger a Dealer Robbery at the nearest dealer.
-    - `Left CTRL + G`: Trigger an instant drive-by at the nearest location.
-    - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
-    - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
-    - `Left CTRL + T`: Trigger an Intercept Deal event.
-    - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
-    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Manny, without checking prerequirements.
-    - `Left CTRL + I`: Place a non buildable safe (Do not use, left for future debugging and testing purposes)
-    - `Left CTRL + O`: Replaces the current Goon Pool with extended version (Do not use, left for future debugging and testing purposes)
-    - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
-
----
-
-### In Multiplayer
-
-For multiplayer to function correctly, all players must have the same `default.json`, `ambush.json` and `config.json` content.
-
-Not all events and activities added by this mod support multiplayer fully and might have bugs on server clients.
-
----
-
 
 ### Modifying Spawns
 
@@ -409,11 +385,47 @@ You can add or modify custom ambush locations.
 2. You can only **modify** the values here; do not add or remove any ambushes.
 3. If the game receives a new update, delete `default.json` to ensure your configuration is up to date. It will be recreated the next time you load a save.
 
+---
+
 #### Modifying Cartel Stolen Items
 
 1. Open `Mods/CartelEnforcer/CartelItems/(organisation name).json`.
-2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id.
+2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id. You can also change cartel stolen balance.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
+
+---
+
+### Debug Mode
+
+In debug mode, you can see various visual cues and use keybinds to test features.
+
+> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See [GitHub BUILD.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/BUILD.md) for more info.
+
+- **Cubes**: Visualize ambush positions. Their size corresponds to the detection radius and their color is based on the region. Standing under a cube will eventually trigger an ambush.
+- **Cyan Beams**: Visualize the four spawn points for each cube.
+- **Orange Spheres**: Show the locations of drive-by events triggers. Standing under the Sphere will eventually trigger a Drive-By.
+
+<img src="https://i.imgur.com/xEt43yQ.png">
+
+<img src="https://i.imgur.com/7x5l97m.png">
+
+- **Keybinds:**
+    - `Left CTRL + R`: Trigger a Dealer Robbery at the nearest dealer.
+    - `Left CTRL + G`: Trigger an instant drive-by at the nearest location.
+    - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
+    - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
+    - `Left CTRL + T`: Trigger an Intercept Deal event.
+    - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
+
+---
+
+### In Multiplayer
+
+For multiplayer to function correctly, all players must have the same `default.json`, `ambush.json` and `config.json` content.
+
+Not all events and activities added by this mod support multiplayer fully and might have bugs on server clients.
 
 ---
 > **Note:** The `config.json`, `default.json` and persistent cartel stolen items files will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.

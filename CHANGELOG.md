@@ -1,3 +1,31 @@
+# Version 1.5.4
+- Changed the cartel dealers behaviour so that they can roam the map while cartel is in status unknown, friendly or defeated in addition to being hostile, this wont trigger the dealers stealing your or your dealers contracts before cartel turns hostile
+- Changed the code default generated values for the dealer.json config to be the same as in documentation since they were different 
+- Changed Cartel Gatherings to be a regional task in code structure and unlocking new gathering locations based on unlocked regions. This aligns better with quest and playthrough.
+- Cartel gathering locations are now picked at random from all unlocked gathering locations instead of all possible locations.
+- Added cartel gathering locations to all regions alongside descriptions
+- Cartel Gathering locations can now be revealed by bribing Mini Quest giving NPCs
+- Made Cartel Gatherings more frequent and now they should appear also during early game even before cartel is "hostile"
+- Cartel Gathering goons have now in their inventory Stolen Money and Items
+- Cartel gathering goons now do the smoke and drink animations on random basis instead of having always enabled
+- Changed the Cartel Gathering goons to do random voice lines and rotate occasionally
+- Increased Cartel gathering max time to 3 ingame hours
+- Defeating cartel gathering decreases the region influence by 50 (up from 25)
+- Changed result if gathering is not defeated, the regional influence will rise by 25 (up from 5), but only up to 400 regional influence.
+- Cartel Gathering has always 1 loot goblin goon, who has Cartel Stolen Items in their inventory, if cartel has stolen items from your dealers
+- Cartel Gathering goons always have their inventories filled with $500 of stolen money if cartel has stolen money from your dealers
+- Changed the Cartel Dealer processing in Handovers, to override the completed deal payment to 0, this fixes the bug where in early game the dealers will do lots of contracts and display their rewards to player
+- Added more Mini Quest giving NPCs: Dan, Jeremy, Marco, Herbert
+- Changed mini quest generation to only work during 07:00 to 24:00
+- Lowered the chance of Mini Quest being givven to player by any given npc, but alternatively if the random roll is not met the NPC will give out Gathering location if one is active
+- Added worldspace text templates where npc tells the location to player
+- Added support for saving the stolen quantity of cash in each save in the cartel stolen items json file
+- Removed redundant keybind inputs for safe placement and goon array extend from Debug mode
+- Removed redundant code for deal signal setting since it gets replaced automatically anyways
+- Fixed a bug where dealer would stay stuck outside and toggling active contract forever
+- Fixed a bug where cartel dealer hp would not set based on config
+- Changed the Cartel Dealer copied contracts to not increment completed contracts
+
 # Version 1.5.3
 - Hotfix a mistake in previous version where the Cartel Dealer would still send messages to player
 

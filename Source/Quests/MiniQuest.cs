@@ -6,6 +6,7 @@ using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.EndGameQuest;
+using static CartelEnforcer.CartelGathering;
 
 #if MONO
 using ScheduleOne.GameTime;
@@ -88,6 +89,22 @@ namespace CartelEnforcer
             if (jeff != null)
                 targetNPCs.Add(jeff, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
 
+            Dan dan = UnityEngine.Object.FindObjectOfType<Dan>();
+            if (dan != null)
+                targetNPCs.Add(dan, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
+
+            Jeremy jeremy = UnityEngine.Object.FindObjectOfType<Jeremy>();
+            if (jeremy != null)
+                targetNPCs.Add(jeremy, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
+
+            Marco marco = UnityEngine.Object.FindObjectOfType<Marco>();
+            if (marco != null)
+                targetNPCs.Add(marco, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
+
+            Herbert herbert = UnityEngine.Object.FindObjectOfType<Herbert>();
+            if (herbert != null)
+                targetNPCs.Add(herbert, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
+
             targetNPCsList = targetNPCs.Keys.ToList();
             Log("Finished Initializing MiniQuest NPCs");
             yield return null;
@@ -105,26 +122,33 @@ namespace CartelEnforcer
         public static IEnumerator EvaluateMiniQuestCreation()
         {
             Log("Starting Mini Quest Dialogue Random Generation");
-            WaitForSeconds upperWait = new WaitForSeconds(UnityEngine.Random.Range(240f, 360f));
-            WaitForSeconds lowerWait = new WaitForSeconds(UnityEngine.Random.Range(90f, 120f));
+            WaitForSeconds upperWait = new WaitForSeconds(240f);
             bool questGenerated = false;
-            bool pass = false;
+            bool passStatus = false;
+            bool passTime = false;
 
             while (registered)
             {
+
 #if MONO
                 // Only when hostile
                 if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile)
-                    pass = true;
+                    passStatus = true;
                 else
-                    pass = false;
+                    passStatus = false;
 #else
                 if (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile)
-                    pass = true;
+                    passStatus = true;
                 else
-                    pass = false;
+                    passStatus = false;
 #endif
-                if (pass)
+
+                if (TimeManager.Instance.CurrentTime >= 659 && TimeManager.Instance.CurrentTime <= 2359) // Dont generate at midnight
+                    passTime = true;
+                else
+                    passTime = false;
+
+                if (passStatus && passTime)
                 {
                     Log("[MINI QUEST] Try Generate");
                     NPC random = targetNPCsList[UnityEngine.Random.Range(0, targetNPCsList.Count)];
@@ -151,7 +175,7 @@ namespace CartelEnforcer
                 if (questGenerated)
                     yield return upperWait;
                 else
-                    yield return lowerWait;
+                    yield return Wait30;
                 questGenerated = false;
             }
         }
@@ -201,13 +225,19 @@ namespace CartelEnforcer
         public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller, float paid)
         {
             Log("[MINI QUEST]    Option Chosen");
-            float chance = Mathf.Lerp(0.30f, 0.60f, npc.RelationData.NormalizedRelationDelta); // At max rela only 40% chance to refuse
-            bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= 100f;
+            float chance = Mathf.Lerp(0.20f, 0.50f, npc.RelationData.NormalizedRelationDelta); // At max rela 50% chance to refuse
+            bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= paid;
             if ((TimeManager.Instance.CurrentTime >= 1200 || TimeManager.Instance.CurrentTime <= 1800))
             {
                 // If inside of 12:00 - 18:00 window, Higher likelihood to accept quest and also tell exact location
                 chance = Mathf.Lerp(chance, 1.0f, chance);
+            }
 
+            if (CartelGathering.areGoonsGathering)
+            {
+                // If the gathering is active we decrease the chance to give the dead drop mini quest so that 
+                // the chance can also dynamically prefer this feature if its active, linear decrease 30%
+                chance = Mathf.Lerp(chance, 0.0f, 0.3f);
             }
 
             if (UnityEngine.Random.Range(0f, 1f) < chance && hasCash)
@@ -306,6 +336,29 @@ namespace CartelEnforcer
                     case 4:
                         prep = hasPreposition ? "" : "at";
                         controller.handler.WorldspaceRend.ShowText($"Yes and don't come asking anymore! They have been dealing {prep} {location}.", 15f);
+                        break;
+                }
+            }
+            else if (CartelGathering.areGoonsGathering && CartelGathering.currentGatheringLocation != null && hasCash)
+            {
+                Log("[MINI QUEST] Display Gathering Loc");
+                controller.handler.ContinueSubmitted();
+                NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
+                switch (UnityEngine.Random.Range(0, 3))
+                {
+                    case 0:
+                        controller.handler.WorldspaceRend.ShowText($"I saw a group of them at the {CartelGathering.currentGatheringLocation.description}", 15f);
+                        npc.PlayVO(EVOLineType.Think, false);
+                        break;
+
+                    case 1:
+                        controller.handler.WorldspaceRend.ShowText($"There is a group of Benzies at the {CartelGathering.currentGatheringLocation.description}", 15f);
+                        npc.PlayVO(EVOLineType.Thanks, false);
+                        break;
+
+                    case 2:
+                        controller.handler.WorldspaceRend.ShowText($"The Benzies are gathering at the {CartelGathering.currentGatheringLocation.description}", 15f);
+                        npc.PlayVO(EVOLineType.Concerned, false);
                         break;
                 }
             }

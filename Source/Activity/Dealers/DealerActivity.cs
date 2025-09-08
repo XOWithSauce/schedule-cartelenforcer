@@ -9,6 +9,7 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.InterceptEvent;
 
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
@@ -27,6 +28,7 @@ using ScheduleOne.NPCs.Other;
 using ScheduleOne.NPCs;
 using ScheduleOne.AvatarFramework.Equipping;
 #else
+using Il2Cpp;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
@@ -66,17 +68,10 @@ namespace CartelEnforcer
         private static int defaultStayInsideEnd = 2000;
         private static int defaultStayInsideDur = 1080;
 
-        private static int defaultDealSignalStart = 2000;
-        private static int defaultDealSignalDur = 360;
-
-
         // Current 
         public static int currentStayInsideStart = 0;
         public static int currentStayInsideEnd = 0;
         public static int currentStayInsideDur = 0;
-
-        public static int currentDealSignalStart = 0;
-        public static int currentDealSignalDur = 0;
 
         public static IEnumerator EvaluateDealerState()
         {
@@ -97,9 +92,6 @@ namespace CartelEnforcer
             currentStayInsideEnd = defaultStayInsideEnd;
             currentStayInsideDur = defaultStayInsideDur;
 
-            currentDealSignalStart = defaultDealSignalStart;
-            currentDealSignalDur = defaultDealSignalDur;
-
             SetupDealers();
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
@@ -116,16 +108,32 @@ namespace CartelEnforcer
                 // from 4pm to 4am only
                 if (!(TimeManager.Instance.CurrentTime >= 1620 || TimeManager.Instance.CurrentTime <= 359))
                     continue;
-
+                bool isHostile = true;
 #if MONO
                 // Only when hostile
                 if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
-                    continue;
+                    isHostile = false;
 #else
 
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
-                    continue;
+                    isHostile = false;
 #endif
+                if (!isHostile)
+                {
+                    // Sleep longer and just trigger the walking, state will continue after extra minute or they go back inside
+                    foreach (CartelDealer d in allCartelDealers)
+                    {
+                        yield return Wait2;
+                        if (!d.isInBuilding && !d.Movement.hasDestination)
+                        {
+                            // and is outside meaning just afk standing
+                            WalkToInterestPoint(d);
+                        }
+                    }
+                    yield return Wait60;
+                    continue;
+                }
+
                 // Calculate current
 
                 // Check safety first, if safety enabled set Stay Inside event to last for entire day if requirement met
@@ -140,7 +148,8 @@ namespace CartelEnforcer
                         foreach (CartelDealer d in DealerActivity.allCartelDealers)
                         {
                             yield return Wait05;
-                            ApplyNewEventState(d, 0, 2359, 1440, 0, 1);
+                            ApplyNewEventState(d, 0, 2359, 1440);
+                            d.SetIsAcceptingDeals(false);
                         }
                     }
                 }
@@ -152,18 +161,20 @@ namespace CartelEnforcer
                     int newStayInsideStart = 0;
                     int newStayInsideEnd = 0;
                     int newStayInsideDur = 0;
-                    int newDealSignalStart = 0;
-                    int newDealSignalDur = 0;
 
                     if (currentDealerActivity > 0f)
                     {
                         // Calculate stay inside Start time when does dealer go back inside, range 00:01 - 03:59
                         int oldStayInsideStartMins = TimeManager.GetMinSumFrom24HourTime(currentStayInsideStart);
-                        int maxStayInsideStartMins = TimeManager.GetMinSumFrom24HourTime(359);
+                        int maxStayInsideStartMins = TimeManager.GetMinSumFrom24HourTime(0359);
 
                         int increasedStayInsideStartMins = Mathf.RoundToInt(Mathf.Lerp((float)oldStayInsideStartMins, (float)maxStayInsideStartMins, currentDealerActivity));
 
                         newStayInsideStart = TimeManager.Get24HourTimeFromMinSum(increasedStayInsideStartMins);
+                        if (newStayInsideStart == 400) // because math round to int sucks ass
+                        {
+                            newStayInsideStart = 359;
+                        }
                         // Stay inside starting time is now increased towards 04:00
 
                         // Calculate stay inside end time, when does dealer go out of building, range 16:20 - 23:59
@@ -177,12 +188,6 @@ namespace CartelEnforcer
 
                         // New Stay inside event duration in minutes
                         newStayInsideDur = decreasedStayInsideEndMins - increasedStayInsideStartMins;
-
-                        // Then the deal handle signal, start time is always the same as stay inside end time
-                        newDealSignalStart = newStayInsideEnd;
-                        // Then duration,
-                        int dayMins = TimeManager.GetMinSumFrom24HourTime(2359);
-                        newDealSignalDur = dayMins - newStayInsideDur;
                     }
                     else if (currentDealerActivity < 0f)
                     {
@@ -209,35 +214,22 @@ namespace CartelEnforcer
 
                         // New Stay inside event duration in minutes
                         newStayInsideDur = increasedStayInsideEndMins - decreasedStayInsideStartMins;
-
-                        // Then the deal handle signal, start time is always the same as stay inside end time
-                        newDealSignalStart = newStayInsideEnd;
-                        // Then duration,
-                        int dayMins = TimeManager.GetMinSumFrom24HourTime(2359);
-                        newDealSignalDur = dayMins - newStayInsideDur;
                     }
                     else // Activity at 0.0f
                     {
                         newStayInsideStart = defaultStayInsideStart;
                         newStayInsideEnd = defaultStayInsideEnd;
                         newStayInsideDur = defaultStayInsideDur;
-
-                        newDealSignalStart = defaultDealSignalStart;
-                        newDealSignalDur = defaultDealSignalDur;
                     }
 
                     Log("[DEALER ACTIVITY] Current Dealer activity: " + currentDealerActivity);
                     Log($"[DEALER ACTIVITY] StayInsideStart changed {currentStayInsideStart} -> {newStayInsideStart}");
                     Log($"[DEALER ACTIVITY] StayInsideEnd changed {currentStayInsideEnd} -> {newStayInsideEnd}");
                     Log($"[DEALER ACTIVITY] StayInsideDur changed {currentStayInsideDur} -> {newStayInsideDur}");
-                    Log($"[DEALER ACTIVITY] DealSignalStart changed {currentDealSignalStart} -> {newDealSignalStart}");
-                    Log($"[DEALER ACTIVITY] DealSignalDur changed {currentDealSignalDur} -> {newDealSignalDur}");
 
                     currentStayInsideStart = newStayInsideStart;
                     currentStayInsideEnd = newStayInsideEnd;
                     currentStayInsideDur = newStayInsideDur;
-                    currentDealSignalStart = newDealSignalStart;
-                    currentDealSignalDur = newDealSignalDur;
 
 
                     // Apply
@@ -249,9 +241,7 @@ namespace CartelEnforcer
                             d,
                             currentStayInsideStart,
                             currentStayInsideEnd,
-                            currentStayInsideDur,
-                            currentDealSignalStart,
-                            currentDealSignalDur
+                            currentStayInsideDur
                         );
                     }
                 }
@@ -269,13 +259,12 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public static void ApplyNewEventState(CartelDealer dealer, int inStart, int inEnd, int inDur, int sigStart, int sigDur)
+        public static void ApplyNewEventState(CartelDealer dealer, int inStart, int inEnd, int inDur)
         {
             // we dont wanna update this dealers values yet since they are actively partaking intercept deal event
             if (interceptor != null && interceptor == dealer) return;
 
             NPCEvent_StayInBuilding event1 = null;
-            NPCSignal_HandleDeal event2 = null;
             if (dealer.Behaviour.ScheduleManager.ActionList != null)
             {
                 foreach (NPCAction action in dealer.Behaviour.ScheduleManager.ActionList)
@@ -284,21 +273,11 @@ namespace CartelEnforcer
                     if (action is NPCEvent_StayInBuilding ev1)
                         event1 = ev1;
 
-                    else if (action is NPCSignal_HandleDeal ev2)
-                        event2 = ev2;
 #else
                     NPCEvent_StayInBuilding ev1_temp = action.TryCast<NPCEvent_StayInBuilding>();
                     if (ev1_temp != null)
                     {
                         event1 = ev1_temp;
-                    }
-                    else
-                    {
-                        NPCSignal_HandleDeal ev2_temp = action.TryCast<NPCSignal_HandleDeal>();
-                        if (ev2_temp != null)
-                        {
-                            event2 = ev2_temp;
-                        }
                     }
 #endif
                 }
@@ -310,11 +289,6 @@ namespace CartelEnforcer
                 event1.EndTime = inEnd;
                 event1.Duration = inDur;
             }
-            if (event2 != null)
-            {
-                event2.MaxDuration = sigDur;
-                event2.StartTime = sigStart;
-            }
         }
 
         public static void SetupDealers()
@@ -325,6 +299,7 @@ namespace CartelEnforcer
             {
                 dealer.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
                 dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
+                dealer.Health.Health = dealerConfig.CartelDealerHP;
 
                 switch (dealerConfig.CartelDealerWeapon.ToLower())
                 {
@@ -380,17 +355,38 @@ namespace CartelEnforcer
 
                     void onStayInsideEnd()
                     {
-                        dealer.SetIsAcceptingDeals(true);
-                        if (!dealer.IsAcceptingDeals)
-                            dealer.SetIsAcceptingDeals(true);
-                        WalkToInterestPoint(dealer);
+                        if (TimeManager.Instance.CurrentTime <= 359 || TimeManager.Instance.CurrentTime >= 1600) // because the 400 bugs out
+                        {
+                            if (!dealer.IsAcceptingDeals)
+                                dealer.SetIsAcceptingDeals(true);
+                            WalkToInterestPoint(dealer);
+                        }
+                        else
+                        {
+                            if (dealer.ActiveContracts.Count > 0)
+                            {
+                                dealer.ActiveContracts[0].Fail();
+                            }
+                        }
                     }
 
-                    void onHandOverComplete()
+                    void onDealSignalEnd()
                     {
-                        if (dealer.ActiveContracts.Count == 0)
+                        if (TimeManager.Instance.CurrentTime <= 359 || TimeManager.Instance.CurrentTime >= 1600) // because the 400 bugs out
                         {
-                            WalkToInterestPoint(dealer);
+                            if (dealer.ActiveContracts.Count == 0)
+                            {
+                                if (!dealer.IsAcceptingDeals)
+                                    dealer.SetIsAcceptingDeals(true);
+                                WalkToInterestPoint(dealer);
+                            }
+                        }
+                        else
+                        {
+                            if (dealer.ActiveContracts.Count > 0)
+                            {
+                                dealer.ActiveContracts[0].Fail();
+                            }
                         }
                     }
 
@@ -408,12 +404,12 @@ namespace CartelEnforcer
                     }
                     if (event2 != null)
                     {
-                        event2.MaxDuration = defaultDealSignalDur;
-                        event2.StartTime = defaultDealSignalStart;
+                        event2.MaxDuration = 60;
+                        // event2.StartTime = defaultDealSignalStart; This is not needed
 #if MONO
-                        event2.onEnded = (Action)Delegate.Combine(event2.onEnded, new Action(onHandOverComplete));
+                        event2.onEnded = (Action)Delegate.Combine(event2.onEnded, new Action(onDealSignalEnd));
 #else
-                        event2.onEnded += (Il2CppSystem.Action)onHandOverComplete;
+                        event2.onEnded += (Il2CppSystem.Action)onDealSignalEnd;
 #endif
                     }
                 }
@@ -429,8 +425,12 @@ namespace CartelEnforcer
 
         public static IEnumerator StartActiveSignal()
         {
+#if MONO
+            bool isHostile = (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile);
+#else
+            bool isHostile = (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile);
+#endif
             List<string> guidAssignedContracts = new();
-
             // Store valid contracts
             List<Contract> validContracts = new();
             Contract contract = null;
@@ -457,7 +457,7 @@ namespace CartelEnforcer
                     bool actionTaken = false;
 
                     // Pick player dealers active contract
-                    if (validContracts.Count > 0 && UnityEngine.Random.Range(0f, 1f) < dealerConfig.StealDealerContractChance)
+                    if (validContracts.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance && isHostile)
                     {
                         Log("[DEALER ACTIVITY] Checking PlayerDealer active deal");
 
@@ -470,13 +470,14 @@ namespace CartelEnforcer
                             actionTaken = true;
                             guidAssignedContracts.Add(contract.GUID.ToString());
                             contract.CompletionXP = 1;
+                            contract.completedContractsIncremented = false;
                             d.AddContract(contract);
                             d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                             validContracts.Remove(contract);
                         }
                     }
                     // Pick customer with null dealer, no active deal and a pending offer
-                    else if (UnityEngine.Random.Range(0f, 1f) < dealerConfig.StealPlayerPendingChance)
+                    else if (UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealPlayerPendingChance && isHostile)
                     {
                         Log("Search for pending");
                         List<Customer> cList = new();
@@ -515,6 +516,7 @@ namespace CartelEnforcer
                                 if (contract != null)
                                 {
                                     contract.CompletionXP = 1;
+                                    contract.completedContractsIncremented = false;
                                     d.AddContract(contract);
                                     d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                                     actionTaken = true;
@@ -583,13 +585,13 @@ namespace CartelEnforcer
     public class CartelDealerConfig
     {
         public float CartelDealerMoveSpeedMultiplier = 1.65f;
-        public float CartelDealerHP = 200;
+        public float CartelDealerHP = 200.0f;
         public string CartelDealerWeapon = "M1911"; // "Knife" "Shotgun", default unknown M1911
         public float StealDealerContractChance = 0.2f;
         public float StealPlayerPendingChance = 0.2f;
-        public float DealerActivityDecreasePerKill = 0.1f;
-        public float DealerActivityIncreasePerDay = 0.1f;
-        public float SafetyThreshold = -0.5f;
+        public float DealerActivityDecreasePerKill = 0.25f;
+        public float DealerActivityIncreasePerDay = 0.15f;
+        public float SafetyThreshold = -0.7f;
         public bool SafetyEnabled = true;
         public bool FreeTimeWalking = true;
     }

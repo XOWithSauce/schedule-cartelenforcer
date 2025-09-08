@@ -174,25 +174,6 @@ namespace CartelEnforcer
                         }
                     }
 
-                    // Left CTRL + I Place safe
-                    else if (Input.GetKey(KeyCode.I))
-                    {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputPlaceSafe());
-                        }
-                    }
-
-                    // Left CTRL + O Test array replace
-                    else if (Input.GetKey(KeyCode.O))
-                    {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputReplaceGoonPool());
-                        }
-                    }
                     // Left CTRL + P Gathering Spawn
                     else if (Input.GetKey(KeyCode.P))
                     {
@@ -241,8 +222,6 @@ namespace CartelEnforcer
             currentConfig = ConfigLoader.Load();
 
             cartelStolenItems = ConfigLoader.LoadStolenItems();
-            if (cartelStolenItems.Count == 0)
-                Log("[CARTEL INVENTORY]   Stolen items is 0");
 
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
@@ -469,6 +448,8 @@ namespace CartelEnforcer
             manorGoonGuids.Clear();
             spawnedGatherGoons.Clear();
 
+            cartelCashAmount = 0f;
+
             // Now the created states and any boolean flags for events
             // QUests
             activeQuest = null;
@@ -488,7 +469,10 @@ namespace CartelEnforcer
             interceptor = null;
             startedCombat = false;
             areGoonsGathering = false;
+            currentGatheringLocation = null;
+            previousGatheringLocation = null;
 
+            hoursUntilNextGathering = 3;
             currentDealerActivity = 0f;
             previousDealerActivity = 0f;
 

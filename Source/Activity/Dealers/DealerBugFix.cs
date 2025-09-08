@@ -1,5 +1,7 @@
 using UnityEngine;
 using HarmonyLib;
+using static CartelEnforcer.DebugModule;
+
 #if MONO
 using FishNet.Object;
 using ScheduleOne.Cartel;
@@ -43,7 +45,7 @@ namespace CartelEnforcer
 #endif
         {
 
-            // Original source code copy, except the relationship change is removed.
+            // Original source code copy, removed functions where the nested if clause is always "player", commented out rela change, also total payment to 1
             if (contract.Dealer != null && contract.Dealer.DealerType == EDealerType.CartelDealer)
             {
                 float num;
@@ -51,47 +53,11 @@ namespace CartelEnforcer
                 int num2;
                 float satisfaction = Mathf.Clamp01(__instance.EvaluateDelivery(contract, items, out num, out drugType, out num2));
                 __instance.ChangeAddiction(num / 5f);
-                float relationDelta = __instance.NPC.RelationData.RelationDelta;
                 float relationshipChange = CustomerSatisfaction.GetRelationshipChange(satisfaction);
                 float change = relationshipChange * 0.2f * Mathf.Lerp(0.75f, 1.5f, num);
                 __instance.AdjustAffinity(drugType, change);
                 // __instance.NPC.RelationData.ChangeRelationship(relationshipChange, true); <--- this caused bugs
-#if MONO
-                List<Contract.BonusPayment> list = new();
-#else
-                Il2CppSystem.Collections.Generic.List<Contract.BonusPayment> list = new();
-#endif
-                if (giveBonuses)
-                {
-                    if (NetworkSingleton<CurfewManager>.Instance.IsCurrentlyActive)
-                    {
-                        list.Add(new Contract.BonusPayment("Curfew Bonus", contract.Payment * 0.2f));
-                    }
-                    if (num2 > contract.ProductList.GetTotalQuantity())
-                    {
-                        list.Add(new Contract.BonusPayment("Generosity Bonus", 10f * (float)(num2 - contract.ProductList.GetTotalQuantity())));
-                    }
-                    GameDateTime acceptTime = contract.AcceptTime;
-                    GameDateTime end = new GameDateTime(acceptTime.elapsedDays, TimeManager.AddMinutesTo24HourTime(contract.DeliveryWindow.WindowStartTime, 60));
-                    if (NetworkSingleton<TimeManager>.Instance.IsCurrentDateWithinRange(acceptTime, end))
-                    {
-                        list.Add(new Contract.BonusPayment("Quick Delivery Bonus", contract.Payment * 0.1f));
-                    }
-                }
-                float num3 = 0f;
-                foreach (Contract.BonusPayment bonusPayment in list)
-                {
-                    num3 += bonusPayment.Amount;
-                }
-                if (handoverByPlayer)
-                {
-                    Singleton<HandoverScreen>.Instance.ClearCustomerSlots(false);
-                    contract.SubmitPayment(num3);
-                }
-                if (outcome == HandoverScreen.EHandoverOutcome.Finalize && handoverByPlayer)
-                {
-                    Singleton<DealCompletionPopup>.Instance.PlayPopup(__instance, satisfaction, relationDelta, contract.Payment, list);
-                }
+
                 __instance.TimeSinceLastDealCompleted = 0;
                 __instance.NPC.SendAnimationTrigger("GrabItem");
                 NetworkObject networkObject = null;
@@ -99,7 +65,7 @@ namespace CartelEnforcer
                 {
                     networkObject = contract.Dealer.NetworkObject;
                 }
-                float totalPayment = Mathf.Clamp(contract.Payment + num3, 0f, float.MaxValue);
+                float totalPayment = 0; // Because this seems to be displayed to player after each day, increments the value of total dealer sum gained
                 __instance.ProcessHandoverServerSide(outcome, items, handoverByPlayer, totalPayment, contract.ProductList, satisfaction, networkObject);
 
                 return false;
@@ -112,14 +78,14 @@ namespace CartelEnforcer
 
     // Fix a bug where the cartel dealer sends messages to player
     [HarmonyPatch(typeof(Dealer), "CustomerContractEnded")]
-    public static class Dealer_CustomerContractEndedPatch
+    public static class Dealer_CustomerContractEnded_Patch
     {
         [HarmonyPrefix]
         public static bool Prefix(Dealer __instance, Contract contract)
         {
+            //Log($"{__instance.DealerType == EDealerType.CartelDealer}");
             if (__instance.DealerType == EDealerType.CartelDealer)
             {
-
                 if (!__instance.ActiveContracts.Contains(contract))
                 {
                     return false;

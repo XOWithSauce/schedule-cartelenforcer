@@ -6,7 +6,6 @@ using UnityEngine;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DealerActivity;
 
-
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.ItemFramework;
@@ -300,6 +299,10 @@ namespace CartelEnforcer
             {
                 stolenItems = new();
             }
+
+            // set static balance
+            CartelInventory.cartelCashAmount = stolenItems.balance;
+
             List<QualityItemInstance> newQualityItemList = new List<QualityItemInstance>();
             if (stolenItems.items != null && stolenItems.items.Count > 0)
             {
@@ -404,6 +407,9 @@ namespace CartelEnforcer
                     SerializeStolenItems newItem = new() { ID = item.ID, Quality = (int)item.Quality, Quantity = item.Quantity };
                     itemsList.items.Add(newItem);
                 }
+                // balance
+                itemsList.balance = Mathf.Round(CartelInventory.cartelCashAmount);
+
                 try
                 {
                     string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
@@ -434,9 +440,10 @@ namespace CartelEnforcer
                     string json = File.ReadAllText(pathDealerConfig);
                     config = JsonConvert.DeserializeObject<CartelDealerConfig>(json);
                     config.SafetyThreshold = Mathf.Clamp(config.SafetyThreshold, -1.0f, 1.0f); // Ensure limits
-                    config.DealerActivityIncreasePerDay = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.1f, 1f); // Ensure limits
+                    config.DealerActivityIncreasePerDay = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.0f, 1f); // Ensure limits
+                    config.DealerActivityDecreasePerKill = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.0f, 1f); // Ensure limits
                     config.CartelDealerMoveSpeedMultiplier = Mathf.Clamp(config.CartelDealerMoveSpeedMultiplier, 0.1f, 3f);
-                    config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10, 2000);
+                    config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10f, 2000f);
                     config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
                     config.StealPlayerPendingChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
 

@@ -23,6 +23,7 @@ namespace CartelEnforcer
     [Serializable]
     public class StolenItemsList
     {
+        public float balance = 0f;
         public List<SerializeStolenItems> items;
     }
 
@@ -30,6 +31,7 @@ namespace CartelEnforcer
     {
 
         public static List<QualityItemInstance> cartelStolenItems = new();
+        public static float cartelCashAmount = 0f;
         public static readonly object cartelItemLock = new object(); // for above list
 
         public static IEnumerator CartelStealsItems(List<ItemInstance> items, Action cb = null)
@@ -153,6 +155,8 @@ namespace CartelEnforcer
                 cb();
             yield return null;
         }
+
+
 
         // From pool max 20 unpackaged items per slot, saves quality
         public static List<ItemInstance> GetFromPool(int maxEmptySlotsToFill)

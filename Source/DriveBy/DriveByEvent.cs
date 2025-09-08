@@ -417,12 +417,9 @@ namespace CartelEnforcer
                 offsetPosition = thomasInstance.transform.position + thomasInstance.transform.up * 1.7f - thomasInstance.transform.right * 0.8f;
                 toPlayer = player.CenterPointTransform.position - offsetPosition;
                 angleToPlayer = Vector3.SignedAngle(thomasInstance.transform.forward, toPlayer, Vector3.up);
-                Log("Raycast");
                 wepHits = false;
                 int hitsFound = Physics.RaycastNonAlloc(offsetPosition, toPlayer, _raycastHitBuffer, 50f);
-                Log("Sort ARr: int " + hitsFound);
                 Array.Sort(_raycastHitBuffer, 0, hitsFound, new HitComparer());
-                Log($"Check Hits: is buffer null ; {_raycastHitBuffer == null}");
                 wepHits = false;
                 for (int i = 0; i < hitsFound; i++)
                 {
@@ -440,7 +437,6 @@ namespace CartelEnforcer
                     }
                 }
 
-                Log($"[DRIVE BY]    Angle: {angleToPlayer} - Dist: {distToPlayer} -  WeaponHits: {wepHits}");
                 if (!wepHits) continue;
                 if (angleToPlayer < -10f && angleToPlayer > -80f)
                 {

@@ -139,8 +139,7 @@ namespace CartelEnforcer
                 return false;
 #endif
 
-
-            // Suburbia region, has to have atleast 5 customers unlocked
+            // Suburbia region, has to have atleast 1 customer unlocked
             int numUnlocked = 0;
 #if MONO
             using (List<Customer>.Enumerator enumerator = Customer.UnlockedCustomers.GetEnumerator())

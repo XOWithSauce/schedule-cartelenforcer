@@ -58,15 +58,14 @@ namespace CartelEnforcer
             // Per original source code SummarizeLosses is defined inside the function.
             static void SummarizeLosses(Dealer __instance, List<ItemInstance> items, float cash)
             {
-                // Added this piece of code to the original source, everything else inside Original function is original source code or equivalent
-                Log("[TRY ROB ORIGINAL] Sum Loss");
-                if (items.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(items)));
-
                 if (items.Count == 0 && cash <= 0f)
                 {
                     return;
                 }
+                // Added this 2 pieces of code to the original source, everything else inside Original function is original source code or equivalent
+                coros.Add(MelonCoroutines.Start(CartelStealsItems(items)));
+                cartelCashAmount += cash;
+
                 List<string> list = new List<string>();
                 for (int i = 0; i < items.Count; i++)
                 {
@@ -576,10 +575,32 @@ namespace CartelEnforcer
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.050f);
 
+
+                // Parse inventory after escape
                 List<ItemInstance> list = new List<ItemInstance>();
+
+#if IL2CPP
+                CashInstance temp = null;
+#endif
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
                 {
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance) continue;
+#if MONO
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
+                    {
+                        cartelCashAmount += inst.Balance;
+                        continue;
+                    }
+#else
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                    {
+                        temp = goon.Inventory.ItemSlots[i].ItemInstance.TryCast<CashInstance>();
+                        if (temp != null)
+                            cartelCashAmount += temp.Balance;
+                        temp = null;
+                        continue;
+                    }
+#endif
+                    // Not cash Instance, can still be product etc.
 
                     if (goon.Inventory.ItemSlots[i].ItemInstance != null)
                     {
@@ -630,10 +651,31 @@ namespace CartelEnforcer
                 // The escape attempt timed out.
                 Log("[TRY ROB]    Despawned escaping goon due to timeout");
 
+                // Parse inventory after escape
                 List<ItemInstance> list = new List<ItemInstance>();
+
+#if IL2CPP
+                CashInstance temp = null;
+#endif
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
                 {
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance) continue;
+#if MONO
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
+                    {
+                        cartelCashAmount += inst.Balance;
+                        continue;
+                    }
+#else
+                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                    {
+                        temp = goon.Inventory.ItemSlots[i].ItemInstance.TryCast<CashInstance>();
+                        if (temp != null)
+                            cartelCashAmount += temp.Balance;
+                        temp = null;
+                        continue;
+                    }
+#endif
+                    // Not cash Instance, can still be product etc.
 
                     if (goon.Inventory.ItemSlots[i].ItemInstance != null)
                     {

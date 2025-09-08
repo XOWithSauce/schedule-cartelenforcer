@@ -4,12 +4,14 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DealerRobbery;
 using static CartelEnforcer.DebugModule;
 
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Map;
 using FishNet;
 #else
+using Il2Cpp;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Map;
@@ -27,6 +29,13 @@ namespace CartelEnforcer
 
             if (region == EMapRegion.Northtown)
                 changeInfluence = false;
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                changeInfluence = false;
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
+                changeInfluence = false;
+#endif
 #if MONO
             if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
                 changeInfluence = true;
