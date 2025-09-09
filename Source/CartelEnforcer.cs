@@ -58,7 +58,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.1";
+        public const string Version = "1.5.5";
         public const string DownloadLink = null;
     }
 
@@ -435,7 +435,6 @@ namespace CartelEnforcer
 
             coros.Clear();
             // Now mostly just the different mod related lists that got populated in init, reset and clear to repopulate everything on new load
-            mapReg.Clear();
             driveByLocations.Clear();
             regActivityHours.Clear();
             actFreqMapping.Clear();

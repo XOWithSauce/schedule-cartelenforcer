@@ -627,6 +627,12 @@ namespace CartelEnforcer
             Log("[END GAME QUEST]    Disposed Choice");
 
             yield return Wait30;
+            coros.Add(MelonCoroutines.Start(ResetRayAFK()));
+            yield return null;
+        }
+
+        public static IEnumerator ResetRayAFK()
+        {
 #if MONO
             (ray.Behaviour.ScheduleManager.ActiveAction as NPCEvent_LocationBasedAction).EndTime = 1800;
             (ray.Behaviour.ScheduleManager.ActiveAction as NPCEvent_LocationBasedAction).Duration = 60;
@@ -2600,6 +2606,7 @@ namespace CartelEnforcer
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2200)
                 {
                     this.Fail(true);
+                    coros.Add(MelonCoroutines.Start(ResetRayAFK()));
                     CleanupListeners();
                     manorCompleted = true;
                 }
@@ -2609,6 +2616,7 @@ namespace CartelEnforcer
                 if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2200)
                 {
                     this.Fail(true);
+                    coros.Add(MelonCoroutines.Start(ResetRayAFK()));
                     CleanupListeners();
                     manorCompleted = true;
                 }

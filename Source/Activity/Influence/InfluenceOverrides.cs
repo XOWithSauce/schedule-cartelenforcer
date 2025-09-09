@@ -22,13 +22,9 @@ namespace CartelEnforcer
 {
     public static class InfluenceOverrides
     {
-        public static List<EMapRegion> mapReg = new();
         public static bool ShouldChangeInfluence(EMapRegion region)
         {
             bool changeInfluence = false;
-
-            if (region == EMapRegion.Northtown)
-                changeInfluence = false;
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
                 changeInfluence = false;
@@ -36,16 +32,22 @@ namespace CartelEnforcer
             if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                 changeInfluence = false;
 #endif
+
 #if MONO
             if (InstanceFinder.IsServer && Singleton<Map>.Instance.GetUnlockedRegions().Contains(region))
                 changeInfluence = true;
 #else
             foreach (EMapRegion unlmapReg in Singleton<Map>.Instance.GetUnlockedRegions())
-                mapReg.Add(unlmapReg);
-            if (InstanceFinder.IsServer && mapReg.Contains(region))
-                changeInfluence = true;
-            mapReg.Clear();
+            {
+                if (unlmapReg == region && InstanceFinder.IsServer)
+                {
+                    changeInfluence = true;
+                    break;
+                }
+            }
 #endif
+            if (region == EMapRegion.Northtown)
+                changeInfluence = false;
             return changeInfluence;
         }
         public static IEnumerator ApplyInfluenceConfig()

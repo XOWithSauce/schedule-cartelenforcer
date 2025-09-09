@@ -150,11 +150,11 @@ namespace CartelEnforcer
             if (TimeManager.Instance.CurrentTime >= startEarliest && TimeManager.Instance.CurrentTime <= startLatest)
             {
                 if (DealerActivity.currentDealerActivity >= 0f)
-                    hoursUntilNextGathering = UnityEngine.Random.Range(3, 18);
+                    hoursUntilNextGathering = UnityEngine.Random.Range(6, 15);
                 else if (DealerActivity.currentDealerActivity < 0f && DealerActivity.currentDealerActivity > -0.5f)
-                    hoursUntilNextGathering = UnityEngine.Random.Range(3, 12);
+                    hoursUntilNextGathering = UnityEngine.Random.Range(5, 12);
                 else
-                    hoursUntilNextGathering = UnityEngine.Random.Range(3, 8);
+                    hoursUntilNextGathering = UnityEngine.Random.Range(4, 9);
 
                 List<GatheringLocation> candidates = new();
                 List<GatheringLocation> regLocs = null;
@@ -312,8 +312,6 @@ namespace CartelEnforcer
             int deltaSecondsForAnnoyance = 0;
             int deltaSecondsDecrAnnoyance = 0;
 
-            float distanceToGetAnnoyedAt = Mathf.Lerp(8f, 4f, DealerActivity.currentDealerActivity);
-            int maxAnnoyance = Mathf.RoundToInt(Mathf.Lerp(3f, 6f, DealerActivity.currentDealerActivity));
             while (registered)
             {
                 dead = 0;
@@ -340,20 +338,24 @@ namespace CartelEnforcer
                     if (DealerActivity.currentDealerActivity < 0f)
                     {
                         // Based on the dealer activity increase the radius which goons become aggressive at
-                        float distanceToAggroAt = Mathf.Lerp(6f, 18f, -DealerActivity.currentDealerActivity);
+                        float distanceToAggroAt = Mathf.Lerp(8f, 18f, -DealerActivity.currentDealerActivity);
 
                         // Now we can check if player is nearby
                         if (distToP < distanceToAggroAt && !playerInBuilding)
                         {
                             // Player is nearby now we check that random one of the goons can see the player, very low dealer activity will trigger without los
-                            bool ignoreLos = false;
-                            if (DealerActivity.currentDealerActivity < -0.5f)
-                                ignoreLos = true;
-
                             Player p = Player.GetClosestPlayer(location.position, out float _);
-                            if (spawnedGatherGoons[UnityEngine.Random.Range(0, spawnedGatherGoons.Count)].Awareness.VisionCone.IsPointWithinSight(Player.Local.CenterPointTransform.position, ignoreLos))
+                            int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
+                            spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position);
+                            yield return Wait05;
+                            if (spawnedGatherGoons[randomIndex].Awareness.VisionCone.IsPlayerVisible(p))
                             {
-                                spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>()); // this will trigger all of them
+                                spawnedGatherGoons[randomIndex].AttackEntity(p.GetComponent<ICombatTargetable>()); // this will trigger all of them
+                            }
+                            else
+                            {
+                                yield return Wait05;
+                                spawnedGatherGoons[randomIndex].Movement.FacePoint(location.position);
                             }
                         }
 
@@ -362,7 +364,8 @@ namespace CartelEnforcer
                     else
                     {
                         // Based on the dealer activity increase the radius which goons become annoyed at
-                        // Now we can check if player is nearby
+                        float distanceToGetAnnoyedAt = Mathf.Lerp(9f, 5f, DealerActivity.currentDealerActivity);
+                        float maxAnnoyance = Mathf.RoundToInt(Mathf.Lerp(3f, 6f, DealerActivity.currentDealerActivity));
                         if (distToP < distanceToGetAnnoyedAt && !playerInBuilding)
                         {
                             deltaSecondsForAnnoyance += 2;
@@ -508,7 +511,7 @@ namespace CartelEnforcer
             if (defeated)
             {
                 if (ShouldChangeInfluence(region))
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
             }
             else
             {

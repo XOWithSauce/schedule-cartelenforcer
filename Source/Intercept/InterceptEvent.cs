@@ -6,6 +6,10 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static MelonLoader.Modules.MelonModule;
+
+
+
 
 
 #if MONO
@@ -22,6 +26,7 @@ using ScheduleOne.PlayerScripts;
 using ScheduleOne.Quests;
 using ScheduleOne.UI;
 using ScheduleOne.UI.Phone.Messages;
+using ScheduleOne.Levelling;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
@@ -36,6 +41,7 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Phone.Messages;
+using Il2CppScheduleOne.Levelling;
 #endif
 
 namespace CartelEnforcer
@@ -110,50 +116,66 @@ namespace CartelEnforcer
         {
             Log("[INTERCEPT] Started Checking Intercept Deal Validity");
             List<string> occupied = new();
+            int occupiedDealersCount = 0;
             foreach (CartelDealer d in InterceptEvent.allCartelDealers)
             {
+                bool hasActive = false;
                 foreach (Contract c in d.ActiveContracts)
                 {
+                    hasActive = true;
                     if (!occupied.Contains(c.GUID.ToString()))
                         occupied.Add(c.GUID.ToString());
                 }
+
+                if (hasActive) 
+                    occupiedDealersCount++;
             }
+
+            // Since the prerequirement here is that the chosen dealer out of all dealers has no active contract, if the occupied dealer count is the all cartel dealer count then we can just skip running the function totally to avoid unnecessary computation
+            if (InterceptEvent.allCartelDealers.Length == occupiedDealersCount)
+                yield break;
+
             Log($"[INTERCEPT]    Check Contracts from total of: {NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount} contracts");
-
             List<Contract> validContracts = new();
-
             int i = 0;
             do
             {
                 yield return Wait025;
+                if (!registered) yield break;
+
                 if (i >= NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount)
                 {
                     Log("[INTERCEPT]    - Check Ended");
                     break; // Safe transform parse
                 }
                 Transform trContract = NetworkSingleton<QuestManager>.Instance.ContractContainer.GetChild(i);
+                i++;
+
                 if (trContract != null)
                 {
+                    Log("Check Contract component");
                     Contract contract = trContract.GetComponent<Contract>();
                     if (contract != null)
                     {
-                        bool isValid = true;
-                        if (contract.Dealer != null) isValid = false; // Not player
-                        if (contract.Customer == null) isValid = false; // broken??
-                        if (occupied.Contains(contract.GUID.ToString())) isValid = false; // Not cartel dealer
-                        if (contract.GetMinsUntilExpiry() > 300) isValid = false; // Only take contracts with less than 5h left
-                        if (contract.GetMinsUntilExpiry() < 90) isValid = false; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
-                        if (contractGuids.Contains(contract.GUID.ToString())) isValid = false; // Only take contracts currently not intercepted
+                        if (contract.Dealer != null) continue; // Not player
+                        if (contract.Customer == null) continue; // broken??
+                        if (contract.State != EQuestState.Active) continue;
+                        if (!contract.hudUIExists) continue; // if not UI exists not valid should simplify the process
+                        if (contract.hudUI == null) continue; // Check hud ui state
+                        if (contract.hudUI.gameObject == null) continue;
+                        if (contract.hudUI.gameObject.activeSelf == false) continue;
+                        if (occupied.Contains(contract.GUID.ToString())) continue; // Not cartel dealer
+                        if (contract.GetMinsUntilExpiry() > 300) continue; // Only take contracts with less than 5h left
+                        if (contract.GetMinsUntilExpiry() < 90) continue; // Only take contracts with More than 1h 30min left (30min) reserved for max wait sleep
+                        if (contractGuids.Contains(contract.GUID.ToString())) continue; // Only take contracts currently not intercepted
 
-                        if (isValid)
-                        {
-                            if (!validContracts.Contains(contract))
-                                validContracts.Add(contract);
-                        }
+                        if (!validContracts.Contains(contract))
+                            validContracts.Add(contract);
                     }
                 }
-                i++;
-            } while (i < NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount);
+                
+            } while (i < NetworkSingleton<QuestManager>.Instance.ContractContainer.childCount && registered);
+            Log("[INTERCEPT]    Check Contracts done");
 
             if (validContracts.Count == 0)
             {
@@ -161,48 +183,43 @@ namespace CartelEnforcer
                 yield break; // No Valid Contracts this time
             }
 
-            // Check that the contract exists in UI since we need it later in functions
-            QuestHUDUI[] current = UnityEngine.Object.FindObjectsOfType<QuestHUDUI>();
-            if (current.Length == 0)
+            Customer customer = null;
+            Contract randomContract = null;
+            Log("[INTERCEPT]     Take contract ");
+            do
             {
-                Log($"[INTERCEPT]    No HUD Elements to parse");
-                yield break;
-            }
-            List<Contract> ctrsToRemove = new();
-            Log($"[INTERCEPT]    Match Contract to HUD Elements from total of: {current.Length} elements");
-            foreach (Contract contract in validContracts)
-            {
-                bool exists = false;
-                foreach (QuestHUDUI item in current)
+                yield return Wait01;
+                if (!registered) yield break;
+                if (validContracts.Count == 0) break;
+                int randomIndex = UnityEngine.Random.Range(0, validContracts.Count);
+
+                randomContract = validContracts[randomIndex];
+
+                if (randomContract == null || (randomContract != null && randomContract.State == EQuestState.Completed))
                 {
-                    // throttle here because it can lag alot with high contract count, max parse 4 per second
-                    yield return Wait025;
-                    if (!registered) yield break;
-                    if (item.Quest == contract)
-                    {
-                        exists = true;
-                        break;
-                    }
+                    Log("[INTERCEPT]    Contract got completed before intercept initialized");
+                    validContracts.RemoveAt(randomIndex);
+                    continue;
                 }
-                if (!exists)
-                    ctrsToRemove.Add(contract);
-            }
-            Log("[INTERCEPT]    Matching done");
-            // Remove the ones which dont exist in UI since that causes an error
-            if (ctrsToRemove.Count > 0)
-            {
-                foreach (Contract ctr in ctrsToRemove)
-                    validContracts.Remove(ctr);
-            }
-            if (validContracts.Count == 0)
-            {
-                Log("[INTERCEPT]    No Valid Contracts After Removing Non-UI supported");
-                yield break; // No Valid Contracts this time
-            }
-            
-            Contract randomContract = validContracts[UnityEngine.Random.Range(0, validContracts.Count)];
-            Customer customer = randomContract.Customer.GetComponent<Customer>();
+
+                customer = randomContract.Customer.GetComponent<Customer>();
+                if (customer.NPC.Health.IsDead || customer.NPC.Health.IsKnockedOut)
+                {
+                    Log("[INTERCEPT]    Contract NPC is dead or knocked out");
+                    validContracts.RemoveAt(randomIndex);
+                    continue;
+                }
+
+                // Else current iteration picked contract is valid and associated customer is alive
+                break;
+
+            } while (registered && validContracts.Count != 0);
+
+            if (customer == null || randomContract == null) yield break; // just a sanity check because sometimes with quantum theory double slit experiment proves that something can be unexpected
+
             CartelDealer selected = null;
+
+            Log("[INTERCEPT]    Dealer Parsing started");
 
             EMapRegion region = EMapRegion.Northtown;
             for (int j = 0; j < Singleton<Map>.Instance.Regions.Length; j++)
@@ -212,28 +229,48 @@ namespace CartelEnforcer
                     region = Singleton<Map>.Instance.Regions[j].Region;
                 }
             }
-            selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(region).CartelDealer;
-            if (selected == null)
+
+            if (region == EMapRegion.Northtown)
             {
-                //Log("[INTERCEPT]    Selected Cartel Dealer is null"); // this happens in the first game region
                 selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(EMapRegion.Westville).CartelDealer;
             }
+            else
+            {
+                selected = NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities(region).CartelDealer;
+            }
 
-            // Ensure Cartel Dealer is not dead or knocked out
-            if (selected.Health.IsDead || selected.Health.IsKnockedOut) yield break;
-            // Ensure Cartel Dealer has no active contract
-            if (selected.ActiveContracts != null && selected.ActiveContracts.Count >= 1) yield break;
-            // Ensure NPC is not dead or knocked out
-            if (customer.NPC.Health.IsDead || customer.NPC.Health.IsKnockedOut) yield break;
-            // Ensure Player is not nearby
-            float distanceToPlayer = Vector3.Distance(customer.NPC.CenterPointTransform.position, Player.Local.CenterPointTransform.position);
-            if (distanceToPlayer < 40f) yield break;
+            
+            // Ensure Cartel Dealer has no active contract and is not dead or knocked out
+            if ((selected.ActiveContracts != null && selected.ActiveContracts.Count >= 1) || (selected.Health.IsDead || selected.Health.IsKnockedOut)) 
+            {
+                // How to manage the state between cartel dealer intercepting player dealer contracts, player pending and also intercepting active? This causes the more frequent kind to be always preferred leading to the intercept deals rarely happening. Config for dealer.json needs to be tweaked
+                Log("[INTERCEPT]    Dealer has active contracts or is dead, check if any nearby.");
+                bool foundReplacement = false;
+                // Alternatively we check if any of the dealers would be nearby (60units max), this way even higher values for the dealer config chance will still allow the intercept event to work
+                foreach (CartelDealer otherDealer in allCartelDealers)
+                {
+                    yield return Wait01;
+                    if (otherDealer == selected) continue; // skip the one who is not elgible
+                    if (otherDealer.Health.IsDead || otherDealer.Health.IsKnockedOut) continue; // Dead or knocked out not elgible
+                    if (otherDealer.ActiveContracts != null && otherDealer.ActiveContracts.Count >= 1) continue;
+
+                    if (Vector3.Distance(otherDealer.CenterPoint, customer.NPC.CenterPoint) < 60f)
+                    {
+                        foundReplacement = true;
+                        selected = otherDealer;
+                        break;
+                    }
+                }
+                if (!foundReplacement) yield break;
+            }
+
+            Log("[INTERCEPT]    Dealer Parsing completed");
 
             string cGuid = randomContract.GUID.ToString();
-            contractGuids.Add(cGuid);
+            if (!contractGuids.Contains(cGuid))
+                contractGuids.Add(cGuid);
 
             NPCEvent_StayInBuilding event1 = null;
-            NPCSignal_HandleDeal event2 = null;
             if (selected.Behaviour.ScheduleManager.ActionList != null)
             {
                 foreach (NPCAction action in selected.Behaviour.ScheduleManager.ActionList)
@@ -241,22 +278,11 @@ namespace CartelEnforcer
 #if MONO
                     if (action is NPCEvent_StayInBuilding ev1)
                         event1 = ev1;
-
-                    else if (action is NPCSignal_HandleDeal ev2)
-                        event2 = ev2;
 #else
                     NPCEvent_StayInBuilding ev1_temp = action.TryCast<NPCEvent_StayInBuilding>();
                     if (ev1_temp != null)
                     {
                         event1 = ev1_temp;
-                    }
-                    else
-                    {
-                        NPCSignal_HandleDeal ev2_temp = action.TryCast<NPCSignal_HandleDeal>();
-                        if (ev2_temp != null)
-                        {
-                            event2 = ev2_temp;
-                        }
                     }
 #endif
 
@@ -297,30 +323,31 @@ namespace CartelEnforcer
             interceptingDeal = true;
             interceptor = selected;
             coros.Add(MelonCoroutines.Start(QuestUIEffect(randomContract)));
-            coros.Add(MelonCoroutines.Start(BeginIntercept(selected, randomContract, customer, region, event1, event2, cGuid)));
+            coros.Add(MelonCoroutines.Start(BeginIntercept(selected, randomContract, customer, region, event1, cGuid)));
             yield return null;
         }
 
-        public static IEnumerator BeginIntercept(CartelDealer dealer, Contract contract, Customer customer, EMapRegion region, NPCEvent_StayInBuilding ev1, NPCSignal_HandleDeal ev2, string cGuid)
+        public static IEnumerator BeginIntercept(CartelDealer dealer, Contract contract, Customer customer, EMapRegion region, NPCEvent_StayInBuilding ev1, string cGuid)
         {
             yield return Wait30; // Cartel dealer is kinda fast so have to wait a bit
             if (!registered) yield break;
             bool changeInfluence = ShouldChangeInfluence(region);
 
-            if (customer.CurrentContract == null || contract == null) // If player managed to complete it within that timeframe
+            if (customer.CurrentContract == null && contract != null && contract.State == EQuestState.Completed) // If player managed to complete it within that timeframe
             {
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
-                contractGuids.Remove(cGuid);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
+                if (contractGuids.Contains(cGuid))
+                    contractGuids.Remove(cGuid);
                 interceptingDeal = false;
                 interceptor = null;
                 yield break;
             }
 
-            contract.BopHUDUI();
-            contract.CompletionXP = Mathf.RoundToInt(contract.CompletionXP * 0.5f);
-            contract.completedContractsIncremented = false;
+            int originalXP = contract.CompletionXP;
 
+            contract.CompletionXP = 1;
+            contract.BopHUDUI();
             for (int i = 0; i < dealer.Inventory.ItemSlots.Count; i++)
             {
                 if (dealer.Inventory.ItemSlots[i].ItemInstance == null)
@@ -336,50 +363,50 @@ namespace CartelEnforcer
             int currentStayInsideEnd = ev1.EndTime;
             int currentStayInsideDur = ev1.Duration;
 
-            int currentDealSignalStart = ev2.StartTime;
-            int currentDealSignalDur = ev2.MaxDuration;
+            bool runOnce = false;
+
+#if MONO
+            UnityEngine.Events.UnityAction<EQuestState> cb = null;
+            cb = new UnityEngine.Events.UnityAction<EQuestState>(OnQuestEndEvaluateResult);
+#else
+            Action<EQuestState> cb = null;
+            cb = new Action<EQuestState>(OnQuestEndEvaluateResult);
+#endif
             void OnQuestEndEvaluateResult(EQuestState state)
             {
+                if (runOnce) return;
+                runOnce = true;
+
+                contract.onQuestEnd.RemoveListener(cb);
+
                 Log("[INTERCEPT]    EVALUATE RESULT: " + state);
                 float cartelDealerDist = Vector3.Distance(dealer.CenterPointTransform.position, customer.NPC.CenterPointTransform.position);
                 float playerDist = Vector3.Distance(Player.Local.CenterPointTransform.position, customer.NPC.CenterPointTransform.position);
-                if (cartelDealerDist < playerDist && cartelDealerDist < 5f && state == EQuestState.Completed)
+                if (cartelDealerDist < playerDist && cartelDealerDist < 4f && state == EQuestState.Completed)
                 {
                     Log("[INTERCEPT]    Cartel Succesfully Intercepted Deal");
                     if (changeInfluence)
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.100f);
-                    customer.NPC.RelationData.ChangeRelationship(-0.25f, true);
+                    customer.NPC.RelationData.ChangeRelationship(-0.10f, true);
                 }
-                // Now this one doesnt work in il2cpp for some reason the contract insta fails when cartel dealer is killed, for mono it doesnt fail allows player to complete the deal correctly
-                else if (playerDist < 5f && (dealer.Health.IsDead || dealer.Health.IsKnockedOut) && state == EQuestState.Completed)
-                {
-                    Log("[INTERCEPT]    Player Stopped Cartel Intercept & killed dealer");
-                    if (changeInfluence)
-                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
-                    customer.NPC.RelationData.ChangeRelationship(0.25f, true);
-
-                }
-                else if (playerDist < 5f && state == EQuestState.Completed)
+                else if (playerDist < 4f && state == EQuestState.Completed)
                 {
                     Log("[INTERCEPT]    Player Stopped Cartel Intercept");
+                    NetworkSingleton<LevelManager>.Instance.AddXP(originalXP);
                     if (changeInfluence)
-                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
-                    customer.NPC.RelationData.ChangeRelationship(0.25f, true);
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
+                    customer.NPC.RelationData.ChangeRelationship(0.10f, true);
+                }
+                else if (state == EQuestState.Failed && (dealer.Health.IsDead || dealer.Health.IsKnockedOut))
+                {
+                    coros.Add(MelonCoroutines.Start(AssignContractSoon(customer, contract, originalXP)));
                 }
                 if (contractGuids.Contains(cGuid))
                     contractGuids.Remove(cGuid);
 
-                if (ev2 != null)
-                {
-                    ev2.End();
-                    ev2.StartTime = currentDealSignalStart;
-                    ev2.MaxDuration = currentDealSignalDur;
-                    ev2.HasStarted = false;
-                    ev2.gameObject.SetActive(false);
-                }
-                
                 if (ev1 != null)
                 {
+                    Log("Re-enable event");
                     ev1.enabled = true;
                     ev1.IsActive = true;
                     ev1.StartTime = currentStayInsideStart;
@@ -391,30 +418,12 @@ namespace CartelEnforcer
                 interceptingDeal = false;
                 interceptor = null;
             }
-#if MONO
-            contract.onQuestEnd.AddListener(new UnityEngine.Events.UnityAction<EQuestState>(OnQuestEndEvaluateResult));
-#else
-            contract.onQuestEnd.AddListener(new Action<EQuestState>(OnQuestEndEvaluateResult));
-#endif
 
-            dealer.SetIsAcceptingDeals(true);
+            contract.onQuestEnd.AddListener(cb);
+            if (!dealer.IsAcceptingDeals)
+                dealer.SetIsAcceptingDeals(true);
             dealer.AddContract(contract);
-
-            //List<QuestEntryData> list = new List<QuestEntryData>();
-            //for (int i = 0; i < contract.Entries.Count; i++)
-            //{
-            //    list.Add(contract.Entries[i].GetSaveData());
-            //}
-
-            //ContractInfo data = new ContractInfo(contract.Payment, contract.ProductList, contract.DeliveryLocation.GUID.ToString(), contract.DeliveryWindow, true, contract.Expiry.time, contract.PickupScheduleIndex, false);
-
-            //NetworkSingleton<QuestManager>.Instance.CreateContract_Networked(null, "Intercept Cartel Deal", "1", contract.GUID.ToString(), true, customer.NetworkObject, data, contract.Expiry, contract.AcceptTime, dealer.NetworkObject);
-
-            // But the logic is still missing receiver because it needs to know to overwrite the cartel dealer stay inside event and reset state
-            // how to differentiate contracts?? Maybe PickupSchedule Index can be custom??
-            // The patching needs something custom for the rpc logic create contract networked function
-            // basically create the contract + do these below events
-
+            dealer.SetIsAcceptingDeals(false);
 
             if (ev1 != null)
             {
@@ -425,21 +434,49 @@ namespace CartelEnforcer
                 ev1.HasStarted = false;
                 ev1.enabled = false;
             }
-            if (ev2 != null)
-            {
-                ev2.MaxDuration = 720;
-                ev2.StartTime = 1620;
-                ev2.Started();
-                ev2.HasStarted = true;
-                ev2.gameObject.SetActive(true);
-            }
+            Log("[INTERCEPT] Dealer Check attend start");
             dealer.CheckAttendStart();
             // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
             // The dealer will have the contract too and try to complete it, but this way player can do it too
             if (customer.CurrentContract != null)
+            {
                 if (customer.CurrentContract.Dealer != null)
                     customer.CurrentContract.Dealer = null;
+            }
+            yield return null;
+        }
 
+        public static IEnumerator AssignContractSoon(Customer customer, Contract contract, int XP)
+        {
+            yield return Wait01;
+            if (contract.State != EQuestState.Active)
+                contract.SetQuestState(EQuestState.Active);
+            customer.AssignContract(contract);
+            customer.CurrentContract.CompletionXP = XP;
+            customer.ConfigureDealSignal(null, NetworkSingleton<TimeManager>.Instance.CurrentTime, true);
+            customer.DealSignal.SetContract(contract);
+            customer.DealSignal.IsActive = true;
+            customer.UpdateDealAttendance();
+            customer.SetIsAwaitingDelivery(true);
+            contract.SetIsTracked(true);
+            if (customer.CurrentContract.hudUI == null || customer.CurrentContract.hudUI?.gameObject == null)
+            {
+                customer.CurrentContract.SetupHudUI();
+            }
+
+            if (!Contract.Contracts.Contains(contract))
+                Contract.Contracts.Add(contract);
+            if (contract.DeliveryLocation != null && !contract.DeliveryLocation.ScheduledContracts.Contains(contract))
+                contract.DeliveryLocation.ScheduledContracts.Add(contract);
+            yield return Wait05;
+            yield return Wait01;
+            if (!customer.CurrentContract.hudUI.gameObject.activeSelf)
+                customer.CurrentContract.hudUI.gameObject.SetActive(true);
+
+            customer.HasChanged = true;
+            contract.HasChanged = true;
+            customer.CurrentContract.hudUI.FadeIn();
+            NetworkSingleton<TimeManager>.Instance.onMinutePass += new Action(contract.MinPass); 
             yield return null;
         }
 

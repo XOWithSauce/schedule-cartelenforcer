@@ -1,3 +1,19 @@
+# Version 1.5.5
+- Changed the way which intercept deals event evaluates active player contracts. The new method skips parsing ui elements totally which was a dumb but working method previously. Should have less lag now.
+- Added new calculation logic for intercept deals event where it now should dynamically evaluate both the random contract and cartel dealer who intercepts. This change should make more contracts succesfully accepted for the intercept deals event and targets potentially nearby cartel dealers for that event.
+- Changed the Intercept Deals event to now correctly pertain their contract even after cartel dealer is killed. This change also allowed the original XP to be assigned back to the existing contract. Additionally the event now awards correct amount of XP when completed by player and only 1 xp when completed by cartel dealer. Previously it was 50% of original XP regardless of who completes.
+- Lowered the NPC Relationship Status change in Intercept Deals Event down from 0.25 to 0.10 based on who completed contract. (0.00 - 5.00 range)
+- Changed Cartel Dealers Walking behaviour to only target locations, within their respective regions. This should fix a bug where intercept dealer would walk from across the map and constantly fail intercept deals due to walking for 2 ingame hours.
+- Lowered the default chance values for Cartel Dealers taking Players hired dealers active deals and also players pending offers, down from 20% and 20% to 3% and 3%. This was overlooked because the evaluation runs every ingame hour and each cartel dealer has sequential chance to first take 20% chance for dealer contract, then another 20% if the previous failed, and because this gets calculated for 5 dealers, the overall chance for any given contract to be taken is extremely high every ingame hour. Higher values prevent Intercept Deals from happening due to Cartel Dealers being reserved for these.
+- Adjusted the Gatherings Frequency to be less common overall by roughly 1 ingame hour across any given dealer activity status (how many killed)
+- Increased the Cartel Influence change from defeating a gathering up from 50 to 100
+- Fixed a bug in the Cartel Gatherings when player has negative Cartel Dealer activity status, the Gathering goons would not attack player properly
+- Fixed a bug in the function controlling Dealer Activity timings based on Cartel Dealer killings. Bug caused killing dealers to not decrease their activity as it should have.
+- Set the Cartel Dealer Aggression to be at 1f instead of whatever it is at default. Cartel Dealers occasionally ran away when shot at, and because of movement speed multiplier they are running faster than what was intended this should make them attack back more / always.
+- Fixed some bugs related to default cartel dealer behaviours and intercept deal event being conflicting. This should allow consistently the dealer to have intercept event deals even beyond 04:00 default maximum stay inside time limit.
+- Fixed a bug in Manor end game quest where Ray would not properly reset their schedule after quest was failed
+- For some reason Versioning number has been forgotten to change since 1.5.1 inside the Melon Loader entry, now that is up to date and should show 1.5.5 every time mod loads
+
 # Version 1.5.4
 - Changed the cartel dealers behaviour so that they can roam the map while cartel is in status unknown, friendly or defeated in addition to being hostile, this wont trigger the dealers stealing your or your dealers contracts before cartel turns hostile
 - Changed the code default generated values for the dealer.json config to be the same as in documentation since they were different 

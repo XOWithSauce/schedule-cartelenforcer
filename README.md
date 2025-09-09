@@ -36,7 +36,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
 - **End Game Quests:** 2 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
-- **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed.
+- **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
 - **Enhanced Cartel Dealers:** Cartel dealers are now officially bug fixed in this mod and they will roam the map by default. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
@@ -159,9 +159,9 @@ This is a new type of event where the Cartel actively attempts to intercept one 
     - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
     - A timer of 30 seconds begins before the Cartel dealer starts their intercept.
 - **Outcomes:**
-    - If you complete the deal within the 30 second grace period, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
+    - If you complete the deal within the 30 second grace period, Cartel influence decreases by 50 and your relationship with the customer increases slightly more.
     - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
-    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases to the next tier below.
+    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases slightly.
 
 
 ---
@@ -212,10 +212,15 @@ Cartel Gatherings are a regional task that appear frequently and even during the
 
 You can reveal these gathering locations by bribing certain mini quest NPCs.
 
-Gatherings include a "loot goblin" goon carrying stolen items and money if the cartel has stolen from your dealers. Goons have varied behaviors, including random animations and voice lines, and they occasionally rotate. If player gets nearby they will get annoyed and eventually turn hostile.
+Gatherings include a "loot goblin" goon carrying stolen items and money if the cartel has stolen from your dealers. 
+
+Goons have varied behaviors, including random animations and voice lines, and they occasionally rotate. 
+
+If player gets nearby they will get annoyed and eventually turn hostile.
+If you have killed enough Cartel Dealers, the Gatherings will be hostile on sight at a range depending on the Cartel Dealer Activity value.
 
 - Gathering lasts for 3 hours after which the goons go away
-- Killing a gathering will now decrease regional cartel influence by 50.
+- Killing a gathering will decrease regional cartel influence by 100.
 - If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
 
 ---
@@ -313,8 +318,8 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
   "CartelDealerMoveSpeedMultiplier": 1.65,
   "CartelDealerHP": 200.0,
   "CartelDealerWeapon": "M1911",
-  "StealDealerContractChance": 0.2,
-  "StealPlayerPendingChance": 0.2,
+  "StealDealerContractChance": 0.03,
+  "StealPlayerPendingChance": 0.03,
   "DealerActivityDecreasePerKill": 0.25,
   "DealerActivityIncreasePerDay": 0.15,
   "SafetyThreshold": -0.7,
