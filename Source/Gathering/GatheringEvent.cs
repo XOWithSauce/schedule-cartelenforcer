@@ -164,6 +164,8 @@ namespace CartelEnforcer
                         foreach (GatheringLocation loc in regLocs)
                         {
                             yield return Wait01;
+                            if (!registered) yield break;
+
                             if (previousGatheringLocation != null && loc != previousGatheringLocation && !candidates.Contains(loc))
                             {
                                 // check if it was prev
@@ -198,6 +200,7 @@ namespace CartelEnforcer
                     do
                     {
                         yield return Wait05;
+                        if (!registered) yield break;
 #if MONO
                         NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
                         NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
@@ -304,6 +307,8 @@ namespace CartelEnforcer
         public static IEnumerator EvaluateCurrentGathering(GatheringLocation location)
         {
             yield return Wait2;
+            if (!registered) yield break;
+
             int elapsed = 0;
             int dead = 0;
             int annoyance = 0;
@@ -346,6 +351,8 @@ namespace CartelEnforcer
                             int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                             spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position);
                             yield return Wait05;
+                            if (!registered) yield break;
+
                             if (spawnedGatherGoons[randomIndex].Awareness.VisionCone.IsPlayerVisible(p))
                             {
                                 spawnedGatherGoons[randomIndex].AttackEntity(p.GetComponent<ICombatTargetable>()); // this will trigger all of them
@@ -353,6 +360,8 @@ namespace CartelEnforcer
                             else
                             {
                                 yield return Wait05;
+                                if (!registered) yield break;
+
                                 spawnedGatherGoons[randomIndex].Movement.FacePoint(location.position);
                             }
                         }
@@ -413,6 +422,8 @@ namespace CartelEnforcer
                                     do
                                     {
                                         yield return Wait01;
+                                        if (!registered) yield break;
+
                                         randomLookAtIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                                     } while (randomIndex == randomLookAtIndex);
 
@@ -436,6 +447,8 @@ namespace CartelEnforcer
                                             break;
                                     } // talk
                                     yield return Wait2;
+                                    if (!registered) yield break;
+
                                     elapsed += 2;
 
                                     switch (UnityEngine.Random.Range(0, 3))
@@ -468,12 +481,16 @@ namespace CartelEnforcer
                 }
 
                 yield return Wait2;
+                if (!registered) yield break;
+
                 elapsed += 2;
             }
 
             foreach (CartelGoon goon in spawnedGatherGoons)
             {
                 yield return Wait05;
+                if (!registered) yield break;
+
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                 goon.Behaviour.ScheduleManager.EnableSchedule();
             }
@@ -526,9 +543,13 @@ namespace CartelEnforcer
             }
 
             yield return Wait30;
+            if (!registered) yield break;
+
             foreach (CartelGoon goon in spawnedGatherGoons)
             {
                 yield return Wait05;
+                if (!registered) yield break;
+
                 goon.Health.MaxHealth = 100f;
                 goon.Health.Revive();
                 if (goon.IsGoonSpawned)

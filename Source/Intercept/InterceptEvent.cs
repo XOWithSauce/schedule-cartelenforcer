@@ -250,6 +250,7 @@ namespace CartelEnforcer
                 foreach (CartelDealer otherDealer in allCartelDealers)
                 {
                     yield return Wait01;
+                    if (!registered) yield break;
                     if (otherDealer == selected) continue; // skip the one who is not elgible
                     if (otherDealer.Health.IsDead || otherDealer.Health.IsKnockedOut) continue; // Dead or knocked out not elgible
                     if (otherDealer.ActiveContracts != null && otherDealer.ActiveContracts.Count >= 1) continue;
@@ -449,6 +450,8 @@ namespace CartelEnforcer
         public static IEnumerator AssignContractSoon(Customer customer, Contract contract, int XP)
         {
             yield return Wait01;
+            if (!registered) yield break;
+
             if (contract.State != EQuestState.Active)
                 contract.SetQuestState(EQuestState.Active);
             customer.AssignContract(contract);
@@ -470,6 +473,8 @@ namespace CartelEnforcer
                 contract.DeliveryLocation.ScheduledContracts.Add(contract);
             yield return Wait05;
             yield return Wait01;
+            if (!registered) yield break;
+
             if (!customer.CurrentContract.hudUI.gameObject.activeSelf)
                 customer.CurrentContract.hudUI.gameObject.SetActive(true);
 

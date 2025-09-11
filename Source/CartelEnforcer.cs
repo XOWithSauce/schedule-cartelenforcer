@@ -58,7 +58,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.5";
+        public const string Version = "1.5.6";
         public const string DownloadLink = null;
     }
 
@@ -307,6 +307,8 @@ namespace CartelEnforcer
         public static IEnumerator InitializeAndEvaluateMiniQuest()
         {
             yield return Wait10;
+            if (!registered) yield break;
+
             yield return InitMiniQuest();
             Log("Adding DayPass Function for Mini Quest");
 #if MONO
@@ -321,6 +323,8 @@ namespace CartelEnforcer
         public static IEnumerator InitializeEndGameQuest()
         {
             yield return Wait30;
+            if (!registered) yield break;
+
             RV rv = UnityEngine.Object.FindObjectOfType<RV>();
             Transform target = rv.transform.Find("RV/rv/Small Safe");
             if (target == null)
@@ -352,6 +356,8 @@ namespace CartelEnforcer
                     coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
                 }
                 yield return Wait60;
+                if (!registered) yield break;
+
             }
 
             yield return null;
@@ -398,10 +404,16 @@ namespace CartelEnforcer
                     newGoon.transform.parent = NPCManager.Instance.NPCContainer;
                     NPCManager.NPCRegistry.Add(newGoon);
                     yield return Wait05;
+                    if (!registered) yield break;
+
                     netManager.ServerManager.Spawn(nobNew);
                     yield return Wait05;
+                    if (!registered) yield break;
+
                     newGoon.gameObject.SetActive(true);
                     yield return Wait2;
+                    if (!registered) yield break;
+
                     newGoon.Movement.enabled = true;
                     newGoon.gameObject.SetActive(true);
                     newGoon.Despawn();
@@ -416,6 +428,8 @@ namespace CartelEnforcer
                 if (goon.Health.IsDead || goon.Health.IsKnockedOut)
                     goon.Health.Revive();
                 yield return Wait01;
+                if (!registered) yield break;
+
                 // fix having unassigned values here otherwise they afk on first spawn (maybe not needed after doing the nob instantiate instead of unity engine obj)
                 if (goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_StayInBuilding stayInside)
                 {
@@ -423,6 +437,8 @@ namespace CartelEnforcer
                 }
                 goon.IsGoonSpawned = true;
                 yield return Wait05;
+                if (!registered) yield break;
+
                 goon.Despawn();
                 goon.Despawn_Client();
 

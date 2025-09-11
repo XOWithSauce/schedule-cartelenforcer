@@ -176,6 +176,8 @@ namespace CartelEnforcer
                     yield return upperWait;
                 else
                     yield return Wait30;
+                if (!registered) yield break;
+
                 questGenerated = false;
             }
         }

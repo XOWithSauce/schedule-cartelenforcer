@@ -275,15 +275,25 @@ namespace CartelEnforcer
             controller.npc.PlayVO(EVOLineType.Concerned);
             controller.handler.WorldspaceRend.ShowText("It doesn't matter who I am. We have a bigger issue at our hands.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Acknowledge);
             controller.handler.WorldspaceRend.ShowText("The cartel has been running Hyland Point for too long.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText("We have intel that Thomas' high ranking soldier is nearby that house up the dirt road.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText("This is not your basic goon, they are a Brute. One of the best soldiers he has.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText("Go and take them down. I'll make sure nobody comes snooping around.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
 
             Log("Running callback");
             if (cb != null)
@@ -326,14 +336,22 @@ namespace CartelEnforcer
             List<string> dialog = dialogOptions[UnityEngine.Random.Range(0, dialogOptions.Count)];
             controller.handler.WorldspaceRend.ShowText(dialog[0], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Think);
             controller.handler.WorldspaceRend.ShowText(dialog[1], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText(dialog[2], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Acknowledge);
             controller.handler.WorldspaceRend.ShowText(dialog[3], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
 
             yield return null;
         }
@@ -353,6 +371,8 @@ namespace CartelEnforcer
         public static IEnumerator QuestReward(CartelGoon goon)
         {
             yield return Wait025;
+            if (!registered) yield break;
+
             goon.Inventory.Clear();
 
             Func<string, ItemDefinition> GetItem;
@@ -387,6 +407,8 @@ namespace CartelEnforcer
                 while (enumerator.MoveNext())
                 {
                     yield return Wait025;
+                    if (!registered) yield break;
+
                     if (enumerator.Current.NPC.RelationData.RelationDelta != 5.0f)
                         enumerator.Current.NPC.RelationData.ChangeRelationship(0.25f, true);
                 }
@@ -395,6 +417,8 @@ namespace CartelEnforcer
             for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
             {
                 yield return Wait025;
+                if (!registered) yield break;
+
                 if (Customer.UnlockedCustomers[i].NPC.RelationData.RelationDelta != 5.0f)
                     Customer.UnlockedCustomers[i].NPC.RelationData.ChangeRelationship(0.25f, true);
             }
@@ -406,6 +430,8 @@ namespace CartelEnforcer
                 {
                     if (unlmapReg == EMapRegion.Northtown) continue;
                     yield return Wait5; // play animation
+                    if (!registered) yield break;
+
                     float current = NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(unlmapReg).Influence;
                     if (current > 0.0f)
                     {
@@ -418,6 +444,8 @@ namespace CartelEnforcer
             }
 
             yield return Wait60;
+            if (!registered) yield break;
+
             if (bossGoon.IsGoonSpawned)
             {
                 // Reset all non default stats that would carry on modified
@@ -563,14 +591,22 @@ namespace CartelEnforcer
             controller.npc.PlayVO(EVOLineType.Acknowledge);
             controller.handler.WorldspaceRend.ShowText(dialog[0], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Concerned);
             controller.handler.WorldspaceRend.ShowText(dialog[1], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText(dialog[2], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Surprised);
             controller.handler.WorldspaceRend.ShowText(dialog[3], lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
 
             yield return null;
         }
@@ -627,6 +663,8 @@ namespace CartelEnforcer
             Log("[END GAME QUEST]    Disposed Choice");
 
             yield return Wait30;
+            if (!registered) yield break;
+
             coros.Add(MelonCoroutines.Start(ResetRayAFK()));
             yield return null;
         }
@@ -660,16 +698,26 @@ namespace CartelEnforcer
             controller.npc.PlayVO(EVOLineType.No);
             controller.handler.WorldspaceRend.ShowText("I don't think so. The whole place is fenced off.", lerpWait);
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Think);
             controller.handler.WorldspaceRend.ShowText("If you manage to make it over the fence, there is a way for me to get you inside.", lerpWaitLong);
             yield return waitObjLong;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText("Here, take my master key. It's from back when the Manor was built.", lerpWait + 2f);
             yield return Wait2;
+            if (!registered) yield break;
+
             controller.npc.PlayVO(EVOLineType.Acknowledge);
             controller.npc.SetAnimationTrigger("GrabItem");
             yield return waitObj;
+            if (!registered) yield break;
+
             controller.handler.WorldspaceRend.ShowText("It won't work on the main entrance, but try the back door.", 5f);
             yield return waitObj;
+            if (!registered) yield break;
+
 
             if (cb != null)
                 cb();
@@ -679,16 +727,21 @@ namespace CartelEnforcer
         public static IEnumerator QuestManorReward()
         {
             yield return Wait025;
+            if (!registered) yield break;
 
             for (int i = 0; i < Business.Businesses.Count; i++)
             {
                 yield return Wait025;
+                if (!registered) yield break;
+
                 Business.Businesses[i].Price = Business.Businesses[i].Price * 0.85f;
             }
 
             for (int i = 0; i < Property.Properties.Count; i++)
             {
                 yield return Wait025;
+                if (!registered) yield break;
+
                 Property.Properties[i].Price = Property.Properties[i].Price * 0.85f;
             }
 
@@ -699,6 +752,8 @@ namespace CartelEnforcer
                 {
                     if (unlmapReg == EMapRegion.Northtown) continue;
                     yield return Wait5; // play animation
+                    if (!registered) yield break;
+
                     float current = NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(unlmapReg).Influence;
                     if (current > 0.0f)
                     {
@@ -1051,8 +1106,12 @@ namespace CartelEnforcer
             myNpc.transform.parent = NPCManager.Instance.NPCContainer;
             NPCManager.NPCRegistry.Add(myNpc);
             yield return Wait05;
+            if (!registered) yield break;
+
             netManager.ServerManager.Spawn(copNet);
             yield return Wait05;
+            if (!registered) yield break;
+
             copNet.gameObject.SetActive(true);
             myNpc.Health.Invincible = true;
             myNpc.Behaviour.CombatBehaviour.Disable_Networked(null);
@@ -1158,13 +1217,18 @@ namespace CartelEnforcer
             offc.ChatterEnabled = false;
             offc.Movement.Agent.enabled = true;
             yield return Wait2;
+            if (!registered) yield break;
+
             Log("Reset Pos");
+
             // because for some reason the cop just tps back to station and sets invis in building
             offc.Movement.Agent.enabled = true;
             offc.Avatar.gameObject.SetActive(true);
             offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
             offc.Movement.WarpToNavMesh();
             yield return Wait01;
+            if (!registered) yield break;
+
             offc.Movement.Stop();
             offc.Movement.Agent.enabled = false;
             offc.Movement.enabled = false;
@@ -1212,10 +1276,14 @@ namespace CartelEnforcer
             bossGoon = _bossGoon;
             bossGoon.Health.Revive();
             yield return Wait05;
+            if (!registered) yield break;
+
             _bossGoon.Behaviour.ScheduleManager.DisableSchedule();
             // because for some reason the avatar goes off and same with nav
 
             yield return Wait05;
+            if (!registered) yield break;
+
             if (_bossGoon.isInBuilding)
             {
                 Log("Exit Building!!");
@@ -1226,6 +1294,8 @@ namespace CartelEnforcer
 
             
             yield return Wait05;
+            if (!registered) yield break;
+
             #region Movement and Health
             _bossGoon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(620f, 1260f, questDifficultyScalar - 1f) / 10f) * 10f;
             _bossGoon.Health.Health = Mathf.Round(Mathf.Lerp(620f, 1260f, questDifficultyScalar - 1f) / 10f) * 10f;
@@ -1234,6 +1304,8 @@ namespace CartelEnforcer
             #endregion
             Log("Setup Boss Move & Health");
             yield return Wait05;
+            if (!registered) yield break;
+
             coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
 
             #region Avatar
@@ -1295,6 +1367,8 @@ namespace CartelEnforcer
                 _bossGoon.Health.Revive();
             }
             yield return Wait05;
+            if (!registered) yield break;
+
             if (!_bossGoon.Avatar.gameObject.activeSelf) _bossGoon.Avatar.gameObject.SetActive(true);
             if (_bossGoon.Movement.Agent != null && _bossGoon.Movement.Agent.enabled == false) _bossGoon.Movement.Agent.enabled = true;
 
@@ -1332,6 +1406,8 @@ namespace CartelEnforcer
             #region Cracked Shotgun
             bossGoon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
             yield return Wait05;
+            if (!registered) yield break;
+
             if (bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
             {
 
@@ -1424,6 +1500,8 @@ namespace CartelEnforcer
                     }
                     Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
                     yield return Wait01;
+                    if (!registered) yield break;
+
                     bossGoon.Movement.ResumeMovement();
 
                     if (bossGoon.Behaviour.CombatBehaviour.Target == null)
@@ -1431,6 +1509,8 @@ namespace CartelEnforcer
                     if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
                         bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
                     yield return Wait01;
+                    if (!registered) yield break;
+
                     coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
                 }
                 yield return Wait05;
@@ -1440,6 +1520,7 @@ namespace CartelEnforcer
                 {
                     for (int i = 0; i < 6; i++)
                     {
+                        
                         yield return Wait05;
                         if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
 
@@ -2084,9 +2165,13 @@ namespace CartelEnforcer
                     continue;
                 }
                 yield return Wait05;
+                if (!registered) yield break;
+
                 foreach (OptimizedLight optimizedLight in lightOptimizer.lights)
                 {
                     yield return Wait05;
+                    if (!registered) yield break;
+
                     Log("LightOpt Swapping");
                     optimizedLight.Enabled = false;
                     optimizedLight.enabled = false;
@@ -2104,15 +2189,21 @@ namespace CartelEnforcer
             spawnedSafe.transform.position = lootSafeSpawns[index].spawnSpot;
             spawnedSafe.transform.rotation = Quaternion.Euler(lootSafeSpawns[index].eulerAngles);
             yield return Wait2;
+            if (!registered) yield break;
+
             if (!spawnedSafe.activeSelf)
                 spawnedSafe.SetActive(true);
             yield return Wait2;
+            if (!registered) yield break;
+
             spawnedSafe.SetActive(true);
 
             Safe safeComp = spawnedSafe.GetComponent<Safe>();
             StorageDoorAnimation doorAnim = spawnedSafe.GetComponent<StorageDoorAnimation>();
             doorAnim.Open();
             yield return Wait05;
+            if (!registered) yield break;
+
             doorAnim.Close();
 
             void SecondaryTrigger()
@@ -2228,6 +2319,8 @@ namespace CartelEnforcer
         private IEnumerator CleanupManor()
         {
             yield return Wait60;
+            if (!registered) yield break;
+
             Manor manor = UnityEngine.Object.FindObjectOfType<Manor>(true);
             Transform doorsTr = manor.transform.Find("Doors");
             if (doorsTr != null)
@@ -2265,9 +2358,13 @@ namespace CartelEnforcer
             {
                 LightOptimizer lightOptimizer = room.gameObject.GetComponent<LightOptimizer>();
                 yield return Wait05;
+                if (!registered) yield break;
+
                 foreach (OptimizedLight optimizedLight in lightOptimizer.lights)
                 {
                     yield return Wait05;
+                    if (!registered) yield break;
+
                     optimizedLight.Enabled = true;
                     optimizedLight.enabled = true;
                     if (optimizedLight._LightExists)
@@ -2280,6 +2377,8 @@ namespace CartelEnforcer
             foreach (CartelGoon goon in manorGoons)
             {
                 yield return Wait05;
+                if (!registered) yield break;
+
                 goon.Movement.MoveSpeedMultiplier = 1f;
                 goon.Health.MaxHealth = 100f;
                 goon.Health.Health = 100f;

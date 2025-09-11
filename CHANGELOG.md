@@ -9,6 +9,7 @@
 - Fixed a potential bug in loading the cartel stolen items
 - Fixed a bug in the Cartel Dealer config where DealerActivityIncreasePerDay value was incorrectly set to the DealerActivityDecreasePerKill value
 - Fixed a bug in the Cartel Dealer config where the StealDealerContractChance value was incorrectly set to the StealPlayerContractChance value
+- Added some coroutine safety checks to prevent mod from throwing errors in various scenarios when exiting to menu or reloading save
 
 # Version 1.5.5
 - Changed the way which intercept deals event evaluates active player contracts. The new method skips parsing ui elements totally which was a dumb but working method previously. Should have less lag now.

@@ -316,18 +316,24 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile || driveByActive)
                 {
                     yield return Wait60;
+                    if (!registered) yield break;
+
                     continue;
                 }
 #else
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || driveByActive)
                 {
                     yield return Wait60;
+                    if (!registered) yield break;
+
                     continue;
                 }
 #endif
                 if (driveByActive)
                 {
                     yield return Wait60;
+                    if (!registered) yield break;
+
                     elapsedSec += 60f;
                     continue;
                 }
@@ -358,6 +364,8 @@ namespace CartelEnforcer
                 else
                 {
                     yield return Wait30;
+                    if (!registered) yield break;
+
                     elapsedSec += 30f;
                 }
 

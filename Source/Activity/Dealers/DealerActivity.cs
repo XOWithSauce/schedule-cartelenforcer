@@ -105,6 +105,7 @@ namespace CartelEnforcer
             while (registered)
             {
                 yield return Wait60;
+                if (!registered) yield break;
                 // from 4pm to 4am only
                 if (!(TimeManager.Instance.CurrentTime >= 1620 || TimeManager.Instance.CurrentTime <= 359))
                     continue;
@@ -207,6 +208,8 @@ namespace CartelEnforcer
                     {
                         Log("[DEALER ACTIVITY] Apply Event state:");
                         yield return Wait05;
+                        if (!registered) yield break;
+
                         ApplyNewEventState(
                             d,
                             currentStayInsideStart,
@@ -231,6 +234,8 @@ namespace CartelEnforcer
                         foreach (CartelDealer d in DealerActivity.allCartelDealers)
                         {
                             yield return Wait05;
+                            if (!registered) yield break;
+
                             ApplyNewEventState(d, 0, 2359, 1440);
                             d.SetIsAcceptingDeals(false);
                         }
@@ -244,12 +249,16 @@ namespace CartelEnforcer
                     foreach (CartelDealer d in allCartelDealers)
                     {
                         yield return Wait2;
+                        if (!registered) yield break;
+
                         if (!d.isInBuilding && !d.Movement.hasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
                         {
                             WalkToInterestPoint(d);
                         }
                     }
                     yield return Wait60;
+                    if (!registered) yield break;
+
                     continue;
                 }
 
@@ -452,6 +461,8 @@ namespace CartelEnforcer
             foreach (Dealer playerDealer in allDealers)
             {
                 yield return Wait01;
+                if (!registered) yield break;
+
                 if (playerDealer.ActiveContracts.Count == 0)
                 {
                     continue;
@@ -469,6 +480,8 @@ namespace CartelEnforcer
             {
                 //Log("Add Customer");
                 yield return Wait01;
+                if (!registered) yield break;
+
                 cList.Add(Customer.UnlockedCustomers[i]);
             }
 
@@ -477,6 +490,8 @@ namespace CartelEnforcer
             do
             {
                 yield return Wait01;
+                if (!registered) yield break;
+
                 Customer c = cList[UnityEngine.Random.Range(0, cList.Count)];
                 if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null)
                 {
@@ -489,6 +504,8 @@ namespace CartelEnforcer
             foreach (CartelDealer d in DealerActivity.allCartelDealers)
             {
                 yield return Wait2; // Short sleep to allow signals to assign contract per dealer
+                if (!registered) yield break;
+
                 if (!(TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart))
                     break;
                 if (interceptor != null && interceptor == d) continue;
@@ -536,6 +553,8 @@ namespace CartelEnforcer
 
                             c.ExpireOffer();
                             yield return Wait01;
+                            if (!registered) yield break;
+
                             c.offeredContractInfo = contractInfo;
 
                             Log("[DEALER ACTIVITY]   Taking pending offer to dealer");

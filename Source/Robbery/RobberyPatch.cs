@@ -367,9 +367,13 @@ namespace CartelEnforcer
                 }
 #endif
                 yield return Wait05; // wait ragdoll
+                if (!registered) yield break;
+
                 goon.Movement.FacePoint(dealer.CenterPointTransform.position, lerpTime: 0.3f);
                 goon.Movement.SetDestination(dealer.CenterPoint);
                 yield return Wait05; // wait ragdoll
+                if (!registered) yield break;
+
                 Log($"[TRY ROB] Curr Destination: {goon.Movement.CurrentDestination}");
                 Log($"[TRY ROB] Dealer Destination: {dealer.CenterPoint}");
                 float distanceToBody = 10f;
@@ -379,6 +383,8 @@ namespace CartelEnforcer
                 {
                     n++;
                     yield return Wait05; // wait traverse
+                    if (!registered) yield break;
+
                     distanceToBody = Vector3.Distance(goon.CenterPoint, dealer.CenterPoint);
                     Log($"[TRY ROB]    TRAVERSE DIST: {distanceToBody}");
                 }
@@ -400,6 +406,8 @@ namespace CartelEnforcer
                 {
                     if (takenSlots >= availableSlots) break; // No more space in goon inventory
                     yield return Wait025;
+                    if (!registered) yield break;
+
                     if (dealer.Inventory.ItemSlots[i].ItemInstance != null)
                     {
                         takenSlots++;
@@ -415,6 +423,7 @@ namespace CartelEnforcer
 
                 goon.SetAnimationTrigger("GrabItem");
                 yield return Wait05;
+                if (!registered) yield break;
 
                 if (takenSlots < availableSlots)
                 {
@@ -430,6 +439,8 @@ namespace CartelEnforcer
                     for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
                     {
                         yield return Wait025;
+                        if (!registered) yield break;
+
                         if (goon.Inventory.ItemSlots[i].ItemInstance == null)
                         {
                             Log($"[TRY ROB]    Inserting Cash to Slot {i}");
