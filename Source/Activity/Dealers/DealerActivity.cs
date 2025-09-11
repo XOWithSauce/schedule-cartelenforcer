@@ -118,42 +118,7 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     isHostile = false;
 #endif
-                if (!isHostile)
-                {
-                    // Sleep longer and just trigger the walking, state will continue after extra minute or they go back inside
-                    foreach (CartelDealer d in allCartelDealers)
-                    {
-                        yield return Wait2;
-                        if (!d.isInBuilding && !d.Movement.hasDestination)
-                        {
-                            // and is outside meaning just afk standing
-                            WalkToInterestPoint(d);
-                        }
-                    }
-                    yield return Wait60;
-                    continue;
-                }
-
-                // Calculate current
-
-                // Check safety first, if safety enabled set Stay Inside event to last for entire day if requirement met
-                bool safetyThresholdMet = false;
-                if (dealerConfig.SafetyEnabled)
-                {
-                    if (currentDealerActivity <= dealerConfig.SafetyThreshold)
-                    {
-                        safetyThresholdMet = true;
-                        // Current dealer activity indicates that alot of dealers have died
-                        // Since safety is enabled we must modify the StayInside event time frame
-                        foreach (CartelDealer d in DealerActivity.allCartelDealers)
-                        {
-                            yield return Wait05;
-                            ApplyNewEventState(d, 0, 2359, 1440);
-                            d.SetIsAcceptingDeals(false);
-                        }
-                    }
-                }
-                if (safetyThresholdMet) continue;
+                
 
                 // Calculate new action start and end times only if the activity has changed
                 if (currentDealerActivity != previousDealerActivity)
@@ -252,6 +217,41 @@ namespace CartelEnforcer
                 }
 
                 previousDealerActivity = currentDealerActivity;
+
+                
+                // Check safety first, if safety enabled set Stay Inside event to last for entire day if requirement met
+                bool safetyThresholdMet = false;
+                if (dealerConfig.SafetyEnabled)
+                {
+                    if (currentDealerActivity <= dealerConfig.SafetyThreshold)
+                    {
+                        safetyThresholdMet = true;
+                        // Current dealer activity indicates that alot of dealers have died
+                        // Since safety is enabled we must modify the StayInside event time frame
+                        foreach (CartelDealer d in DealerActivity.allCartelDealers)
+                        {
+                            yield return Wait05;
+                            ApplyNewEventState(d, 0, 2359, 1440);
+                            d.SetIsAcceptingDeals(false);
+                        }
+                    }
+                }
+                if (safetyThresholdMet) continue;
+
+                if (!isHostile)
+                {
+                    // Sleep longer and just trigger the walking, state will continue after extra minute or they go back inside
+                    foreach (CartelDealer d in allCartelDealers)
+                    {
+                        yield return Wait2;
+                        if (!d.isInBuilding && !d.Movement.hasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
+                        {
+                            WalkToInterestPoint(d);
+                        }
+                    }
+                    yield return Wait60;
+                    continue;
+                }
 
                 // Now that new ones are applied we can check if the signal should be toggled
                 if (TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart)
@@ -370,7 +370,7 @@ namespace CartelEnforcer
                                 dealer.SetIsAcceptingDeals(true);
                             WalkToInterestPoint(dealer);
                         }
-                        else if (TimeManager.Instance.CurrentTime > 359)
+                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 402)
                         {
                             if (dealer.ActiveContracts.Count > 0)
                             {
@@ -397,7 +397,7 @@ namespace CartelEnforcer
                                 WalkToInterestPoint(dealer);
                             }
                         }
-                        else if (TimeManager.Instance.CurrentTime > 359)
+                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 402)
                         {
                             if (dealer.ActiveContracts.Count > 0)
                             {
@@ -446,14 +446,12 @@ namespace CartelEnforcer
 
         public static IEnumerator StartActiveSignal()
         {
-            bool isHostile = (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile);
-            List<string> guidAssignedContracts = new();
-            // Store valid contracts
+            // Store valid contracts from dealers
             List<Contract> validContracts = new();
             Contract contract = null;
             foreach (Dealer playerDealer in allDealers)
             {
-                yield return Wait05;
+                yield return Wait01;
                 if (playerDealer.ActiveContracts.Count == 0)
                 {
                     continue;
@@ -464,18 +462,44 @@ namespace CartelEnforcer
                     validContracts.Add(contract);
             }
             contract = null;
+            
+            // Store valid contracts from customers
+            List<Customer> cList = new();
+            for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
+            {
+                //Log("Add Customer");
+                yield return Wait01;
+                cList.Add(Customer.UnlockedCustomers[i]);
+            }
+
+            List<Customer> validCustomers = new();
+            //Log("Parse customers");
+            do
+            {
+                yield return Wait01;
+                Customer c = cList[UnityEngine.Random.Range(0, cList.Count)];
+                if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null)
+                {
+                    validCustomers.Add(c);
+                }
+                cList.Remove(c);
+            } while (cList.Count > 0);
+
 
             foreach (CartelDealer d in DealerActivity.allCartelDealers)
             {
-                yield return Wait5; // Short sleep to allow signals to assign contract per dealer
+                yield return Wait2; // Short sleep to allow signals to assign contract per dealer
+                if (!(TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart))
+                    break;
                 if (interceptor != null && interceptor == d) continue;
                 if (d.Health.IsDead || d.Health.IsKnockedOut) continue;
                 if (d.ActiveContracts.Count == 0)
                 {
                     bool actionTaken = false;
+                    
 
                     // Pick player dealers active contract
-                    if (validContracts.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance && isHostile)
+                    if (validContracts.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance)
                     {
                         Log("[DEALER ACTIVITY] Checking PlayerDealer active deal");
 
@@ -485,63 +509,48 @@ namespace CartelEnforcer
                             // This one is hard because this contract now awards xp to player even when cartel completes it
                             // We dont really want to fail the original contract either to have the player dealer compete against cartel dealer
                             actionTaken = true;
-                            guidAssignedContracts.Add(contract.GUID.ToString());
                             contract.CompletionXP = 1;
                             contract.completedContractsIncremented = false;
                             d.AddContract(contract);
                             d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-                            validContracts.Remove(contract);
                         }
+                        validContracts.Remove(contract);
+
                     }
                     // Pick customer with null dealer, no active deal and a pending offer
-                    else if (UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealPlayerPendingChance && isHostile)
+                    else if (validCustomers.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealPlayerPendingChance)
                     {
-                        Log("Search for pending");
-                        List<Customer> cList = new();
-                        for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
+                        Customer c = validCustomers[UnityEngine.Random.Range(0, validCustomers.Count)];
+                        if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null) // because of delay we have to verify again a bit redundant but needed
                         {
-                            //Log("Add Customer");
+                            ContractInfo contractInfo = new();
+                            contractInfo.DeliveryLocation = c.offeredContractInfo.DeliveryLocation;
+                            contractInfo.DeliveryLocationGUID = c.offeredContractInfo.DeliveryLocationGUID;
+                            contractInfo.Payment = c.offeredContractInfo.Payment;
+                            contractInfo.Expires = c.offeredContractInfo.Expires;
+                            contractInfo.DeliveryWindow = c.offeredContractInfo.DeliveryWindow;
+                            contractInfo.PickupScheduleIndex = c.offeredContractInfo.PickupScheduleIndex;
+                            contractInfo.ExpiresAfter = c.offeredContractInfo.ExpiresAfter;
+                            contractInfo.IsCounterOffer = c.offeredContractInfo.IsCounterOffer;
+                            contractInfo.Products = c.offeredContractInfo.Products;
+
+                            c.ExpireOffer();
                             yield return Wait01;
-                            cList.Add(Customer.UnlockedCustomers[i]);
-                        }
-                        //Log("Parse customers");
-                        do
-                        {
-                            yield return Wait01;
-                            Customer c = cList[UnityEngine.Random.Range(0, cList.Count)];
-                            if (c.CurrentContract == null && c.AssignedDealer == null && c.offeredContractInfo != null)
+                            c.offeredContractInfo = contractInfo;
+
+                            Log("[DEALER ACTIVITY]   Taking pending offer to dealer");
+                            EDealWindow window = d.GetDealWindow();
+                            contract = c.ContractAccepted(window, false, d);
+                            if (contract != null)
                             {
-                                ContractInfo contractInfo = new();
-                                contractInfo.DeliveryLocation = c.offeredContractInfo.DeliveryLocation;
-                                contractInfo.DeliveryLocationGUID = c.offeredContractInfo.DeliveryLocationGUID;
-                                contractInfo.Payment = c.offeredContractInfo.Payment;
-                                contractInfo.Expires = c.offeredContractInfo.Expires;
-                                contractInfo.DeliveryWindow = c.offeredContractInfo.DeliveryWindow;
-                                contractInfo.PickupScheduleIndex = c.offeredContractInfo.PickupScheduleIndex;
-                                contractInfo.ExpiresAfter = c.offeredContractInfo.ExpiresAfter;
-                                contractInfo.IsCounterOffer = c.offeredContractInfo.IsCounterOffer;
-                                contractInfo.Products = c.offeredContractInfo.Products;
-
-                                c.ExpireOffer();
-                                yield return Wait01;
-                                c.offeredContractInfo = contractInfo;
-
-                                Log("[DEALER ACTIVITY]   Taking pending offer to dealer");
-                                EDealWindow window = d.GetDealWindow();
-                                contract = c.ContractAccepted(window, false, d);
-                                if (contract != null)
-                                {
-                                    contract.CompletionXP = 1;
-                                    contract.completedContractsIncremented = false;
-                                    d.AddContract(contract);
-                                    d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-                                    actionTaken = true;
-                                }
-                                break; // out of do While
+                                contract.CompletionXP = 1;
+                                contract.completedContractsIncremented = false;
+                                d.AddContract(contract);
+                                d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                                actionTaken = true;
                             }
-                            else
-                                cList.Remove(c);
-                        } while (cList.Count > 0);
+                        }
+                        validCustomers.Remove(c);
                     }
 
                     // For when no valid contracts were found for this cartel dealer
@@ -551,7 +560,6 @@ namespace CartelEnforcer
                         // Has no contract but is in time window, and random roll didnt award the contract
                         if (!d.isInBuilding && !d.Movement.hasDestination)
                         {
-                            Log("[DEALER ACTIVITY] Not in building no destination");
                             // and is outside meaning just afk standing
                             WalkToInterestPoint(d);
                         }
@@ -564,7 +572,12 @@ namespace CartelEnforcer
                         d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                     continue;
                 }
+
             }
+
+            cList.Clear();
+            validCustomers.Clear();
+            validContracts.Clear();
 
             yield return null;
         }
@@ -574,13 +587,11 @@ namespace CartelEnforcer
             if (!dealerConfig.FreeTimeWalking) return;
             if (interceptingDeal && interceptor != null && interceptor == d) return;
             if (d.ActiveContracts.Count > 0) return;
-            Log("[DEALER ACTIVITY] Cartel dealer walking to Interest point");
+            if (d.Health.IsDead || d.Health.IsKnockedOut) return;
+            if (!(TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart)) return;
             MapRegionData mapRegionData = Singleton<Map>.instance.Regions[(int)d.Region];
-            Log("[DEALER ACTIVITY] Got region data");
             DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
-            Log("[DEALER ACTIVITY] Got Walk Destination");
             d.Movement.SetDestination(walkDest.CustomerStandPoint.position);
-            Log("[DEALER ACTIVITY] Set Destination");
             if (!d.IsAcceptingDeals)
                 d.SetIsAcceptingDeals(true);
         }

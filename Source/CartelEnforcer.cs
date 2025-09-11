@@ -174,6 +174,16 @@ namespace CartelEnforcer
                         }
                     }
 
+                    // Left CTRL + I Test bugfix
+                    else if (Input.GetKey(KeyCode.I))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            MelonCoroutines.Start(OnInputTestDealerInv());
+                        }
+                    }
+
                     // Left CTRL + P Gathering Spawn
                     else if (Input.GetKey(KeyCode.P))
                     {

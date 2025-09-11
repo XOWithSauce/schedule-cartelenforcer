@@ -83,9 +83,9 @@ namespace CartelEnforcer
         [HarmonyPrefix]
         public static bool Prefix(Dealer __instance, Contract contract)
         {
-            //Log($"{__instance.DealerType == EDealerType.CartelDealer}");
             if (__instance.DealerType == EDealerType.CartelDealer)
             {
+                Log("Cartel Dealer Bug Fix Working");
                 if (!__instance.ActiveContracts.Contains(contract))
                 {
                     return false;

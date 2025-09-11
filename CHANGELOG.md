@@ -1,3 +1,15 @@
+# Version 1.5.6
+- Simplified the way which Cartel Dealers get assigned with players pending deals to reduce lag.
+- Fixed a bug where the Cartel Dealers would get assigned contracts even after bedtime when they are supposed to head back inside
+- Fixed a bug where the Cartel Dealers would not update their activity status while cartel is other than hostile
+- Fixed a bug where the Cartel Dealers would not trigger Safety if activity is low enough and safety is enabled, when cartel is other than hostile
+- Fixed a bug where after stay inside ends or the deal signal ends, the cartel dealer could inproperly fail contracts when not intended
+- Fixed a bug where the code would try to make dead or knocked out cartel dealers walk to locations in their free time
+- Fixed a bug where the code would try to make cartel dealers walk to locations outside of their dynamic time range
+- Fixed a potential bug in loading the cartel stolen items
+- Fixed a bug in the Cartel Dealer config where DealerActivityIncreasePerDay value was incorrectly set to the DealerActivityDecreasePerKill value
+- Fixed a bug in the Cartel Dealer config where the StealDealerContractChance value was incorrectly set to the StealPlayerContractChance value
+
 # Version 1.5.5
 - Changed the way which intercept deals event evaluates active player contracts. The new method skips parsing ui elements totally which was a dumb but working method previously. Should have less lag now.
 - Added new calculation logic for intercept deals event where it now should dynamically evaluate both the random contract and cartel dealer who intercepts. This change should make more contracts succesfully accepted for the intercept deals event and targets potentially nearby cartel dealers for that event.

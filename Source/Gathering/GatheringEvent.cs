@@ -10,8 +10,6 @@ using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.DealerActivity;
 
-using static UnityEngine.InputSystem.Controls.AxisControl;
-
 
 
 #if MONO
@@ -437,7 +435,9 @@ namespace CartelEnforcer
                                             spawnedGatherGoons[randomIndex].PlayVO(EVOLineType.Question, true);
                                             break;
                                     } // talk
-                                    yield return Wait05;
+                                    yield return Wait2;
+                                    elapsed += 2;
+
                                     switch (UnityEngine.Random.Range(0, 3))
                                     {
                                         case 0:

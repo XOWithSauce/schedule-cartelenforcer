@@ -279,7 +279,7 @@ namespace CartelEnforcer
 
         public static List<QualityItemInstance> LoadStolenItems()
         {
-            StolenItemsList stolenItems;
+            StolenItemsList stolenItems = new();
             string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
             string fileName = SanitizeAndFormatName(orgName);
             if (File.Exists(Path.Combine(pathCartelStolen, fileName)))
@@ -432,7 +432,7 @@ namespace CartelEnforcer
         #region Cartel Dealer config
         public static CartelDealerConfig LoadDealerConfig()
         {
-            CartelDealerConfig config;
+            CartelDealerConfig config = new();
             if (File.Exists(pathDealerConfig))
             {
                 try
@@ -441,12 +441,11 @@ namespace CartelEnforcer
                     config = JsonConvert.DeserializeObject<CartelDealerConfig>(json);
                     config.SafetyThreshold = Mathf.Clamp(config.SafetyThreshold, -1.0f, 1.0f); // Ensure limits
                     config.DealerActivityIncreasePerDay = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.0f, 1f); // Ensure limits
-                    config.DealerActivityDecreasePerKill = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.0f, 1f); // Ensure limits
+                    config.DealerActivityDecreasePerKill = Mathf.Clamp(config.DealerActivityDecreasePerKill, 0.0f, 1f); // Ensure limits
                     config.CartelDealerMoveSpeedMultiplier = Mathf.Clamp(config.CartelDealerMoveSpeedMultiplier, 0.1f, 3f);
                     config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10f, 2000f);
                     config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
-                    config.StealPlayerPendingChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
-
+                    config.StealPlayerPendingChance = Mathf.Clamp(config.StealPlayerPendingChance, 0f, 1f);
                 }
                 catch (Exception ex)
                 {

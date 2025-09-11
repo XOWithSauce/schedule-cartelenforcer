@@ -73,6 +73,23 @@ namespace CartelEnforcer
                 MelonLogger.Msg(msg);
         }
 
+
+        public static IEnumerator OnInputTestDealerInv()
+        {
+            Log("Testing Cartel Dealer Bug fix");
+
+            CartelDealer[] arr = UnityEngine.Object.FindObjectsOfType<CartelDealer>();
+            foreach (CartelDealer d in arr)
+            {
+                d.Inventory.Clear();
+            }
+            
+
+            yield return Wait2;
+            debounce = false;
+            yield return null;
+        }
+
         public static IEnumerator OnInputGenerateManorQuest()
         {
             Log("Generating Manor Quest");
