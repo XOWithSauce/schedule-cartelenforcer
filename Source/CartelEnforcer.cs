@@ -61,7 +61,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.7";
+        public const string Version = "1.5.8";
         public const string DownloadLink = null;
     }
 

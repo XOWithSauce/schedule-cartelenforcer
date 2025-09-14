@@ -473,25 +473,25 @@ namespace CartelEnforcer
                     string json = File.ReadAllText(pathInfluenceConfig);
                     config = JsonConvert.DeserializeObject<InfluenceConfig>(json);
 
-                    config.interceptFail = ClampInfluence(config.interceptFail);
-                    config.interceptSuccess = ClampInfluence(config.interceptSuccess);
+                    config.interceptFail = ClampInfluence(config.interceptFail, true);
+                    config.interceptSuccess = ClampInfluence(config.interceptSuccess, false);
 
-                    config.deadDropFail = ClampInfluence(config.deadDropFail);
-                    config.deadDropSuccess = ClampInfluence(config.deadDropSuccess);
+                    config.deadDropFail = ClampInfluence(config.deadDropFail, true);
+                    config.deadDropSuccess = ClampInfluence(config.deadDropSuccess, false);
 
-                    config.gatheringFail = ClampInfluence(config.gatheringFail);
-                    config.gatheringSuccess = ClampInfluence(config.gatheringSuccess);
+                    config.gatheringFail = ClampInfluence(config.gatheringFail, true);
+                    config.gatheringSuccess = ClampInfluence(config.gatheringSuccess, false);
 
-                    config.robberyPlayerEscape = ClampInfluence(config.robberyPlayerEscape);
-                    config.robberyGoonEscapeSuccess = ClampInfluence(config.robberyGoonEscapeSuccess);
-                    config.robberyGoonDead = ClampInfluence(config.robberyGoonDead);
-                    config.robberyGoonEscapeDead = ClampInfluence(config.robberyGoonEscapeDead);
+                    config.robberyPlayerEscape = ClampInfluence(config.robberyPlayerEscape, true);
+                    config.robberyGoonEscapeSuccess = ClampInfluence(config.robberyGoonEscapeSuccess, true);
+                    config.robberyGoonDead = ClampInfluence(config.robberyGoonDead, false);
+                    config.robberyGoonEscapeDead = ClampInfluence(config.robberyGoonEscapeDead, false);
 
-                    config.cartelDealerDied = ClampInfluence(config.cartelDealerDied);
+                    config.cartelDealerDied = ClampInfluence(config.cartelDealerDied, false);
 
-                    config.ambushDefeated = ClampInfluence(config.ambushDefeated);
+                    config.ambushDefeated = ClampInfluence(config.ambushDefeated, false);
 
-                    config.passiveInfluenceGainPerDay = ClampInfluence(config.passiveInfluenceGainPerDay);
+                    config.passiveInfluenceGainPerDay = ClampInfluence(config.passiveInfluenceGainPerDay, true);
                 }
                 catch (Exception ex)
                 {
@@ -506,9 +506,9 @@ namespace CartelEnforcer
             return config;
         }
 
-        private static float ClampInfluence(float value)
+        private static float ClampInfluence(float value, bool clampPositive)
         {
-            if (value < 0f)
+            if (!clampPositive)
             {
                 return Mathf.Clamp(value, -1f, 0f);
             }

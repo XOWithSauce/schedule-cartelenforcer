@@ -324,7 +324,13 @@ namespace CartelEnforcer
 
                 // test to see if this works
                 // AvatarEquippable equippable = dealer.SetEquippable_Return(resourcePath);
-                GameObject gameObject = Resources.Load(resourcePath) as GameObject; // does the as cast work here in il2cpp??
+#if MONO
+                GameObject gameObject = Resources.Load(resourcePath) as GameObject;
+#else
+                UnityEngine.Object obj = Resources.Load(resourcePath);
+                GameObject gameObject = obj.TryCast<GameObject>();
+#endif
+
                 AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, null).GetComponent<AvatarEquippable>();
 #if MONO
                 if (equippable is AvatarWeapon weapon)

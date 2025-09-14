@@ -1,3 +1,8 @@
+# Version 1.5.8
+- Hotfixed 1 error in IL2CPP where loading a resource for the Cartel Dealer Weapon would have an incorrect "as" casting
+- Forgot to include the clamping mechanism in Config Loader for the new influence.json configuration values
+- config.json file in releases had debug mode set to true, which should be false by default. Re-released with the value set to false.
+
 # Version 1.5.7
 - Added new Influence Config which allows changing almost all events that reduce or add cartel influence
 - Added new feature where killing cartel dealers has a chance to spawn 2 cartel goons nearby to attack player
