@@ -328,7 +328,7 @@ namespace CartelEnforcer
             if (customer.CurrentContract == null && contract != null && contract.State == EQuestState.Completed) // If player managed to complete it within that timeframe
             {
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.050f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptSuccess);
                 if (contractGuids.Contains(cGuid))
                     contractGuids.Remove(cGuid);
                 interceptingDeal = false;

@@ -31,6 +31,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 
 - Adds more Cartel Ambush locations from the **ambush.json** file.
 - Allows configuration of default ambush locations, spawns, and radius from the **default.json** file.
+- Allows configuration of influence rewarded by certain events from the **influence.json** file
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
@@ -111,6 +112,9 @@ You can customize the mod's settings through the **config.json** file.
 - **`realRobberyEnabled`**:
     - `true`: Enables the realistic robbery system.
     - `false`: Disables the realistic robbery system.
+- **`defaultRobberyEnabled`**:
+    - `true`: Enables the game default robberies where you only get a text message
+    - `false`: Disables the game default text message based robberies
 - **`miniQuestsEnabled`**:
     - `true`: Enables mini-quests.
     - `false`: Disables mini-quests.
@@ -139,9 +143,9 @@ You can customize the mod's settings through the **config.json** file.
 ### Realistic Robberies
 
 When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
-- **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 25.
-- **Player flees:** If you run out of range, regional influence increases by 20.
-- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 50.
+- **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 50.
+- **Player flees:** If you run out of range, regional influence increases by 80.
+- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 80.
 
 ---
 
@@ -159,9 +163,8 @@ This is a new type of event where the Cartel actively attempts to intercept one 
     - When the event starts, the quest icon on the left side of the screen changes to the Benzies logo.
     - A timer of 30 seconds begins before the Cartel dealer starts their intercept.
 - **Outcomes:**
-    - If you complete the deal within the 30 second grace period, Cartel influence decreases by 50 and your relationship with the customer increases slightly more.
-    - If you complete the deal after the grace period but before the Cartel dealer does, Cartel influence decreases by 100 and your relationship with the customer increases slightly more.
-    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 100, and your relationship with the customer decreases slightly.
+    - If you complete the deal before the Cartel dealer does, regional influence decreases by 50 and your relationship with the customer increases slightly more.
+    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 50, and your relationship with the customer decreases slightly.
 
 
 ---
@@ -173,7 +176,7 @@ This is a new type of event where the Cartel actively attempts to intercept one 
 These events only happen when the Cartel is hostile.
 - Only happens at Night Time from 22:30 to 04:00
 - Thomas will spawn in a car and try to shoot the player.
-- They are triggered when the player is near one of the 11 designated hotspots (common dealing locations, homes, and businesses).
+- They are triggered when the player is near one of the 14 designated hotspots (common dealing locations, homes, and businesses).
 - These events have a randomized cooldown of 16-48 in-game hours.
 - Their frequency can be adjusted with the `activityFrequency` parameter.
 
@@ -220,7 +223,7 @@ If player gets nearby they will get annoyed and eventually turn hostile.
 If you have killed enough Cartel Dealers, the Gatherings will be hostile on sight at a range depending on the Cartel Dealer Activity value.
 
 - Gathering lasts for 3 hours after which the goons go away
-- Killing a gathering will decrease regional cartel influence by 100.
+- Killing a gathering will decrease regional cartel influence by 80.
 - If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
 
 ---
@@ -318,11 +321,11 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
   "CartelDealerMoveSpeedMultiplier": 1.65,
   "CartelDealerHP": 200.0,
   "CartelDealerWeapon": "M1911",
-  "StealDealerContractChance": 0.03,
-  "StealPlayerPendingChance": 0.03,
-  "DealerActivityDecreasePerKill": 0.25,
-  "DealerActivityIncreasePerDay": 0.15,
-  "SafetyThreshold": -0.7,
+  "StealDealerContractChance": 0.06,
+  "StealPlayerPendingChance": 0.08,
+  "DealerActivityDecreasePerKill": 0.10,
+  "DealerActivityIncreasePerDay": 0.25,
+  "SafetyThreshold": -0.85,
   "SafetyEnabled": true,
   "FreeTimeWalking": true
 }
@@ -400,6 +403,15 @@ You can add or modify custom ambush locations.
 1. Open `Mods/CartelEnforcer/CartelItems/(organisation name).json`.
 2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id. You can also change cartel stolen balance.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
+
+---
+
+### Modifying Influence Changing Events
+
+1. Open `Mods/CartelEnforcer/Influence/influence.json`.
+2. Each type of event and its corresponding influence change is listed in the file. 
+3. Positive values means that Cartel Influence Increases and Negative values mean that Cartel Influence Decreases.
+4. Values are divided by a thousand, meaning that for example 0.050 corresponds to 50 increase in Cartel Influence.
 
 ---
 
