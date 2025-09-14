@@ -11,7 +11,6 @@ using static CartelEnforcer.EndGameQuest;
 using System.Diagnostics;
 
 #if MONO
-using ScheduleOne.Quests;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
@@ -20,20 +19,8 @@ using ScheduleOne.Map;
 using ScheduleOne.NPCs;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI;
-using ScheduleOne.Building;
-using ScheduleOne.EntityFramework;
-using ScheduleOne.Properties;
-using ScheduleOne.Property;
-using ScheduleOne.Interaction;
-using ScheduleOne.Storage;
-using ScheduleOne.ObjectScripts;
-using ScheduleOne.NPCs.Schedules;
-using FishNet.Object;
-using FishNet.Managing.Object;
-using FishNet.Managing;
 using TMPro;
 #else
-using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
@@ -42,17 +29,6 @@ using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI;
-using Il2CppScheduleOne.Building;
-using Il2CppScheduleOne.EntityFramework;
-using Il2CppScheduleOne.Properties;
-using Il2CppScheduleOne.Property;
-using Il2CppScheduleOne.Interaction;
-using Il2CppScheduleOne.Storage;
-using Il2CppScheduleOne.ObjectScripts;
-using Il2CppScheduleOne.NPCs.Schedules;
-using Il2CppFishNet.Object;
-using Il2CppFishNet.Managing.Object;
-using Il2CppFishNet.Managing;
 using Il2CppTMPro;
 #endif
 
@@ -142,19 +118,14 @@ namespace CartelEnforcer
 
             Transform playerLocal = Player.Local.transform;
             Dealer[] allDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(true);
-            List<Dealer> regularDealers = new List<Dealer>();
+            Dealer nearest = null;
+            float distanceToP = 160f;
             foreach (Dealer d in allDealers)
             {
-                yield return Wait01;
-                if (d is not CartelDealer)
-                {
-                    regularDealers.Add(d);
-                }
-            }
-            Dealer nearest = null;
-            float distanceToP = 100f;
-            foreach (Dealer d in regularDealers)
-            {
+                if (d.DealerType == EDealerType.CartelDealer) continue;
+                if (!d.IsRecruited) continue;
+                if (d.isInBuilding) continue;
+
                 yield return Wait01;
                 float dist = Vector3.Distance(d.transform.position, playerLocal.position);
                 if (dist < distanceToP)

@@ -4,6 +4,8 @@ using UnityEngine;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.DriveByEvent;
+using static CartelEnforcer.DealerActivity;
+
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -98,6 +100,36 @@ namespace CartelEnforcer
             activityGlobalHrs.hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
             activityGlobalHrs.cartelActivityClass = -1; // -1 reserved for the global ambushes
             regActivityHours.Add(activityGlobalHrs); // Always first element
+            // Also populate the weapon arrays
+            foreach (CartelActivity globalActivity in instanceActivities.GlobalActivities)
+            {
+#if MONO
+                if (globalActivity is Ambush ambush)
+                {
+                    if ((MeleeWeapons == null || MeleeWeapons.Length == 0) && (ambush.MeleeWeapons != null && ambush.MeleeWeapons.Length > 0))
+                    {
+                        MeleeWeapons = ambush.MeleeWeapons;
+                    }
+                    if ((RangedWeapons == null || RangedWeapons.Length == 0) && (ambush.RangedWeapons != null && ambush.RangedWeapons.Length > 0))
+                    {
+                        RangedWeapons = ambush.RangedWeapons;
+                    }
+                }
+#else
+                Ambush temp = globalActivity.TryCast<Ambush>();
+                if (temp != null)
+                {
+                    if ((MeleeWeapons == null || MeleeWeapons.Length == 0) && (temp.MeleeWeapons != null && temp.MeleeWeapons.Length > 0))
+                    {
+                        MeleeWeapons = temp.MeleeWeapons;
+                    }
+                    if ((RangedWeapons == null || RangedWeapons.Length == 0) && (temp.RangedWeapons != null && temp.RangedWeapons.Length > 0))
+                    {
+                        RangedWeapons = temp.RangedWeapons;
+                    }
+                }
+#endif
+            }
 
             CartelRegionActivities[] regInstanceActivies = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
             foreach (CartelRegionActivities act in regInstanceActivies)
@@ -132,11 +164,20 @@ namespace CartelEnforcer
                         activityHrs.cartelActivityClass = 0;
                         hours = GetActivityHours(currentConfig.deadDropStealFrequency);
                     }
-                    else if (inRegAct is CartelCustomerDeal)
+                    else if (inRegAct is CartelCustomerDeal cartelCustomerDeal)
                     {
                         activityHrs.cartelActivityClass = 1;
                         hours = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
 
+                        if (currentConfig.enhancedDealers)
+                        {
+                            void OnCustomerDealActive()
+                            {
+                                Log("[LOCKED CUSTOMER DEAL] On Activated");
+                                coros.Add(MelonCoroutines.Start(OnCartelCustomerDeal(cartelCustomerDeal, true)));
+                            }
+                            cartelCustomerDeal.onActivated = (Action)Delegate.Combine(cartelCustomerDeal.onActivated, new Action(OnCustomerDealActive));
+                        }
                     }
                     else // else its RobDealer class
                     {
@@ -153,6 +194,18 @@ namespace CartelEnforcer
                     {
                         activityHrs.cartelActivityClass = 1;
                         hours = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
+
+                        if (currentConfig.enhancedDealers) 
+                        {
+                            CartelCustomerDeal cartelCustomerDeal = inRegAct.TryCast<CartelCustomerDeal>();
+                            void OnCustomerDealActive()
+                            {
+                                Log("[LOCKED CUSTOMER DEAL] On Activated");
+                                coros.Add(MelonCoroutines.Start(OnCartelCustomerDeal(cartelCustomerDeal, true)));
+                            }
+                            cartelCustomerDeal.onActivated += (Il2CppSystem.Action)OnCustomerDealActive;
+                        }
+
                     }
                     else if (inRegAct.TryCast<RobDealer>() != null)
                     {

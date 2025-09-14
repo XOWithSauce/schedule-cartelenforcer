@@ -1,56 +1,33 @@
 using System.Collections;
 using MelonLoader;
 using UnityEngine;
-using UnityEngine.UI;
-using HarmonyLib;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
-using static CartelEnforcer.InterceptEvent;
-using static CartelEnforcer.DealerActivity;
 
 
 
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
-using ScheduleOne.Economy;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
 using ScheduleOne.Money;
-using ScheduleOne.Messaging;
-using ScheduleOne.NPCs.Schedules;
-using ScheduleOne.Persistence.Datas;
 using ScheduleOne.PlayerScripts;
-using ScheduleOne.Quests;
-using ScheduleOne.UI;
-using ScheduleOne.UI.Phone.Messages;
 using ScheduleOne.NPCs.Other;
-using ScheduleOne.NPCs;
-using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Combat;
 using ScheduleOne.VoiceOver;
 #else
-using Il2Cpp;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
-using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
-using Il2CppScheduleOne.Messaging;
-using Il2CppScheduleOne.NPCs.Schedules;
-using Il2CppScheduleOne.Persistence.Datas;
 using Il2CppScheduleOne.PlayerScripts;
-using Il2CppScheduleOne.Quests;
-using Il2CppScheduleOne.UI;
-using Il2CppScheduleOne.UI.Phone.Messages;
 using Il2CppScheduleOne.NPCs.Other;
-using Il2CppScheduleOne.NPCs;
-using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.VoiceOver;
 
@@ -104,7 +81,7 @@ namespace CartelEnforcer
             // Region 0: Northtown
             { 0, new List<GatheringLocation>
                 {
-                    new GatheringLocation(new Vector3(-62.84f, -3.64f, 166.34f), 0, "northern wharf in the Northtown region."),
+                    new GatheringLocation(new Vector3(-62.84f, -3.64f, 166.34f), 0, "northern waterfront in the Northtown region."),
                     new GatheringLocation(new Vector3(-86.51f, -4.12f, 108.41f), 0, "western canal in the Northtown region."),
                     new GatheringLocation(new Vector3(-86.51f, -4.12f, 108.41f), 0, "area in front of Thompson's Construction"),
                     new GatheringLocation(new Vector3(-76.09f, -2.54f, 140.60f), 0, "basketball court in the Northtown region.")
@@ -190,6 +167,7 @@ namespace CartelEnforcer
                 previousGatheringLocation = location;
                 areGoonsGathering = true;
                 Log("Spawning Gather at: " + location.position.ToString());
+                Log(location.description);
                 float offsetFromCenter = 0.67f;
                 Vector3 spawnPos1 = location.position + Vector3.forward * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
                 Vector3 spawnPos2 = location.position + Vector3.right * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
@@ -203,13 +181,15 @@ namespace CartelEnforcer
                         if (!registered) yield break;
 #if MONO
                         NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
-                        NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
+                        if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().IsGoonSpawned)
+                            NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
 #else
                         int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1;
                         if (count != -1)
                         {
                             NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Health.Revive();
-                            NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Despawn();
+                            if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].IsGoonSpawned)
+                                NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Despawn();
                         }
                         else
                         {
@@ -231,10 +211,7 @@ namespace CartelEnforcer
                     foreach (CartelGoon goon in spawnedGatherGoons)
                     {
                         goon.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
-                        goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
-                        if (goon.Behaviour.CombatBehaviour.DefaultWeapon == null && goon.Behaviour.CombatBehaviour.currentWeapon != null)
-                            goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
-
+                        goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
                         goon.AttackEntity(p.GetComponent<ICombatTargetable>());
                         
                     }
@@ -413,7 +390,7 @@ namespace CartelEnforcer
                             int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
 
                             // Only run the interaction if player is nearby otherwise it just wastes memory??
-                            if (distToP < 30f)
+                            if (distToP < 40f)
                             {
                                 // Some extra shit just random voicelines to make it feel like they actually talk..
                                 if (UnityEngine.Random.Range(0f, 1f) > 0.8f)
@@ -528,7 +505,7 @@ namespace CartelEnforcer
             if (defeated)
             {
                 if (ShouldChangeInfluence(region))
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.gatheringSuccess);
             }
             else
             {
@@ -537,7 +514,7 @@ namespace CartelEnforcer
                     if (NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(region).Influence < 0.400f)
                     {
                         if (ShouldChangeInfluence(region))
-                            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.025f);
+                            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.gatheringFail);
                     }
                 }
             }
@@ -550,6 +527,7 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
+                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 goon.Health.MaxHealth = 100f;
                 goon.Health.Revive();
                 if (goon.IsGoonSpawned)

@@ -6,10 +6,6 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
-using static MelonLoader.Modules.MelonModule;
-
-
-
 
 
 #if MONO
@@ -21,10 +17,8 @@ using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
 using ScheduleOne.Messaging;
 using ScheduleOne.NPCs.Schedules;
-using ScheduleOne.Persistence.Datas;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Quests;
-using ScheduleOne.UI;
 using ScheduleOne.UI.Phone.Messages;
 using ScheduleOne.Levelling;
 #else
@@ -36,10 +30,8 @@ using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Messaging;
 using Il2CppScheduleOne.NPCs.Schedules;
-using Il2CppScheduleOne.Persistence.Datas;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Quests;
-using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Phone.Messages;
 using Il2CppScheduleOne.Levelling;
 #endif
@@ -153,7 +145,6 @@ namespace CartelEnforcer
 
                 if (trContract != null)
                 {
-                    Log("Check Contract component");
                     Contract contract = trContract.GetComponent<Contract>();
                     if (contract != null)
                     {
@@ -240,11 +231,11 @@ namespace CartelEnforcer
             }
 
             
-            // Ensure Cartel Dealer has no active contract and is not dead or knocked out
-            if ((selected.ActiveContracts != null && selected.ActiveContracts.Count >= 1) || (selected.Health.IsDead || selected.Health.IsKnockedOut)) 
+            // Ensure Cartel Dealer has no active contract and is not dead or knocked out OR they are occupied by base game CartelCustomerDeals region activity
+            if ((selected.ActiveContracts != null && selected.ActiveContracts.Count >= 1) || (selected.Health.IsDead || selected.Health.IsKnockedOut))
             {
                 // How to manage the state between cartel dealer intercepting player dealer contracts, player pending and also intercepting active? This causes the more frequent kind to be always preferred leading to the intercept deals rarely happening. Config for dealer.json needs to be tweaked
-                Log("[INTERCEPT]    Dealer has active contracts or is dead, check if any nearby.");
+                Log("[INTERCEPT]    Dealer has active contracts or is dead or is occupied, check if any nearby.");
                 bool foundReplacement = false;
                 // Alternatively we check if any of the dealers would be nearby (60units max), this way even higher values for the dealer config chance will still allow the intercept event to work
                 foreach (CartelDealer otherDealer in allCartelDealers)
@@ -255,7 +246,7 @@ namespace CartelEnforcer
                     if (otherDealer.Health.IsDead || otherDealer.Health.IsKnockedOut) continue; // Dead or knocked out not elgible
                     if (otherDealer.ActiveContracts != null && otherDealer.ActiveContracts.Count >= 1) continue;
 
-                    if (Vector3.Distance(otherDealer.CenterPoint, customer.NPC.CenterPoint) < 60f)
+                    if (Vector3.Distance(otherDealer.CenterPoint, customer.NPC.CenterPoint) < 80f)
                     {
                         foundReplacement = true;
                         selected = otherDealer;
@@ -347,7 +338,7 @@ namespace CartelEnforcer
 
             int originalXP = contract.CompletionXP;
 
-            contract.CompletionXP = 1;
+            contract.CompletionXP = 0;
             contract.BopHUDUI();
             for (int i = 0; i < dealer.Inventory.ItemSlots.Count; i++)
             {
@@ -387,7 +378,7 @@ namespace CartelEnforcer
                 {
                     Log("[INTERCEPT]    Cartel Succesfully Intercepted Deal");
                     if (changeInfluence)
-                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.100f);
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptFail);
                     customer.NPC.RelationData.ChangeRelationship(-0.10f, true);
                 }
                 else if (playerDist < 4f && state == EQuestState.Completed)
@@ -395,7 +386,7 @@ namespace CartelEnforcer
                     Log("[INTERCEPT]    Player Stopped Cartel Intercept");
                     NetworkSingleton<LevelManager>.Instance.AddXP(originalXP);
                     if (changeInfluence)
-                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.100f);
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptSuccess);
                     customer.NPC.RelationData.ChangeRelationship(0.10f, true);
                 }
                 else if (state == EQuestState.Failed && (dealer.Health.IsDead || dealer.Health.IsKnockedOut))

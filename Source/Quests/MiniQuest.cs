@@ -6,7 +6,6 @@ using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.EndGameQuest;
-using static CartelEnforcer.CartelGathering;
 
 #if MONO
 using ScheduleOne.GameTime;
@@ -20,7 +19,6 @@ using ScheduleOne.Money;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
-using FishNet;
 #else
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Cartel;
@@ -317,29 +315,30 @@ namespace CartelEnforcer
                 {
                     case 0:
                         prep = hasPreposition ? "" : "around";
-                        controller.handler.WorldspaceRend.ShowText($"I heard them talk about some drop {prep} {location}...", 15f);
+                        controller.handler.WorldspaceRend.ShowText($"I heard them talk about some drop {prep} {location}...", 9f);
                         break;
 
                     case 1:
                         prep = hasPreposition ? "" : "near";
-                        controller.handler.WorldspaceRend.ShowText($"There are rumours about suspicious actions {prep} {location}!", 15f);
+                        controller.handler.WorldspaceRend.ShowText($"There are rumours about a suspicious drop {prep} {location}!", 9f);
                         break;
 
                     case 2:
                         prep = hasPreposition ? "" : "near";
-                        controller.handler.WorldspaceRend.ShowText($"Yes! I heard they stashed something {prep} {location}! You didn't hear this from me, okay?", 15f);
+                        controller.handler.WorldspaceRend.ShowText($"Yes! I heard they stashed something {prep} {location}!", 9f);
                         break;
 
                     case 3:
                         prep = hasPreposition ? "" : "around";
-                        controller.handler.WorldspaceRend.ShowText($"I saw one of them hide something in a dead drop {prep} {location}.", 15f);
+                        controller.handler.WorldspaceRend.ShowText($"I saw one of them hide something in a dead drop {prep} {location}.", 9f);
                         break;
 
                     case 4:
                         prep = hasPreposition ? "" : "at";
-                        controller.handler.WorldspaceRend.ShowText($"Yes and don't come asking anymore! They have been dealing {prep} {location}.", 15f);
+                        controller.handler.WorldspaceRend.ShowText($"They have been stashing items {prep} {location}.", 9f);
                         break;
                 }
+                coros.Add(MelonCoroutines.Start(HurryUpMessage(controller)));
             }
             else if (CartelGathering.areGoonsGathering && CartelGathering.currentGatheringLocation != null && hasCash)
             {
@@ -393,6 +392,13 @@ namespace CartelEnforcer
             return;
         }
 
+        public static IEnumerator HurryUpMessage(DialogueController controller)
+        {
+            yield return Wait10;
+            controller.handler.WorldspaceRend.ShowText($"You need to hurry before they grab it!", 5f);
+            yield return null;
+        }
+
         public static IEnumerator DisposeChoice(DialogueController controller, NPC npc)
         {
             yield return Wait05;
@@ -427,7 +433,7 @@ namespace CartelEnforcer
                 NetworkSingleton<LevelManager>.Instance.AddXP(100);
                 opened = true;
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
                 StageDeadDropsObserved += 1;
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             };
@@ -438,7 +444,7 @@ namespace CartelEnforcer
                 NetworkSingleton<LevelManager>.Instance.AddXP(100);
                 opened = true;
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, -0.025f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
                 StageDeadDropsObserved += 1;
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             }
@@ -452,7 +458,7 @@ namespace CartelEnforcer
             if (!opened)
             {
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, 0.050f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropFail);
                 entity.Storage.ClearContents();
             }
 

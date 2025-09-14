@@ -14,7 +14,9 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
 
+
 #if MONO
+using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Property;
 using ScheduleOne.Cartel;
 using ScheduleOne.NPCs;
@@ -29,6 +31,7 @@ using FishNet.Managing;
 using FishNet.Object;
 
 #else
+using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Persistence;
@@ -58,7 +61,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.6";
+        public const string Version = "1.5.7";
         public const string DownloadLink = null;
     }
 
@@ -66,10 +69,15 @@ namespace CartelEnforcer
     {
         public static CartelEnforcer Instance { get; private set; }
         public static ModConfig currentConfig;
+        public static InfluenceConfig influenceConfig;
         public static List<object> coros = new();
         public static bool registered = false;
         private bool firstTimeLoad = false;
         private static bool isSaving = false;
+
+        // These 2 are from the Ambush class we use them as references to set weapons, populated in frequency overrides while parsing all activities
+        public static AvatarWeapon[] MeleeWeapons;
+        public static AvatarWeapon[] RangedWeapons;
 
         #region No Suffering for GC anymore because of this code region
         public static WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
@@ -87,6 +95,7 @@ namespace CartelEnforcer
             base.OnInitializeMelon();
             Instance = this;
             currentConfig = ConfigLoader.Load();
+            influenceConfig = ConfigLoader.LoadInfluenceConfig();
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
         }
 
@@ -185,13 +194,14 @@ namespace CartelEnforcer
                     }
 
                     // Left CTRL + P Gathering Spawn
-                    else if (Input.GetKey(KeyCode.P))
+                    else if (Input.GetKeyDown(KeyCode.P))
                     {
                         if (!debounce)
                         {
                             debounce = true;
                             hoursUntilNextGathering = 1;
                             MelonCoroutines.Start(TryStartGathering());
+                            debounce = false;
                         }
                     }
                 }
@@ -230,8 +240,14 @@ namespace CartelEnforcer
             registered = true;
 
             currentConfig = ConfigLoader.Load();
-
+            influenceConfig = ConfigLoader.LoadInfluenceConfig();
             cartelStolenItems = ConfigLoader.LoadStolenItems();
+
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassChangePassive;
+#else
+            NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassChangePassive;
+#endif
 
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
@@ -416,7 +432,7 @@ namespace CartelEnforcer
 
                     newGoon.Movement.enabled = true;
                     newGoon.gameObject.SetActive(true);
-                    newGoon.Despawn();
+                    newGoon.Despawn_Client();
                     newGoons[i] = newGoon;
                     goonPool.unspawnedGoons.Add(newGoon);
                 }
@@ -439,7 +455,6 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                goon.Despawn();
                 goon.Despawn_Client();
 
             }

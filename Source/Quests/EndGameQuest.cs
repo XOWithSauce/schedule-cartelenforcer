@@ -5,17 +5,13 @@ using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.UI;
-using UnityEngine.AI;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.EndGameQuest;
-using static CartelEnforcer.InfluenceOverrides;
-using HarmonyLib;
-
-
 
 #if MONO
 using ScheduleOne.Police;
@@ -32,12 +28,9 @@ using ScheduleOne.Money;
 using ScheduleOne.Map;
 using ScheduleOne.Cartel;
 using ScheduleOne.GameTime;
-using ScheduleOne.Persistence.Datas;
 using ScheduleOne.Property;
 using ScheduleOne.Quests;
 using ScheduleOne.DevUtilities;
-using ScheduleOne.ObjectScripts;
-using static ScheduleOne.UI.Items.FilterConfigPanel.SearchCategory;
 using ScheduleOne.NPCs.Other;
 using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.Messaging;
@@ -456,6 +449,7 @@ namespace CartelEnforcer
                 bossGoon.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
                 bossGoon.Behaviour.ScheduleManager.EnableSchedule();
                 bossGoon.Despawn();
+                bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 bossGoon = null;
             }
 
@@ -523,6 +517,7 @@ namespace CartelEnforcer
             }
             else
             {
+                controller.handler.WorldspaceRend.ShowText("Talk with me at the courthouse between 18:15 and 19:00.", 7f);
                 controller.npc.PlayVO(EVOLineType.Annoyed);
             }
 
@@ -2392,8 +2387,11 @@ namespace CartelEnforcer
 
                 if (goon.Health.IsDead)
                     goon.Health.Revive();
-                if (goon.IsSpawned)
+                if (goon.IsGoonSpawned)
+                {
+                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                     goon.Despawn();
+                }
             }
             manorGoons.Clear();
             manorGoonGuids.Clear();
@@ -2441,6 +2439,7 @@ namespace CartelEnforcer
                 {
 #if MONO
                     NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
+
                     NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
 #else
                     int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1;

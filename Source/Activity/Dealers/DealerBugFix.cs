@@ -1,31 +1,26 @@
 using UnityEngine;
 using HarmonyLib;
 using static CartelEnforcer.DebugModule;
+using static CartelEnforcer.DealerActivity;
+using static CartelEnforcer.CartelEnforcer;
+
 
 #if MONO
 using FishNet.Object;
 using ScheduleOne.Cartel;
-using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
-using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
-using ScheduleOne.Law;
 using ScheduleOne.Product;
 using ScheduleOne.Quests;
-using ScheduleOne.UI;
 using ScheduleOne.UI.Handover;
 
 #else
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.Cartel;
-using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
-using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
-using Il2CppScheduleOne.Law;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
-using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Handover;
 
 #endif
@@ -93,11 +88,36 @@ namespace CartelEnforcer
                 __instance.ActiveContracts.Remove(contract);
                 contract.SetDealer(null);
                 __instance.Invoke("SortContracts", 0.05f);
+
+                if (currentConfig.enhancedDealers)
+                {
+#if MONO
+                    WalkToInterestPoint(__instance as CartelDealer);
+#else
+                    WalkToInterestPoint(__instance.TryCast<CartelDealer>());
+#endif
+                }
                 return false;
             }
 
             return true;
         }
     }
+    // The customer contract ended patch could use another addition to make the dealer start walking again? It starts standing still when contracts end and max wait time is 1 minute before it can start walking again?
+
+
+    // Fix a bug where current activity can be null and throw errors if callback function is registered
+    [HarmonyPatch(typeof(CartelRegionActivities), "ActivityEnded")]
+    public static class CartelRegionActivities_Patch
+    {
+        public static bool Prefix(CartelRegionActivities __instance)
+        {
+            if (__instance.CurrentActivity == null)
+                return false;
+
+            return true;
+        }
+    }
+
 
 }

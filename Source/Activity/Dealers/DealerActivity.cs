@@ -1,49 +1,36 @@
 using System.Collections;
 using MelonLoader;
 using UnityEngine;
-using UnityEngine.UI;
-using HarmonyLib;
 using static CartelEnforcer.CartelEnforcer;
-using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
-using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.InterceptEvent;
 
 
 #if MONO
 using ScheduleOne.Cartel;
+using ScheduleOne.Combat;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
-using ScheduleOne.Messaging;
 using ScheduleOne.NPCs.Schedules;
-using ScheduleOne.Persistence.Datas;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Quests;
-using ScheduleOne.UI;
-using ScheduleOne.UI.Phone.Messages;
-using ScheduleOne.NPCs.Other;
-using ScheduleOne.NPCs;
+using ScheduleOne.Product;
 using ScheduleOne.AvatarFramework.Equipping;
 #else
-using Il2Cpp;
 using Il2CppScheduleOne.Cartel;
+using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
-using Il2CppScheduleOne.Messaging;
 using Il2CppScheduleOne.NPCs.Schedules;
-using Il2CppScheduleOne.Persistence.Datas;
 using Il2CppScheduleOne.PlayerScripts;
+using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
-using Il2CppScheduleOne.UI;
-using Il2CppScheduleOne.UI.Phone.Messages;
-using Il2CppScheduleOne.NPCs.Other;
-using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 #endif
 
@@ -315,27 +302,40 @@ namespace CartelEnforcer
                 dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
                 dealer.Health.Health = dealerConfig.CartelDealerHP;
 
+                string resourcePath = "";
                 switch (dealerConfig.CartelDealerWeapon.ToLower())
                 {
                     case "m1911":
-                        dealer.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
+                        resourcePath = "Avatar/Equippables/M1911";
                         break;
 
                     case "knife":
-                        dealer.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+                        resourcePath = "Avatar/Equippables/Knife";
                         break;
 
                     case "shotgun":
-                        dealer.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
+                        resourcePath = "Avatar/Equippables/PumpShotgun";
                         break;
 
                     default:
-                        dealer.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+                        resourcePath = "Avatar/Equippables/M1911";
                         break;
                 }
 
-                if (dealer.Behaviour.CombatBehaviour.currentWeapon != null)
-                    dealer.Behaviour.CombatBehaviour.DefaultWeapon = dealer.Behaviour.CombatBehaviour.currentWeapon;
+                // test to see if this works
+                // AvatarEquippable equippable = dealer.SetEquippable_Return(resourcePath);
+                GameObject gameObject = Resources.Load(resourcePath) as GameObject; // does the as cast work here in il2cpp??
+                AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, null).GetComponent<AvatarEquippable>();
+#if MONO
+                if (equippable is AvatarWeapon weapon)
+                    dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
+#else
+                AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
+                if (weapon != null)
+                    dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
+#endif
+                // then we set the current weapon to load its own resource but default one stays... Maybe this way it wont drop the gun on beh end or it can re equip default on beh start
+                dealer.Behaviour.CombatBehaviour.SetWeapon(resourcePath);
 
                 dealer.OverrideAggression(1f); // because the dealers run away like wtf?
 
@@ -379,7 +379,7 @@ namespace CartelEnforcer
                                 dealer.SetIsAcceptingDeals(true);
                             WalkToInterestPoint(dealer);
                         }
-                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 402)
+                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 1600)
                         {
                             if (dealer.ActiveContracts.Count > 0)
                             {
@@ -390,6 +390,8 @@ namespace CartelEnforcer
                                 // Anybody else but the interceptor must fail contracts past 3:59 or they start bugging out
                                 dealer.ActiveContracts[0].Fail();
                             }
+                            if (dealer.IsAcceptingDeals)
+                                dealer.SetIsAcceptingDeals(false);
                         }
                     }
 
@@ -406,7 +408,7 @@ namespace CartelEnforcer
                                 WalkToInterestPoint(dealer);
                             }
                         }
-                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 402)
+                        else if (TimeManager.Instance.CurrentTime > 359 && TimeManager.Instance.CurrentTime < 1600)
                         {
                             if (dealer.ActiveContracts.Count > 0)
                             {
@@ -417,6 +419,8 @@ namespace CartelEnforcer
                                 // Anybody else but the interceptor must fail contracts past 3:59 or they start bugging out
                                 dealer.ActiveContracts[0].Fail();
                             }
+                            if (dealer.IsAcceptingDeals)
+                                dealer.SetIsAcceptingDeals(false);
                         }
                     }
 
@@ -447,10 +451,93 @@ namespace CartelEnforcer
 
                 #region Health based callbacks
                 dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)OnDealerDied);
-                #endregion
+
+                // 1 callback for random roll to spawn nearby goons on dead
+                void TrySpawnGoonsOnDeath()
+                {
+                    if (UnityEngine.Random.Range(0f, 1f) > 0.5f) return;
+                    if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 2) return;
+
+                    Player p = Player.GetClosestPlayer(dealer.CenterPoint, out _);
+
+                    Vector3 randomDirection;
+                    Vector3 randomPoint = Vector3.zero;
+                    float randomRadius;
+                    int maxAttempts = 4;
+                    int i = 0;
+                    do
+                    {
+                        if (!registered) return;
+                        if (i == maxAttempts) break; // just send it
+
+                        randomDirection = UnityEngine.Random.onUnitSphere;
+                        randomDirection.y = 0;
+                        randomDirection.Normalize();
+                        randomRadius = UnityEngine.Random.Range(16f, 24f);
+                        randomPoint = dealer.transform.position + randomDirection * randomRadius;
+                        i++;
+
+                    } while (p.IsPointVisibleToPlayer(randomPoint));
+
+                    if (randomPoint == Vector3.zero) return;
+#if MONO
+                    List<CartelGoon> goons = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnMultipleGoons(randomPoint, 2, true);
+#else
+                    Il2CppSystem.Collections.Generic.List<CartelGoon> goons = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnMultipleGoons(randomPoint, 2, true);
+#endif
+                    foreach (CartelGoon goon in goons)
+                    {
+                        goon.Movement.WarpToNavMesh(); // just incase
+                        if (UnityEngine.Random.Range(0f, 1f) > 0.7f && RangedWeapons != null && RangedWeapons.Length != 0)
+                            goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
+                        else if (MeleeWeapons != null && MeleeWeapons.Length != 0)
+                            goon.Behaviour.CombatBehaviour.DefaultWeapon = MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)];
+                        goon.AttackEntity(p.GetComponent<ICombatTargetable>(), true);
+                    }
+                    coros.Add(MelonCoroutines.Start(DespawnDefenderGoonsSoon(goons)));
+                    return;
+                }
+                dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)TrySpawnGoonsOnDeath);
+
+#endregion
 
             }
             Log("    Done Configuring Cartel Dealer Event values");
+        }
+
+#if MONO
+        public static IEnumerator DespawnDefenderGoonsSoon(List<CartelGoon> goons)
+#else
+        public static IEnumerator DespawnDefenderGoonsSoon(Il2CppSystem.Collections.Generic.List<CartelGoon> goons)
+#endif
+        {
+            int maxHoursWaited = 2;
+            int goonsDead = 0;
+            for (int i = 0; i < maxHoursWaited; i++)
+            {
+                yield return Wait60;
+                foreach (CartelGoon goon in goons)
+                {
+                    if ((goon.Health.IsDead || goon.Health.IsKnockedOut) && goon.IsGoonSpawned)
+                    {
+                        goonsDead++;
+                        goon.Health.Revive();
+                        goon.Despawn();
+                        goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+                    }
+                }
+                if (goonsDead == goons.Count) break;
+            }
+            foreach (CartelGoon goon in goons)
+            {
+                if (goon.IsGoonSpawned)
+                {
+                    goon.Despawn();
+                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+                }
+            }
+
+            yield return null;
         }
 
         public static IEnumerator StartActiveSignal()
@@ -486,7 +573,7 @@ namespace CartelEnforcer
             }
 
             List<Customer> validCustomers = new();
-            //Log("Parse customers");
+            Log("[DEALER ACTIVITY] Parse customers");
             do
             {
                 yield return Wait01;
@@ -500,7 +587,7 @@ namespace CartelEnforcer
                 cList.Remove(c);
             } while (cList.Count > 0);
 
-
+            Log("[DEALER ACTIVITY] Parse dealers");
             foreach (CartelDealer d in DealerActivity.allCartelDealers)
             {
                 yield return Wait2; // Short sleep to allow signals to assign contract per dealer
@@ -526,7 +613,7 @@ namespace CartelEnforcer
                             // This one is hard because this contract now awards xp to player even when cartel completes it
                             // We dont really want to fail the original contract either to have the player dealer compete against cartel dealer
                             actionTaken = true;
-                            contract.CompletionXP = 1;
+                            contract.CompletionXP = 0;
                             contract.completedContractsIncremented = false;
                             d.AddContract(contract);
                             d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
@@ -562,7 +649,7 @@ namespace CartelEnforcer
                             contract = c.ContractAccepted(window, false, d);
                             if (contract != null)
                             {
-                                contract.CompletionXP = 1;
+                                contract.CompletionXP = 0;
                                 contract.completedContractsIncremented = false;
                                 d.AddContract(contract);
                                 d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
@@ -603,6 +690,7 @@ namespace CartelEnforcer
 
         public static void WalkToInterestPoint(CartelDealer d)
         {
+            if (!currentConfig.enhancedDealers) return;
             if (!dealerConfig.FreeTimeWalking) return;
             if (interceptingDeal && interceptor != null && interceptor == d) return;
             if (d.ActiveContracts.Count > 0) return;
@@ -626,6 +714,168 @@ namespace CartelEnforcer
             currentDealerActivity = Mathf.Clamp(currentDealerActivity + dealerConfig.DealerActivityIncreasePerDay, minActivity, maxActivity);
         }
 
+        // 1 callback function to monitor the change of CartelCustomerDeal type event calls this function to insta-generate new locked customer contracts
+        // so that the event can end earlier, by default it only enables the isAccepting deals boolean and awards the contracts but this should make it more reliable
+        // When the contract is generated from this, it should always result in the event activity disable without errors.
+
+        // Note this is the only function in the mod that can add contracts to dealer even if they have active contracts. This is to make the base functionality "more" preferrable. Any other mod added contracts obey to limit 1 contract at any given state.
+        public static IEnumerator OnCartelCustomerDeal(CartelCustomerDeal dealEvent, bool started)
+        {
+            yield return Wait2;
+
+            if (started)
+            {
+                List<Customer> regionLockedCustomers = new();
+                // Make list traverse safe for modification
+                int i = 0;
+                do
+                {
+                    yield return Wait025;
+                    if (i >= Customer.LockedCustomers.Count) break;
+                    if (Customer.LockedCustomers[i].NPC.Region == dealEvent.Region && !regionLockedCustomers.Contains(Customer.LockedCustomers[i]))
+                        regionLockedCustomers.Add(Customer.LockedCustomers[i]);
+                    i++;
+                } while (i < Customer.LockedCustomers.Count && registered);
+
+                if (regionLockedCustomers.Count == 0)
+                {
+                    // should deactivate, since the callback will only run when the activity will only time out
+                    dealEvent.Deactivate();
+                    Log("[LOCKED CUSTOMER DEAL] Customer deal deactivated due to region not having locked customers");
+                    yield break;
+                }
+
+                Customer c = regionLockedCustomers[UnityEngine.Random.Range(0, regionLockedCustomers.Count)];
+
+                // Simplified the way which customer gets awarded a contract, by default alot of calculations go into determining the deal time, weekday, customer state, MOST of relevant stuff is typed out here but some is left out just for simplicity due to being a guaranteed locked customer.
+                bool canAwardContract = true;
+
+                // from ShouldTryGenerateDeal only 2 relevant conditions
+                if (c.CurrentContract != null) canAwardContract = false; // basically never true but still
+                if (!c.NPC.IsConscious) canAwardContract = false;
+
+                // from IsDealTime only this should be relevant, as the weekdays are kind of cosmetic addition to have player feel like this behaviour is consistent. For cartel dealers it doesnt really matter what weekday is since there is no perception of week time passing or memorizing customers.
+                int orderTime = c.customerData.OrderTime;
+                int max = TimeManager.AddMinutesTo24HourTime(orderTime, 240); // doubled from default 120 -> 240
+                if (!NetworkSingleton<TimeManager>.Instance.IsCurrentTimeWithinRange(orderTime, max))
+                    canAwardContract = false;
+
+                if (!canAwardContract) 
+                {
+                    Log($"[LOCKED CUSTOMER DEAL] Cant award contract at this moment, see below state");   
+                    Log($"[LOCKED CUSTOMER DEAL]     Has Contract: {c.CurrentContract != null}");
+                    Log($"[LOCKED CUSTOMER DEAL]     IsConscious: {c.NPC.IsConscious}");
+                    Log($"[LOCKED CUSTOMER DEAL]     Order Time in Range: {NetworkSingleton<TimeManager>.Instance.IsCurrentTimeWithinRange(orderTime, max)}");
+                    dealEvent.Deactivate();
+                    yield break;
+                }
+
+
+                // Before running below we want to make sure there is something in the inventory since try generate contract can result in no acceptable items especially in higher standard customers, so based on region, we add change existing quality OR add quality item if empty?
+                EQuality requiredQuality = c.customerData.Standards.GetCorrespondingQuality();
+                List<ProductDefinition> list = new List<ProductDefinition>();
+                bool hasMinItems = false;
+
+#if IL2CPP
+                ProductItemInstance temp = null;
+                QualityItemInstance qtInst = null;
+#endif
+
+                foreach (ItemSlot itemSlot in dealEvent.dealer.GetAllSlots())
+                {
+                    if (itemSlot.ItemInstance != null)
+                    {
+#if MONO
+                        if (itemSlot.ItemInstance is ProductItemInstance product)
+                        {
+                            if ((int)product.Quality < (int)requiredQuality)
+                            {
+                                hasMinItems = true;
+                                product.Quality = requiredQuality;
+                                break;
+                            }
+                            else
+                            {
+                                hasMinItems = true;
+                                break;
+                            }
+                        }
+#else
+                        temp = itemSlot.ItemInstance.TryCast<ProductItemInstance>();
+                        if (temp != null) 
+                        {
+                            if ((int)temp.Quality < (int)requiredQuality)
+                            {
+                                hasMinItems = true;
+                                temp.Quality = requiredQuality;
+                                break;
+                            }
+                            else
+                            {
+                                hasMinItems = true;
+                                break;
+                            }
+                        }
+                        temp = null;
+#endif
+                    }
+                }
+                // Now if hasMinItems is still false it means nothing in inventory is of required quality or item type to sell
+                // by default we add into inventory of required type
+                if (!hasMinItems)
+                {
+#if MONO
+                    ItemDefinition def = ScheduleOne.Registry.GetItem("cocaine");
+#else
+                    ItemDefinition def = Il2CppScheduleOne.Registry.GetItem("cocaine");
+#endif
+                    ItemInstance item = def.GetDefaultInstance(4);
+#if MONO
+                    if (item is QualityItemInstance inst)
+                        inst.Quality = requiredQuality;
+#else
+                    qtInst = item.TryCast<QualityItemInstance>();
+                    if (qtInst != null)
+                        qtInst.Quality = requiredQuality;
+#endif
+
+                    if (dealEvent.dealer.Inventory.CanItemFit(item))
+                    {
+                        dealEvent.dealer.Inventory.InsertItem(item);
+                    }
+                }
+
+                // Now try generate contract has better chance always to award items from inventory
+                ContractInfo contractInfo = c.TryGenerateContract(dealEvent.dealer);
+
+                if (contractInfo != null)
+                {
+                    // Here we skip the offering, instead manually set the same variables as in source, but we skip checking should accept contract to ensure probability of generating the contract succesfully at the CartelCustomerDeal event is as high as possible
+                    //c.OfferContractToDealer(contractInfo, dealEvent.dealer);
+                    Log("[LOCKED CUSTOMER DEAL] Awarded contract to locked customer");
+                    int offeredDeals = c.OfferedDeals;
+                    c.OfferedDeals = offeredDeals + 1;
+                    c.TimeSinceLastDealOffered = 0;
+                    c.OfferedContractInfo = contractInfo;
+                    c.OfferedContractTime = NetworkSingleton<TimeManager>.Instance.GetDateTime();
+                    c.HasChanged = true;
+                    EDealWindow dealWindow = dealEvent.dealer.GetDealWindow();
+                    Contract contract = c.ContractAccepted(dealWindow, false, dealEvent.dealer);
+                    contract.CompletionXP = 0;
+                    contract.completedContractsIncremented = false;
+                    dealEvent.dealer.AddContract(contract); // Running this should instantly deactivate CartelCustomerDeal activity since the callbacks _should_ have the Deactivate still added
+                }
+                else
+                {
+                    Log("[LOCKED CUSTOMER DEAL] Locked customer did not generate a contract");
+                    dealEvent.Deactivate();
+                }
+
+            }
+
+            yield return null;
+        }
+
     }
 
     [Serializable]
@@ -634,11 +884,11 @@ namespace CartelEnforcer
         public float CartelDealerMoveSpeedMultiplier = 1.65f;
         public float CartelDealerHP = 200.0f;
         public string CartelDealerWeapon = "M1911"; // "Knife" "Shotgun", default unknown M1911
-        public float StealDealerContractChance = 0.03f;
-        public float StealPlayerPendingChance = 0.03f;
-        public float DealerActivityDecreasePerKill = 0.25f;
-        public float DealerActivityIncreasePerDay = 0.15f;
-        public float SafetyThreshold = -0.7f;
+        public float StealDealerContractChance = 0.06f;
+        public float StealPlayerPendingChance = 0.08f;
+        public float DealerActivityDecreasePerKill = 0.10f;
+        public float DealerActivityIncreasePerDay = 0.25f;
+        public float SafetyThreshold = -0.85f;
         public bool SafetyEnabled = true;
         public bool FreeTimeWalking = true;
     }

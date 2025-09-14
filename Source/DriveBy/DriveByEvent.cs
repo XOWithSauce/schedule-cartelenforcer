@@ -83,7 +83,7 @@ namespace CartelEnforcer
             DriveByTrigger uptownParkTrigger = new DriveByTrigger
             {
                 triggerPosition = new Vector3(84.99f, 5.36f, -122.38f),
-                radius = 5f,
+                radius = 7f,
                 startPosition = new Vector3(144.68f, 5.6f, -103.69f),
                 spawnEulerAngles = new Vector3(0f, 270f, 0f),
                 endPosition = new Vector3(17.40f, 1.37f, -103.53f)
@@ -138,7 +138,7 @@ namespace CartelEnforcer
             DriveByTrigger groceryMarketTrigger = new DriveByTrigger
             {
                 triggerPosition = new Vector3(17.62f, 1.61f, -3.31f),
-                radius = 2f,
+                radius = 6f,
                 startPosition = new Vector3(-11.64f, 1.15f, -43.54f),
                 spawnEulerAngles = new Vector3(0f, 60f, 0f),
                 endPosition = new Vector3(33.02f, 1.15f, 65.28f)
@@ -160,7 +160,7 @@ namespace CartelEnforcer
             DriveByTrigger townHallTrigger = new DriveByTrigger
             {
                 triggerPosition = new Vector3(51.28f, 1.48f, 31.03f),
-                radius = 2f,
+                radius = 6f,
                 startPosition = new Vector3(29.97f, 1.37f, 81.63f),
                 spawnEulerAngles = new Vector3(0f, 180f, 0f),
                 endPosition = new Vector3(-12.39f, 1.37f, -40.43f)
@@ -182,12 +182,46 @@ namespace CartelEnforcer
             DriveByTrigger raysEstateTrigger = new DriveByTrigger
             {
                 triggerPosition = new Vector3(74.65f, 1.37f, -3.24f),
-                radius = 2f,
+                radius = 8f,
                 startPosition = new Vector3(93.06f, 2.30f, -37.39f),
                 spawnEulerAngles = new Vector3(6f, 0f, 0f),
                 endPosition = new Vector3(30.11f, 1.37f, 72.90f)
             };
             driveByLocations.Add(raysEstateTrigger);
+
+            // 12. Behind the Taco Ticklers
+            DriveByTrigger tacoTicklerTrigger = new DriveByTrigger
+            {
+                triggerPosition = new Vector3(-33.19f, 1.46f, 85.58f),
+                radius = 6f,
+                startPosition = new Vector3(-17.13f, 1.37f, 61.00f),
+                spawnEulerAngles = new Vector3(0f, 0f, 0f),
+                endPosition = new Vector3(37.97f, -2.63f, 132.08f)
+            };
+            driveByLocations.Add(tacoTicklerTrigger);
+
+            // 13. Skatepark and surrounding area
+            DriveByTrigger skateparkTrigger = new DriveByTrigger
+            {
+                triggerPosition = new Vector3(-49.25f, 1.09f, 75.80f),
+                radius = 10f,
+                startPosition = new Vector3(-93.33f, -1.43f, 70.90f),
+                spawnEulerAngles = new Vector3(-8f, 110f, 0f),
+                endPosition = new Vector3(-16.86f, 1.37f, -5.03f)
+            };
+            driveByLocations.Add(skateparkTrigger);
+
+            // 14. Behind Crimson Canary
+            DriveByTrigger crimsonTrigger = new DriveByTrigger
+            {
+                triggerPosition = new Vector3(48.51f, 1.46f, 66.55f),
+                radius = 8f,
+                startPosition = new Vector3(27.37f, 1.37f, 49.58f),
+                spawnEulerAngles = new Vector3(0f, 90f, 0f),
+                endPosition = new Vector3(90.05f, 1.37f, 22.96f)
+            };
+            driveByLocations.Add(crimsonTrigger);
+
             Log("Succesfully configured Drive By Triggers");
             yield return Wait2;
             if (!registered) yield break;
@@ -307,13 +341,10 @@ namespace CartelEnforcer
             while (registered)
             {
                 yield return Wait2;
-                elapsedSec += 2f;
                 if (!registered) yield break;
-
-
 #if MONO
                 // Only when hostile
-                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile || driveByActive)
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
                 {
                     yield return Wait60;
                     if (!registered) yield break;
@@ -321,7 +352,7 @@ namespace CartelEnforcer
                     continue;
                 }
 #else
-                if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || driveByActive)
+                if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                 {
                     yield return Wait60;
                     if (!registered) yield break;
@@ -329,6 +360,9 @@ namespace CartelEnforcer
                     continue;
                 }
 #endif
+
+                elapsedSec += 2f;
+
                 if (driveByActive)
                 {
                     yield return Wait60;

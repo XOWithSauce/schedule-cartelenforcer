@@ -4,7 +4,6 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using UnityEngine;
 using static CartelEnforcer.CartelInventory;
-using static CartelEnforcer.DealerActivity;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -54,6 +53,8 @@ namespace CartelEnforcer
 
         public bool realRobberyEnabled = true;
 
+        public bool defaultRobberyEnabled = true; // message robberies
+
         public bool miniQuestsEnabled = true;
 
         public bool interceptDeals = true;
@@ -96,7 +97,7 @@ namespace CartelEnforcer
         private static string pathDefAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "default.json");
         private static string pathDealerConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Dealers", "dealer.json");
         private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
-
+        private static string pathInfluenceConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Influence", "influence.json");
 
         #region Mod Config 
         public static ModConfig Load()
@@ -458,6 +459,63 @@ namespace CartelEnforcer
                 config = new CartelDealerConfig();
             }
             return config;
+        }
+        #endregion
+
+        #region Cartel Influence Config
+        public static InfluenceConfig LoadInfluenceConfig()
+        {
+            InfluenceConfig config = new();
+            if (File.Exists(pathInfluenceConfig))
+            {
+                try
+                {
+                    string json = File.ReadAllText(pathInfluenceConfig);
+                    config = JsonConvert.DeserializeObject<InfluenceConfig>(json);
+
+                    config.interceptFail = ClampInfluence(config.interceptFail);
+                    config.interceptSuccess = ClampInfluence(config.interceptSuccess);
+
+                    config.deadDropFail = ClampInfluence(config.deadDropFail);
+                    config.deadDropSuccess = ClampInfluence(config.deadDropSuccess);
+
+                    config.gatheringFail = ClampInfluence(config.gatheringFail);
+                    config.gatheringSuccess = ClampInfluence(config.gatheringSuccess);
+
+                    config.robberyPlayerEscape = ClampInfluence(config.robberyPlayerEscape);
+                    config.robberyGoonEscapeSuccess = ClampInfluence(config.robberyGoonEscapeSuccess);
+                    config.robberyGoonDead = ClampInfluence(config.robberyGoonDead);
+                    config.robberyGoonEscapeDead = ClampInfluence(config.robberyGoonEscapeDead);
+
+                    config.cartelDealerDied = ClampInfluence(config.cartelDealerDied);
+
+                    config.ambushDefeated = ClampInfluence(config.ambushDefeated);
+
+                    config.passiveInfluenceGainPerDay = ClampInfluence(config.passiveInfluenceGainPerDay);
+                }
+                catch (Exception ex)
+                {
+                    config = new InfluenceConfig();
+                    MelonLogger.Warning("Failed to read CartelEnforcer config: " + ex);
+                }
+            }
+            else
+            {
+                config = new InfluenceConfig();
+            }
+            return config;
+        }
+
+        private static float ClampInfluence(float value)
+        {
+            if (value < 0f)
+            {
+                return Mathf.Clamp(value, -1f, 0f);
+            }
+            else
+            {
+                return Mathf.Clamp(value, 0f, 1f);
+            }
         }
         #endregion
 

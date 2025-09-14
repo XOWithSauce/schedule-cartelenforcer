@@ -1,3 +1,24 @@
+# Version 1.5.7
+- Added new Influence Config which allows changing almost all events that reduce or add cartel influence
+- Added new feature where killing cartel dealers has a chance to spawn 2 cartel goons nearby to attack player
+- Added new configuration value to config.json "defaultRobberyEnabled" now allows disabling the game default robberies where player would only get a message saying dealer has been robbed
+- Added new Ambush Positions to ambush.json
+- Added new Drive By positions and increased some of the existing ones radius'
+- Added new worldspace text into the Mini Quest steal cartel deaddrop, telling the player to hurry up.
+- Modified the influence rewards from events to be slightly lower overall to compensate for the new ways of reducing or adding cartel influence
+- Adjusted the default values in dealer.json to match better with current state of the mod and to optimize the dealer behaviour
+- Changed the way guns get assigned to goons in events to make them not drop it on forceful impact
+- Changed all mod handled contracts for Cartel Dealers to zero out any XP in the contract instead of having 1 xp per contract
+- Changed the way which game default CartelCustomerDeal events behave for locked customers to make it more reliable and faster to deactivate when there are no elgible customers for the game default event
+- Changed the game default CartelCustomerDeal events to potentially fill Cartel Dealer inventory with higher quality product, if their locked customer needs it.
+- Changed Gathering location description of "northern wharf" to be "northern waterfront" because thats what the place actually is 
+- Changed the Real Robbery goon to have 160 hp instead of 100 to make it more probable that it will win the event solo against dealer
+- Increased the radius which replacement Cartel Dealers get searched for nearby the customer for the Intercept Event when the respective regions Cartel Dealer is occupied. Up from 60 to 80 units distance.
+- Increased the radius which RealRobbery occurs at up from 60 to 120 units distance between player and dealer
+- Fixed a bug where during Real Robbery while the Goon is looting dealer and the goon dies, it would keep moving items into inventory and running the event for a while
+- Fixed a bug in goons where after they despawn, they can still be in active combat and attack player while invisible
+- Fixed a bug where the cartel dealer would be able to free roam when enhanced dealer was off
+
 # Version 1.5.6
 - Simplified the way which Cartel Dealers get assigned with players pending deals to reduce lag.
 - Fixed a bug where the Cartel Dealers would get assigned contracts even after bedtime when they are supposed to head back inside

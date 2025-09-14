@@ -9,7 +9,6 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
 
 #if MONO
-using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Cartel;
 using ScheduleOne.Combat;
 using ScheduleOne.DevUtilities;
@@ -22,9 +21,7 @@ using ScheduleOne.Money;
 using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Product;
-using ScheduleOne.Properties;
 #else
-using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.DevUtilities;
@@ -37,7 +34,6 @@ using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product;
-using Il2CppScheduleOne.Properties;
 #endif
 
 
@@ -47,7 +43,7 @@ namespace CartelEnforcer
     [HarmonyPatch(typeof(Dealer), "TryRobDealer")] // This is only reached by FishNet Instance IsServer
     public static class DealerRobberyPatch
     {
-        private static bool IsPlayerNearby(Dealer dealer, float maxDistance = 60f)
+        private static bool IsPlayerNearby(Dealer dealer, float maxDistance = 120f)
         {
             return Vector3.Distance(dealer.transform.position, Player.Local.transform.position) < maxDistance;
         }
@@ -202,7 +198,7 @@ namespace CartelEnforcer
                         Log("[TRY ROB]    Run Custom");
                         coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
                     }
-                    else
+                    else if (currentConfig.defaultRobberyEnabled)
                     {
                         Log("[TRY ROB]    Run original");
                         Original(__instance);
@@ -284,17 +280,14 @@ namespace CartelEnforcer
 
             dealer.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, false, -1), true, true);
             goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
-            float chance = UnityEngine.Random.Range(0f, 1f);
-            if (chance > 0.5f)
+            if (UnityEngine.Random.Range(0f, 1f) > 0.7f && RangedWeapons != null && RangedWeapons.Length > 0)
             {
-                if (chance > 0.95f)
-                    goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
-                else
-                    goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+                goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
             }
-            else
-                goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
-
+            else if (MeleeWeapons != null && MeleeWeapons.Length > 0)
+            {
+                goon.Behaviour.CombatBehaviour.DefaultWeapon = MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)];
+            }
 
             goon.Movement.Warp(spawnPos);
             yield return Wait05;
@@ -302,6 +295,9 @@ namespace CartelEnforcer
 
             dealer.Behaviour.CombatBehaviour.SetTarget(null, goon.GetComponent<ICombatTargetable>().NetworkObject); 
             dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
+
+            goon.Health.MaxHealth = 160f;
+            goon.Health.Health = 160f;
 #if MONO
             goon.AttackEntity(dealer);
 #else
@@ -316,17 +312,17 @@ namespace CartelEnforcer
             // While Both dealer and spawned goon are alive and conscious evaluate every sec, max timeout is 1 minute
             int maxWaitSec = 60;
             float elapsed = 0f;
-            float currDistance = 30f;
+            float currDistance = 159f;
             while (!dealer.Health.IsDead &&
                 !dealer.Health.IsKnockedOut &&
                 !goon.Health.IsDead &&
                 !goon.Health.IsKnockedOut &&
-                currDistance <= 90f &&
+                currDistance <= 160f &&
                 elapsed < maxWaitSec)
             {
                 yield return Wait05;
                 if (!registered) yield break;
-                currDistance = Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position);
+                currDistance = Vector3.Distance(Player.Local.CenterPointTransform.position, dealer.CenterPointTransform.position);
                 elapsed += 0.5f;
                 //Log($"In Combat:\n    Dealer:{dealer.Health.Health}\n    Goon:{goon.Health.Health}");
             }
@@ -366,27 +362,32 @@ namespace CartelEnforcer
                     stayInside.gameObject.SetActive(false);
                 }
 #endif
-                yield return Wait05; // wait ragdoll
+                yield return Wait2; // wait ragdoll
                 if (!registered) yield break;
+                if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
+                {
+                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                    yield break;
+                }
 
                 goon.Movement.FacePoint(dealer.CenterPointTransform.position, lerpTime: 0.3f);
                 goon.Movement.SetDestination(dealer.CenterPoint);
-                yield return Wait05; // wait ragdoll
-                if (!registered) yield break;
 
-                Log($"[TRY ROB] Curr Destination: {goon.Movement.CurrentDestination}");
-                Log($"[TRY ROB] Dealer Destination: {dealer.CenterPoint}");
                 float distanceToBody = 10f;
                 int n = 0;
-                // While not in range and traverse lasted less than 7.5 sec, continue
-                while (distanceToBody > 1.5f && n < 15)
+                // While not in range and traverse lasted less than 6 sec, continue
+                while (distanceToBody > 2f && n < 24)
                 {
                     n++;
-                    yield return Wait05; // wait traverse
+                    yield return Wait025; // wait traverse
                     if (!registered) yield break;
+                    if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
+                    {
+                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                        yield break;
+                    }
 
                     distanceToBody = Vector3.Distance(goon.CenterPoint, dealer.CenterPoint);
-                    Log($"[TRY ROB]    TRAVERSE DIST: {distanceToBody}");
                 }
                 goon.Avatar.Anim.SetCrouched(true);
                 goon.Movement.Stop();
@@ -407,6 +408,11 @@ namespace CartelEnforcer
                     if (takenSlots >= availableSlots) break; // No more space in goon inventory
                     yield return Wait025;
                     if (!registered) yield break;
+                    if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
+                    {
+                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                        yield break;
+                    }
 
                     if (dealer.Inventory.ItemSlots[i].ItemInstance != null)
                     {
@@ -424,8 +430,13 @@ namespace CartelEnforcer
                 goon.SetAnimationTrigger("GrabItem");
                 yield return Wait05;
                 if (!registered) yield break;
+                if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
+                {
+                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                    yield break;
+                }
 
-                if (takenSlots < availableSlots)
+                if (takenSlots < availableSlots && dealer.Cash > 1f)
                 {
                     // Also take cash if there is still available space
                     float qtyCashLoss = dealer.Cash * 0.6f;
@@ -440,6 +451,11 @@ namespace CartelEnforcer
                     {
                         yield return Wait025;
                         if (!registered) yield break;
+                        if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
+                        {
+                            coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                            yield break;
+                        }
 
                         if (goon.Inventory.ItemSlots[i].ItemInstance == null)
                         {
@@ -463,21 +479,19 @@ namespace CartelEnforcer
 
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.080f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonDead);
             }
-            else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 90f)
+            else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 160f)
             {
                 // Player is out of range
-                // For now just make a hacky way to prevent robbery
-                // if outside range, then full defend
                 Log("[TRY ROB]    Player outside of range. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 dealer.Behaviour.CombatBehaviour.End();
 
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
+                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.020f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyPlayerEscape);
             }
             else if (elapsed >= 60)
             {
@@ -489,17 +503,49 @@ namespace CartelEnforcer
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
         }
-        public static IEnumerator DespawnSoon(CartelGoon goon)
+
+        public static IEnumerator EndBodyLootPrematurely(CartelGoon goon, NPCEvent_CartelGoonExit stayInside)
         {
-            Log("[TRY ROB]    Despawned Goon");
             yield return Wait60;
             if (!registered) yield break;
 
-            if (!goon.Behaviour.CombatBehaviour.enabled)
-                goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+            goon.Behaviour.ScheduleManager.EnableSchedule();
+
+            if (stayInside != null)
+            {
+                stayInside.gameObject.SetActive(true);
+                stayInside.Resume();
+            }
 
             if (goon.IsGoonSpawned)
+            {
+                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 goon.Despawn();
+            }
+            goon.Health.MaxHealth = 100f;
+            goon.Health.Health = 100f;
+            goon.Health.Revive();
+
+            yield return null;
+        }
+
+        public static IEnumerator DespawnSoon(CartelGoon goon, bool instant = false)
+        {
+            Log("[TRY ROB]    Despawned Goon");
+            if (!instant)
+                yield return Wait60;
+            if (!registered) yield break;
+
+
+            if (goon.IsGoonSpawned)
+            {
+                goon.Despawn();
+            }
+            goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+            goon.Health.MaxHealth = 100f;
+            goon.Health.Health = 100f;
+            goon.Health.Revive();
+
             yield return null;
         }
         public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence, NPCEvent_CartelGoonExit stayInside)
@@ -584,7 +630,7 @@ namespace CartelEnforcer
                 // The goon successfully escaped.
                 Log("[TRY ROB]    Goon Escaped to Cartel Dealer!");
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.050f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeSuccess);
 
 
                 // Parse inventory after escape
@@ -640,15 +686,14 @@ namespace CartelEnforcer
                     stayInside.Resume();
                 }
 
-
-                if (!goon.Behaviour.CombatBehaviour.Enabled)
-                    goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                goon.Health.MaxHealth = 100f;
+                goon.Health.Health = 100f;
 
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
             {
                 if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, -0.025f);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeDead);
                 // The goon was defeated (dead or knocked out).
                 if (stayInside != null)
                 {
@@ -713,11 +758,13 @@ namespace CartelEnforcer
                     stayInside.Resume();
                 }
 
-                if (!goon.Behaviour.CombatBehaviour.Enabled)
-                    goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
 
+                goon.Health.MaxHealth = 100f;
+                goon.Health.Health = 100f;
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
+
                 Log("[TRY ROB] End");
             }
             yield return null;
@@ -731,7 +778,7 @@ namespace CartelEnforcer
             goon.Movement.WalkSpeed = goon.Movement.WalkSpeed * 3.5f;
             goon.Movement.RunSpeed = goon.Movement.RunSpeed * 2.5f;
             goon.Movement.MoveSpeedMultiplier = 1.4f;
-            goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, 100f, 0.2f));
+            goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, goon.Health.MaxHealth, 0.15f));
 
             for (int i = 0; i < 40; i++)
             {
