@@ -71,6 +71,7 @@ You can customize the mod's settings through the **config.json** file.
     "cartelRobberyFrequency": 1.0,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
+    "defaultRobberyEnabled": true,
     "miniQuestsEnabled": true,
     "interceptDeals": true,
     "enhancedDealers": true,
