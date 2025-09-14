@@ -22,6 +22,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [Modifying Spawns](#modifying-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
 * [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
+* [Modifying Influence Changing Events](#modifying-influence-changing-events)
 * [Debug Mode](#debug-mode)
 * [In Multiplayer](#in-multiplayer)
 
@@ -412,6 +413,8 @@ You can add or modify custom ambush locations.
 2. Each type of event and its corresponding influence change is listed in the file. 
 3. Positive values means that Cartel Influence Increases and Negative values mean that Cartel Influence Decreases.
 4. Values are divided by a thousand, meaning that for example 0.050 corresponds to 50 increase in Cartel Influence.
+
+Note: Due to the way which the mod handles some of the influence changes, sometimes the displayed influence change is __not__ displaying the correct change and can rarely display the change twice for the event
 
 ---
 
