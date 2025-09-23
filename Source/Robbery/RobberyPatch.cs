@@ -293,7 +293,7 @@ namespace CartelEnforcer
             yield return Wait05;
             if (!registered) yield break;
 
-            dealer.Behaviour.CombatBehaviour.SetTarget(null, goon.GetComponent<ICombatTargetable>().NetworkObject); 
+            dealer.Behaviour.CombatBehaviour.SetTarget(goon.GetComponent<ICombatTargetable>().NetworkObject); 
             dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
 
             goon.Health.MaxHealth = 160f;
@@ -389,7 +389,7 @@ namespace CartelEnforcer
 
                     distanceToBody = Vector3.Distance(goon.CenterPoint, dealer.CenterPoint);
                 }
-                goon.Avatar.Anim.SetCrouched(true);
+                goon.Avatar.Animation.SetCrouched(true);
                 goon.Movement.Stop();
                 int availableSlots = 0;
                 for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
@@ -466,7 +466,7 @@ namespace CartelEnforcer
                     }
                 }
                 Log("[TRY ROB    Finished Body Intercept]");
-                goon.Avatar.Anim.SetCrouched(false);
+                goon.Avatar.Animation.SetCrouched(false);
                 coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence, stayInside)));
             }
             else if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)

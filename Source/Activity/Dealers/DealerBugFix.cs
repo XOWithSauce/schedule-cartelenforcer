@@ -39,19 +39,9 @@ namespace CartelEnforcer
         public static bool Prefix(Customer __instance, HandoverScreen.EHandoverOutcome outcome, Contract contract, Il2CppSystem.Collections.Generic.List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
 #endif
         {
-
-            // Original source code copy, removed functions where the nested if clause is always "player", commented out rela change, also total payment to 1
             if (contract.Dealer != null && contract.Dealer.DealerType == EDealerType.CartelDealer)
             {
-                float num;
-                EDrugType drugType;
-                int num2;
-                float satisfaction = Mathf.Clamp01(__instance.EvaluateDelivery(contract, items, out num, out drugType, out num2));
-                __instance.ChangeAddiction(num / 5f);
-                float relationshipChange = CustomerSatisfaction.GetRelationshipChange(satisfaction);
-                float change = relationshipChange * 0.2f * Mathf.Lerp(0.75f, 1.5f, num);
-                __instance.AdjustAffinity(drugType, change);
-                // __instance.NPC.RelationData.ChangeRelationship(relationshipChange, true); <--- this caused bugs
+                float satisfaction = 0f;
 
                 __instance.TimeSinceLastDealCompleted = 0;
                 __instance.NPC.SendAnimationTrigger("GrabItem");
@@ -60,7 +50,7 @@ namespace CartelEnforcer
                 {
                     networkObject = contract.Dealer.NetworkObject;
                 }
-                float totalPayment = 0; // Because this seems to be displayed to player after each day, increments the value of total dealer sum gained
+                float totalPayment = 0f; // Because this seems to be displayed to player after each day, increments the value of total dealer sum gained
                 __instance.ProcessHandoverServerSide(outcome, items, handoverByPlayer, totalPayment, contract.ProductList, satisfaction, networkObject);
 
                 return false;

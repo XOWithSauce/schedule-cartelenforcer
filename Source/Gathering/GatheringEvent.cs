@@ -5,10 +5,12 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.EndGameQuest;
 
 
 
 #if MONO
+using ScheduleOne.Quests;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
@@ -20,6 +22,7 @@ using ScheduleOne.NPCs.Other;
 using ScheduleOne.Combat;
 using ScheduleOne.VoiceOver;
 #else
+using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
@@ -44,7 +47,7 @@ namespace CartelEnforcer
                 {
                     new GatheringLocation(new Vector3(151.39f, 2.18f, -16.93f), 5, "forest next to the barn in the Uptown region."),
                     new GatheringLocation(new Vector3(126.84f, 1.46f, 55.52f), 5, "parking lot infront of the Church in the Uptown region."),
-                    new GatheringLocation(new Vector3(126.84f, 1.46f, 55.52f), 5, "alley between the Hyland towers.")
+                    new GatheringLocation(new Vector3(65.94f, 1.46f, 65.51f), 5, "alley between the Hyland towers.")
                 }
             },
             // Region 4: Suburbia
@@ -83,7 +86,7 @@ namespace CartelEnforcer
                 {
                     new GatheringLocation(new Vector3(-62.84f, -3.64f, 166.34f), 0, "northern waterfront in the Northtown region."),
                     new GatheringLocation(new Vector3(-86.51f, -4.12f, 108.41f), 0, "western canal in the Northtown region."),
-                    new GatheringLocation(new Vector3(-86.51f, -4.12f, 108.41f), 0, "area in front of Thompson's Construction"),
+                    new GatheringLocation(new Vector3(-31.51f, 1.46f, 100.46f), 0, "area in front of Thompson's Construction"),
                     new GatheringLocation(new Vector3(-76.09f, -2.54f, 140.60f), 0, "basketball court in the Northtown region.")
                 }
             }
@@ -213,7 +216,6 @@ namespace CartelEnforcer
                         goon.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
                         goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
                         goon.AttackEntity(p.GetComponent<ICombatTargetable>());
-                        
                     }
                 }
 
@@ -266,12 +268,28 @@ namespace CartelEnforcer
                 {
                     DrinkItem drinkAct = spawnedGatherGoons[0].transform.Find("Aux/Drink").GetComponent<DrinkItem>();
                     drinkAct.Begin();
+                    void CombatStartedEndAct()
+                    {
+                        drinkAct.End();
+                        Player p = Player.GetClosestPlayer(location.position, out float _);
+                        spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>());
+                        spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                    }
+                    spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
                 }
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
                 {
                     SmokeCigarette smokeAct = spawnedGatherGoons[1].transform.Find("Aux/SmokeCigarette").GetComponent<SmokeCigarette>();
                     smokeAct.Begin();
+                    void CombatStartedEndAct()
+                    {
+                        smokeAct.End();
+                        Player p = Player.GetClosestPlayer(location.position, out float _);
+                        spawnedGatherGoons[1].AttackEntity(p.GetComponent<ICombatTargetable>());
+                        spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                    }
+                    spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
                 }
 
 
@@ -329,6 +347,7 @@ namespace CartelEnforcer
                             spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position);
                             yield return Wait05;
                             if (!registered) yield break;
+                            if (startedCombat) continue;
 
                             if (spawnedGatherGoons[randomIndex].Awareness.VisionCone.IsPlayerVisible(p))
                             {
@@ -338,6 +357,7 @@ namespace CartelEnforcer
                             {
                                 yield return Wait05;
                                 if (!registered) yield break;
+                                if (startedCombat) continue;
 
                                 spawnedGatherGoons[randomIndex].Movement.FacePoint(location.position);
                             }
@@ -402,7 +422,9 @@ namespace CartelEnforcer
                                         if (!registered) yield break;
 
                                         randomLookAtIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
+
                                     } while (randomIndex == randomLookAtIndex);
+                                    if (startedCombat) continue;
 
                                     spawnedGatherGoons[randomIndex].Movement.FacePoint(spawnedGatherGoons[randomLookAtIndex].CenterPoint);
                                     switch (UnityEngine.Random.Range(0, 4))
@@ -425,8 +447,10 @@ namespace CartelEnforcer
                                     } // talk
                                     yield return Wait2;
                                     if (!registered) yield break;
-
                                     elapsed += 2;
+
+                                    if (startedCombat) continue;
+
 
                                     switch (UnityEngine.Random.Range(0, 3))
                                     {
@@ -506,6 +530,8 @@ namespace CartelEnforcer
             {
                 if (ShouldChangeInfluence(region))
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.gatheringSuccess);
+                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active)
+                    StageGatheringsDefeated++;
             }
             else
             {

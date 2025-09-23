@@ -2,6 +2,7 @@
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.AmbushOverrides;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
@@ -14,7 +15,6 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
 
-
 #if MONO
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Property;
@@ -26,6 +26,7 @@ using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.Persistence;
 using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
+using ScheduleOne.Dialogue;
 using FishNet.Managing.Object;
 using FishNet.Managing;
 using FishNet.Object;
@@ -40,11 +41,11 @@ using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Cartel;
+using Il2CppScheduleOne.Dialogue;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Object;
 using Il2CppScheduleOne.NPCs.Schedules;
-
 #endif
 
 
@@ -61,7 +62,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.5.8";
+        public const string Version = "1.6.0";
         public const string DownloadLink = null;
     }
 
@@ -204,6 +205,7 @@ namespace CartelEnforcer
                             debounce = false;
                         }
                     }
+
                 }
             }
         }
@@ -354,26 +356,43 @@ namespace CartelEnforcer
                 safePrefab = prefab;
             }
 
-            Log("Evaluating End Game Quest Creation");
+            Log("[END GAME QUEST] Evaluating End Game Quest Creation");
             bool hasGeneratedQuest = false;
             bool hasGeneratedManorQuest = false;
+            bool hasGeneratedCarQuest = false;
+            DialogueController frankController;
             while (registered)
             {
-                if (PreRequirementsMet() && !completed && !hasGeneratedQuest)
+                if (PreRequirementsMet() && !completed && !hasGeneratedQuest && activeQuest == null)
                 {
-                    Log("[END GAME QUEST] End Game Quest creation started");
                     hasGeneratedQuest = true;
                     coros.Add(MelonCoroutines.Start(GenDialogOption()));
                 }
-                if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest)
+                if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest && activeManorQuest == null)
                 {
-                    Log("[END GAME QUEST] Manor Quest creation started");
                     hasGeneratedManorQuest = true;
                     coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
                 }
+
+                bool inTimeWindowForCarQuest = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1559 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1801);
+                if (CarQuestPreRequirementsMet() && !carMeetupCompleted && !hasGeneratedCarQuest && frankDiagIndex == -1 && inTimeWindowForCarQuest && activeCarMeetupQuest == null)
+                {
+                    // Gen quest opt in time window
+                    Log("[END GAME QUEST] Car Quest opt generated");
+                    hasGeneratedCarQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenFrankOption()));
+                }
+                else if (hasGeneratedCarQuest && !carMeetupCompleted && frankDiagIndex != -1 && !inTimeWindowForCarQuest && crankyFrank != null && activeCarMeetupQuest == null)
+                {
+                    Log("[END GAME QUEST] Car Quest opt removed");
+                    hasGeneratedCarQuest = false;
+                    frankController = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
+                    // Del quest opt out of time window when it exists and quest not generated
+                    coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
+                }
+
                 yield return Wait60;
                 if (!registered) yield break;
-
             }
 
             yield return null;
@@ -496,11 +515,19 @@ namespace CartelEnforcer
             completed = false;
             activeManorQuest = null;
             manorCompleted = false;
+            activeCarMeetupQuest = null;
+            carMeetupCompleted = false;
             fixer = null;
             ray = null;
+            jeremy = null;
+            crankyFrank = null;
             bossGoon = null;
             fixerDiagIndex = 0;
             rayChoiceIndex = 0;
+            jeremyDiagIndex = -1;
+            frankDiagIndex = -1;
+            jeremyDialogueActive = false;
+            inContactDialogue = false;
 
             // Mini quests and events
             StageDeadDropsObserved = 0;

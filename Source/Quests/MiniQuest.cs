@@ -1,6 +1,7 @@
 ﻿using System.Collections;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
@@ -8,6 +9,7 @@ using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.EndGameQuest;
 
 #if MONO
+using ScheduleOne.Quests;
 using ScheduleOne.GameTime;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
@@ -20,6 +22,7 @@ using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
 #else
+using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
@@ -90,10 +93,6 @@ namespace CartelEnforcer
             Dan dan = UnityEngine.Object.FindObjectOfType<Dan>();
             if (dan != null)
                 targetNPCs.Add(dan, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
-
-            Jeremy jeremy = UnityEngine.Object.FindObjectOfType<Jeremy>();
-            if (jeremy != null)
-                targetNPCs.Add(jeremy, new NpcQuestStatus { HasAskedQuestToday = false, HasActiveQuest = false });
 
             Marco marco = UnityEngine.Object.FindObjectOfType<Marco>();
             if (marco != null)
@@ -445,7 +444,8 @@ namespace CartelEnforcer
                 opened = true;
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
-                StageDeadDropsObserved += 1;
+                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active)
+                    StageDeadDropsObserved += 1;
                 entity.Storage.onOpened.RemoveListener(onOpenedAction);
             }
             onOpenedAction = (UnityEngine.Events.UnityAction)WrapOnOpenCallback;

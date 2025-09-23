@@ -222,6 +222,17 @@ namespace CartelEnforcer
             };
             driveByLocations.Add(crimsonTrigger);
 
+            // 15. Uptown Jeremys house
+            DriveByTrigger jeremyTrigger = new DriveByTrigger
+            {
+                triggerPosition = new Vector3(69.55f, 5.93f, -117.93f),
+                radius = 2f,
+                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
+                spawnEulerAngles = new Vector3(0f, 270f, 0f),
+                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
+            };
+            driveByLocations.Add(jeremyTrigger);
+
             Log("Succesfully configured Drive By Triggers");
             yield return Wait2;
             if (!registered) yield break;
@@ -439,7 +450,7 @@ namespace CartelEnforcer
             int maxBulletsShot = UnityEngine.Random.Range(4, 9);
             int bulletsShot = 0;
             Log($"[DRIVE BY] Setting Target to {player.GetComponent<ICombatTargetable>().NetworkObject}");
-            thomasInstance.Behaviour.CombatBehaviour.SetTarget(null, player.GetComponent<ICombatTargetable>().NetworkObject);
+            thomasInstance.Behaviour.CombatBehaviour.SetTarget(player.GetComponent<ICombatTargetable>().NetworkObject);
             thomasInstance.Behaviour.CombatBehaviour.SetWeaponRaised(true);
             int playerLayer = LayerMask.NameToLayer("Player");
             int obstacleLayerMask = LayerMask.GetMask("Terrain", "Default", "Vehicle");

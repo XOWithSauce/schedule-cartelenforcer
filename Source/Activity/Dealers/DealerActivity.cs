@@ -238,7 +238,7 @@ namespace CartelEnforcer
                         yield return Wait2;
                         if (!registered) yield break;
 
-                        if (!d.isInBuilding && !d.Movement.hasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
+                        if (!d.isInBuilding && !d.Movement.HasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
                         {
                             WalkToInterestPoint(d);
                         }
@@ -296,42 +296,42 @@ namespace CartelEnforcer
         {
             Log("[DEALER ACTIVITY] Configuring Cartel Dealer Event values");
 
-            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
+            string resourcePath = "";
+            switch (dealerConfig.CartelDealerWeapon.ToLower())
             {
-                dealer.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
-                dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
-                dealer.Health.Health = dealerConfig.CartelDealerHP;
+                case "m1911":
+                    resourcePath = "Avatar/Equippables/M1911";
+                    break;
 
-                string resourcePath = "";
-                switch (dealerConfig.CartelDealerWeapon.ToLower())
-                {
-                    case "m1911":
-                        resourcePath = "Avatar/Equippables/M1911";
-                        break;
+                case "knife":
+                    resourcePath = "Avatar/Equippables/Knife";
+                    break;
 
-                    case "knife":
-                        resourcePath = "Avatar/Equippables/Knife";
-                        break;
+                case "shotgun":
+                    resourcePath = "Avatar/Equippables/PumpShotgun";
+                    break;
 
-                    case "shotgun":
-                        resourcePath = "Avatar/Equippables/PumpShotgun";
-                        break;
+                default:
+                    resourcePath = "Avatar/Equippables/M1911";
+                    break;
+            }
 
-                    default:
-                        resourcePath = "Avatar/Equippables/M1911";
-                        break;
-                }
-
-                // test to see if this works
-                // AvatarEquippable equippable = dealer.SetEquippable_Return(resourcePath);
+            // test to see if this works
+            // AvatarEquippable equippable = dealer.SetEquippable_Return(resourcePath);
 #if MONO
-                GameObject gameObject = Resources.Load(resourcePath) as GameObject;
+            GameObject gameObject = Resources.Load(resourcePath) as GameObject;
 #else
                 UnityEngine.Object obj = Resources.Load(resourcePath);
                 GameObject gameObject = obj.TryCast<GameObject>();
 #endif
 
-                AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, null).GetComponent<AvatarEquippable>();
+            AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
+
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
+            {
+                dealer.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
+                dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
+                dealer.Health.Health = dealerConfig.CartelDealerHP;
 #if MONO
                 if (equippable is AvatarWeapon weapon)
                     dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
@@ -670,7 +670,7 @@ namespace CartelEnforcer
                     {
                         Log("[DEALER ACTIVITY] No action taken");
                         // Has no contract but is in time window, and random roll didnt award the contract
-                        if (!d.isInBuilding && !d.Movement.hasDestination)
+                        if (!d.isInBuilding && !d.Movement.HasDestination)
                         {
                             // and is outside meaning just afk standing
                             WalkToInterestPoint(d);

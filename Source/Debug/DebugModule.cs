@@ -1,6 +1,8 @@
 ﻿using System.Collections;
+using System.Diagnostics;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DriveByEvent;
@@ -8,7 +10,6 @@ using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
-using System.Diagnostics;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -48,7 +49,6 @@ namespace CartelEnforcer
             if (currentConfig.debugMode)
                 MelonLogger.Msg(msg);
         }
-
 
         public static IEnumerator OnInputTestDealerInv()
         {

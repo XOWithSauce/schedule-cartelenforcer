@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
 		<DebugSymbols>true</DebugSymbols>
@@ -22,11 +22,11 @@
 		<TargetFramework>net48</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.5.0.0</FileVersion>
-		<Version>1.5.0</Version>
+		<FileVersion>1.6.0.0</FileVersion>
+		<Version>1.6.0</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
-		<Copyright>Copyright XOWithSauce 2025</Copyright>
+		<Copyright>Copyright XOWithSauce 2025 Source MIT</Copyright>
 
 		<Authors>XOWithSauce</Authors>
 		<Description>Schedule I Cartel Enforcer Mod</Description>

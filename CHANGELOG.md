@@ -1,3 +1,19 @@
+# Version 1.6.0
+- Added new Car Meetup Quest where player has to stop Cartel from transporting cocaine in the Northern Waterfront area
+- Updated mod compatibility to match latest alternate-beta and beta versions for game version 0.4.0f7
+- Changed the way which cartel dealers get assigned the default weapon from dealer config
+- Removed code that allowed Cartel Dealers completed deals to change the respective customers affinity and addiction status
+- Added new Drive-By Trigger in the Uptown region
+- Added 1 new reward to the Unexpected Alliances quest to lower law intensity by 5% upon completion
+- Removed Jeremy from Mini-Quest elgible NPCs since it now provides mod added stuff for car meetup
+- Changed Unexpected Alliances quest to require defeating atleast 1 gathering in addition to stealing 2 cartel dead drops
+- Fixed all the end game quest entry titles to have a bullet point "•" to match the game default quest syntax
+- Fixed a problem in IL2CPP version of the mod where end game quest complete, fail and end methods would randomly throw NullReferenceExceptions or ViolationAccessExceptions probably due to networking logic or garbage collection
+- Fixed 2 gathering location in the Uptown and northtown regions being at the incorrect position
+- Fixed a bug where gathering event enemies would keep their drinking or smoking animations active during combat
+- Fixed a bug where gathering event enemies would not stop the rotate or talk animations when combat has started
+
+
 # Version 1.5.8
 - Hotfixed 1 error in IL2CPP where loading a resource for the Cartel Dealer Weapon would have an incorrect "as" casting
 - Forgot to include the clamping mechanism in Config Loader for the new influence.json configuration values
