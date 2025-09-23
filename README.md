@@ -17,7 +17,8 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Cartel Gatherings](#cartel-gatherings)
 * [End Game Quests](#end-game-quests)
     * [Unexpected Alliances](#unexpected-alliances)
-    * [Infiltrate Manor](#infiltrate-manor) 
+    * [Infiltrate Manor](#infiltrate-manor)
+    * [Four Wheels](#four-wheels) 
 * [Modifying Cartel Dealers](#modifying-cartel-dealers)
 * [Modifying Spawns](#modifying-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
@@ -36,7 +37,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
-- **End Game Quests:** 2 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
+- **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
 - **Enhanced Cartel Dealers:** Cartel dealers are now officially bug fixed in this mod and they will roam the map by default. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
@@ -47,7 +48,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 ### Installation
 
 1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/).
-2. With **Melon Loader** install version **0.7.0** for Schedule I (0.7.1 is incompatible in IL2CPP)
+2. With **Melon Loader** install version **0.7.0** or **0.7.2 nightly builds** for Schedule I (0.7.1 is incompatible in IL2CPP)
 3. Manually download the correct .zip file and unzip it.
 4. Copy the **.dll file** and the **Cartel Enforcer** folder into your **Mods** folder.
 
@@ -250,8 +251,9 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
     3. Player must be atleast Enforcer rank
 
 - Upon paying the $5000 Bribe to Manny, you get a custom active quest:
-    - First you must intercept cartel dead drops twice (the Mini Quest in this document)
-    - After intercepts, you must wait for Manny to arrange a meeting and send a text.
+    - First you must intercept cartel dead drops twice
+    - Additionally you must stop a Cartel Gathering once
+    - After completing the first step you must wait for Manny to arrange a meeting and send a text.
     - After player attends the meeting and finishes the dialogue they get the final quest step
     - Kill the Cartel Brute
         - If you run more than 70 units away from the Brute the Quest will fail
@@ -306,6 +308,35 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 | Silver Watch | **20%** | 1 |  |
 | Silver Chain | **20%** | 1 |  |
 | Stolen Cartel Item | **80%** | 1 | Only spawns if the `cartelStolenItems` pool has items. |
+
+---
+
+
+---
+
+<img src="https://i.imgur.com/sWndjjy.png">
+
+### Four Wheels
+
+The End Game Quest can be started by speaking to Cranky Frank between 16:00 and 18:00 when they are smoking a cigarette near at the Northern Waterfront. This Quest can be completed only once per session.
+
+> Note: The *Four Wheels* Quest is in early phase development and is subject to change in content, difficulty and rewards.
+
+- **Quest Prerequirements:**
+    1. Cartel must be Hostile
+    2. Player must have unlocked atleast 3 customers from the Docks region
+    3. Player must be atleast Hustler rank
+
+- Upon paying the $3500 Bribe to Cranky Frank, you get a custom active quest:
+    - You must first ask Jeremy for additional information after 21:00 at their house. Bribing them costs $6000.
+    - After talking to Jeremy you must stop the Cartel from transporting cocaine in the Northern Waterfront.
+    - After killing all the enemies you must escape before police arrive.
+
+- **Quest Rewards:**
+    - XP Based on Total Cartel Influence (300 - 600 XP)
+    - You get Cocaine Bricks from the SUV trunk (available after all cartel enemies are killed)
+    - Cocaine Bricks amount scales with Total Cartel Influence
+    - All unlocked regions have their Cartel Influence decreased by 10%
 
 ---
 
