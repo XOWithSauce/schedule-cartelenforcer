@@ -4,10 +4,12 @@ using System.Collections;
 using MelonLoader;
 using UnityEngine;
 using HarmonyLib;
+using UnityEngine.UI;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
+using static CartelEnforcer.InterceptEvent;
 
 #if MONO
 using ScheduleOne.Law;
@@ -463,13 +465,6 @@ namespace CartelEnforcer
                 bossGoon = null;
             }
 
-            if (activeQuest != null)
-            {
-                if (Quest.Quests.Contains(activeQuest))
-                    Quest.Quests.Remove(activeQuest);
-                if (activeQuest.gameObject.activeSelf)
-                    activeQuest.gameObject.SetActive(false);
-            }
             yield return null;
         }
         #endregion
@@ -774,14 +769,6 @@ namespace CartelEnforcer
                 }
             }
 
-            if (activeManorQuest != null)
-            {
-                if (Quest.Quests.Contains(activeManorQuest))
-                    Quest.Quests.Remove(activeManorQuest);
-                if (activeManorQuest.gameObject.activeSelf)
-                    activeManorQuest.gameObject.SetActive(false);
-            }
-
             yield return null;
         }
         #endregion
@@ -954,6 +941,8 @@ namespace CartelEnforcer
             controller.handler.WorldspaceRend.ShowText(dialog[1], lerpWait + 2f);
             controller.npc.Movement.FacePoint(new Vector3(-32.68f, -2.54f, 168.73f), lerpTime: 1f);
             yield return Wait2;
+            if (!registered) yield break;
+
             controller.npc.Movement.FacePoint(Player.GetClosestPlayer(controller.npc.CenterPoint, out _).CenterPointTransform.position, lerpTime: 1f);
             yield return waitObj;
             if (!registered) yield break;
@@ -1116,10 +1105,77 @@ namespace CartelEnforcer
                 }
             }
 
+            
             yield return null;
         }
 
         #endregion
+
+        // Shared UI related code
+        #region Quest UI prefabs
+        public static RectTransform MakeIcon(Transform parent)
+        {
+            GameObject logo = new("BenziesLogoQuest");
+            Image imgComp = logo.AddComponent<Image>();
+            imgComp.sprite = benziesLogo;
+            RectTransform rt = logo.AddComponent<RectTransform>();
+            logo.AddComponent<CanvasRenderer>();
+            logo.transform.SetParent(parent);
+            return rt;
+        }
+        public static GameObject MakeUIPrefab(Transform parent)
+        {
+            GameObject go = new("CartelEnforcerLogo");
+            GameObject IconContainer = new("IconContainer");
+            GameObject MainLabel = new("MainLabel");
+            IconContainer.transform.parent = go.transform;
+            MainLabel.transform.parent = go.transform;
+
+            RectTransform rtr1 = go.AddComponent<RectTransform>();
+            rtr1.anchoredPosition = new Vector2(0f, 0f);
+            rtr1.anchorMax = new Vector2(0.5f, 0.5f);
+            rtr1.anchorMin = new Vector2(0.5f, 0.5f);
+            rtr1.offsetMax = new Vector2(25f, 25f);
+            rtr1.offsetMin = new Vector2(-25f, -25f);
+            rtr1.pivot = new Vector2(0.5f, 0.5f);
+            rtr1.sizeDelta = new Vector2(50f, 50f);
+
+            go.AddComponent<CanvasRenderer>();
+            go.AddComponent<Image>();
+
+            RectTransform rtr2 = IconContainer.AddComponent<RectTransform>();
+            rtr2.sizeDelta = new Vector2(50f, 50f);
+            Image logo = IconContainer.AddComponent<Image>();
+            logo.sprite = benziesLogo;
+
+            RectTransform rtr3 = MainLabel.AddComponent<RectTransform>();
+            rtr3.anchoredPosition = new Vector2(0f, -46f);
+            rtr3.anchorMax = new Vector2(0.5f, 0.5f);
+            rtr3.anchorMin = new Vector2(0.5f, 0.5f);
+            rtr3.offsetMax = new Vector2(250f, 14f);
+            rtr3.offsetMin = new Vector2(-250f, -106f);
+            rtr3.pivot = new Vector2(-250f, -106f);
+            rtr3.sizeDelta = new Vector2(500f, 120f);
+            MainLabel.AddComponent<CanvasRenderer>();
+            MainLabel.AddComponent<Text>();
+            go.transform.parent = parent;
+            return go;
+        }
+        public static GameObject MakePOI(Transform parent, GameObject UiPrefab)
+        {
+            GameObject poiPrefabObject = new GameObject($"CartelEnforcer_POI");
+            poiPrefabObject.transform.SetParent(parent);
+            poiPrefabObject.SetActive(false);
+            POI poi = poiPrefabObject.AddComponent<POI>();
+            poi.AutoUpdatePosition = true;
+            poi.MainText = "Test";
+            poi.DefaultMainText = "TestText";
+            poi.UIPrefab = UiPrefab;
+            return poiPrefabObject;
+        }
+
+        #endregion
+
     }
 
 }

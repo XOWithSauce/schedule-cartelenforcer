@@ -4,11 +4,9 @@ using System.Collections;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UI;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
-using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.EndGameQuest;
 
 #if MONO
@@ -96,7 +94,6 @@ namespace CartelEnforcer
 
         // store the combat variables
         private float GiveUpRange = 0f;
-        private float GiveUpTime = 0f;
         private int GiveUpAfterSuccessfulHits = 0;
         private float DefaultSearchTime = 0f;
 
@@ -162,14 +159,6 @@ namespace CartelEnforcer
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
 #endif
-                if (Quest.ActiveQuests.Contains(this))
-                    Quest.ActiveQuests.Remove(this);
-
-                if (Quest.Quests.Contains(this))
-                    Quest.Quests.Remove(this);
-
-                coros.Add(MelonCoroutines.Start(SetActiveSoon(false)));
-
                 investigationActive = false;
                 playerSightedActive = false;
                 combatBegun = false;
@@ -181,13 +170,8 @@ namespace CartelEnforcer
                 Log($"Quest_CarMeetup: An error occurred in base.End: {ex.Message}");
                 throw;
             }
-        }
 
-        private IEnumerator SetActiveSoon(bool active)
-        {
-            yield return Wait2; // because of hud ui anim
             this.gameObject.SetActive(false);
-            yield return null;
         }
 
         #endregion
@@ -195,7 +179,8 @@ namespace CartelEnforcer
 
 
 #if IL2CPP
-        // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries is il2cpp system ienumerable but expecting system ienumerable?
+        // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries
+        // il2cpp system ienumerable but expecting system ienumerable?
         public new int ActiveEntryCount
         {
             get
@@ -261,9 +246,12 @@ namespace CartelEnforcer
                 this.transform.SetParent(target);
             }
 
-            MakeIcon();
-            MakeUIPrefab();
-            MakePOI();
+            // UI related code and the benzies logo
+            RectTransform rt = MakeIcon(this.transform);
+            rtIcon = rt;
+            this.IconPrefab = rt;
+            UiPrefab = MakeUIPrefab(this.transform);
+            PoIPrefab = MakePOI(this.transform, UiPrefab);
 
             // Create the QuestEntry GameObjects and parent them.
             GameObject talkTojeremyObject = new GameObject("QuestEntry_TalkToJeremy");
@@ -360,9 +348,6 @@ namespace CartelEnforcer
             escape.ParentQuest = this;
             escape.CompleteParentQuest = false;
 
-            Quest.Quests.Add(this);
-            Quest.ActiveQuests.Add(this);
-            this.InitializeSaveable();
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
@@ -370,10 +355,10 @@ namespace CartelEnforcer
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
 #endif
             instance.onMinutePass.Add(new Action(this.MinPass));
-            coros.Add(MelonCoroutines.Start(StartQuestDetail()));
+            StartQuestDetail();
         }
 
-        private IEnumerator StartQuestDetail() // todo fixme this dumb
+        private void StartQuestDetail() // todo fixme this dumb
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
@@ -399,7 +384,7 @@ namespace CartelEnforcer
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
 
-            yield return null;
+            return;
         }
 
         void CombatStarted()
@@ -425,9 +410,20 @@ namespace CartelEnforcer
                 kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
                 kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
             }
-            Player p = Player.GetClosestPlayer(spawnedGoons["guard"].CenterPointTransform.position, out float _);
-            spawnedGoons["guard"].AttackEntity(p.GetComponent<ICombatTargetable>());
-            spawnedGoons["extra1"].AttackEntity(p.GetComponent<ICombatTargetable>());
+
+            CartelGoon guard = null;
+            if (spawnedGoons.Keys.Contains("guard"))
+                guard = spawnedGoons["guard"];
+
+            Player p = null;
+            if (guard != null)
+            {
+                p = Player.GetClosestPlayer(spawnedGoons["guard"].CenterPointTransform.position, out float _);
+                spawnedGoons["guard"].AttackEntity(p.GetComponent<ICombatTargetable>());
+            }
+
+            if (p != null && spawnedGoons.Keys.Contains("extra1"))
+                spawnedGoons["extra1"].AttackEntity(p.GetComponent<ICombatTargetable>());
         }
 
         private IEnumerator SpawnCarMeetup()
@@ -495,10 +491,16 @@ namespace CartelEnforcer
                 {
                     Log("Parsing Brick");
                     GameObject brickOriginal = storedItemInst.Visuals.cocaineVisuals.Container.gameObject;
-                    if (brickOriginal == null) { Log("Brick original obj is null"); }
-                    brickBase = UnityEngine.Object.Instantiate(storedItemInst.Visuals.cocaineVisuals.Container.gameObject);
-                    brickBase.name = "CokeBrickDecor";
-                    brickBase.transform.SetParent(this.transform);
+                    if (brickOriginal != null) 
+                    { 
+                        brickBase = UnityEngine.Object.Instantiate(brickOriginal);
+                        brickBase.name = "CokeBrickDecor";
+                        brickBase.transform.SetParent(this.transform);
+                    }
+                    else
+                    {
+                        Log("Brick original obj is null");
+                    }
                 }
             }
 #else
@@ -517,10 +519,16 @@ namespace CartelEnforcer
                     {
                         Log("Parsing Brick");
                         GameObject brickOriginal = storedItemInst.Visuals.cocaineVisuals.Container.gameObject;
-                        if (brickOriginal == null) { Log("Brick original obj is null"); }
-                        brickBase = UnityEngine.Object.Instantiate(storedItemInst.Visuals.cocaineVisuals.Container.gameObject);
-                        brickBase.name = "CokeBrickDecor";
-                        brickBase.transform.SetParent(this.transform);
+                        if (brickOriginal != null) 
+                        { 
+                            brickBase = UnityEngine.Object.Instantiate(brickOriginal);
+                            brickBase.name = "CokeBrickDecor";
+                            brickBase.transform.SetParent(this.transform);
+                        }
+                        else
+                        {
+                            Log("Brick original obj is null");
+                        }
                     } 
                 }
             }
@@ -645,25 +653,22 @@ namespace CartelEnforcer
             // if unspawned goon count is too low we insta despawn
             if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4)
             {
+                // because below dowhile not limited by max iter added this
+                int maxIter = 5;
+                int currentIter = 0;
                 do
                 {
-#if MONO
-                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
+                    if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count == 0) break;
+                    int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1; // list pos to last
+                    CartelGoon target = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count];
+                    target.Health.Revive();
+                    target.Despawn();
+                    // If combat behaviour is active then the goon will be invis but fight player ensure disable
+                    if (target.Behaviour.CombatBehaviour.Active)
+                        target.Behaviour.CombatBehaviour.Disable_Networked(null);
 
-                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
-#else
-                    int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1;
-                    if (count != -1)
-                    {
-                        NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Health.Revive();
-                        NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Despawn();
-                    }
-                    else
-                    {
-                        break;
-                    }
-#endif
-                } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4);
+                    currentIter++;
+                } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4 || currentIter == maxIter);
             }
 
             // first handler guy crouched next to bricks
@@ -696,6 +701,8 @@ namespace CartelEnforcer
             spawnedGoons.Add("extra2", goonExtra2);
 
             goonGuard.AddGoonMate(goonExtra2);
+            goonGuard.AddGoonMate(goonExtra1);
+            goonGuard.AddGoonMate(goonHandler);
             goonExtra1.AddGoonMate(goonHandler);
 
             foreach (KeyValuePair<string, CartelGoon> kvp in spawnedGoons)
@@ -714,13 +721,11 @@ namespace CartelEnforcer
                 if (GiveUpRange == 0f)
                 {
                     GiveUpRange = kvp.Value.Behaviour.CombatBehaviour.GiveUpRange;
-                    GiveUpTime = kvp.Value.Behaviour.CombatBehaviour.GiveUpTime;
                     GiveUpAfterSuccessfulHits = kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
                     DefaultSearchTime = kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime;
                 }
 
                 kvp.Value.Behaviour.CombatBehaviour.GiveUpRange = 120f;
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpTime = 300f;
                 kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 60;
                 kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
 
@@ -809,82 +814,25 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        #region Quest prefabs
-        private void MakeIcon()
-        {
-            GameObject logo = new("BenziesLogoQuest");
-            Image imgComp = logo.AddComponent<Image>();
-            imgComp.sprite = benziesLogo;
-            RectTransform rt = logo.AddComponent<RectTransform>();
-            logo.AddComponent<CanvasRenderer>();
-            logo.transform.SetParent(this.transform);
-
-            rtIcon = rt;
-            this.IconPrefab = rt;
-        }
-
-        private void MakeUIPrefab()
-        {
-            GameObject go = new("CartelEnforcerLogo");
-            GameObject IconContainer = new("IconContainer");
-            GameObject MainLabel = new("MainLabel");
-            IconContainer.transform.parent = go.transform;
-            MainLabel.transform.parent = go.transform;
-
-            RectTransform rtr1 = go.AddComponent<RectTransform>();
-            rtr1.anchoredPosition = new Vector2(0f, 0f);
-            rtr1.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr1.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr1.offsetMax = new Vector2(25f, 25f);
-            rtr1.offsetMin = new Vector2(-25f, -25f);
-            rtr1.pivot = new Vector2(0.5f, 0.5f);
-            rtr1.sizeDelta = new Vector2(50f, 50f);
-
-            go.AddComponent<CanvasRenderer>();
-            go.AddComponent<Image>();
-
-            RectTransform rtr2 = IconContainer.AddComponent<RectTransform>();
-            rtr2.sizeDelta = new Vector2(50f, 50f);
-            Image logo = IconContainer.AddComponent<Image>();
-            logo.sprite = benziesLogo;
-
-            RectTransform rtr3 = MainLabel.AddComponent<RectTransform>();
-            rtr3.anchoredPosition = new Vector2(0f, -46f);
-            rtr3.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr3.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr3.offsetMax = new Vector2(250f, 14f);
-            rtr3.offsetMin = new Vector2(-250f, -106f);
-            rtr3.pivot = new Vector2(-250f, -106f);
-            rtr3.sizeDelta = new Vector2(500f, 120f);
-            MainLabel.AddComponent<CanvasRenderer>();
-            MainLabel.AddComponent<Text>();
-            UiPrefab = go;
-            go.transform.parent = this.transform;
-
-            return;
-        }
-
-        private void MakePOI()
-        {
-            GameObject poiPrefabObject = new GameObject($"CartelEnforcer_POI");
-            poiPrefabObject.transform.SetParent(this.transform);
-            poiPrefabObject.SetActive(false);
-            POI poi = poiPrefabObject.AddComponent<POI>();
-            poi.AutoUpdatePosition = true;
-            poi.MainText = "Test";
-            poi.DefaultMainText = "TestText";
-            poi.UIPrefab = UiPrefab;
-            PoIPrefab = poiPrefabObject;
-            return;
-        }
-        #endregion
         private IEnumerator PlayerSightedByGuard(Player p)
         {
+            if (!spawnedGoons.Keys.Contains("guard"))
+            {
+                Log("Spawned goons does not contain key guard");
+                yield break;
+            }
+
             DialogueController controller = spawnedGoons["guard"].DialogueHandler.gameObject.GetComponent<DialogueController>();
             int timesWarned = 0;
             Vector3 closestPoint = Vector3.zero;
             while (registered && !combatBegun)
             {
+                if (!spawnedGoons.Keys.Contains("guard"))
+                {
+                    Log("Spawned goons does not contain key guard");
+                    yield break;
+                }
+
                 if (spawnedGoons["guard"].Health.IsDead || spawnedGoons["guard"].Health.IsKnockedOut) break;
 
                 spawnedGoons["guard"].Movement.GetClosestReachablePoint(p.CenterPointTransform.position, out closestPoint);
@@ -901,7 +849,7 @@ namespace CartelEnforcer
                     switch (UnityEngine.Random.Range(0, 4))
                     {
                         case 0:
-                            controller.handler.WorldspaceRend.ShowText($"Get out here you punk!", 3f);
+                            controller.handler.WorldspaceRend.ShowText($"Get out of here you punk!", 3f);
                             break;
                         case 1:
                             controller.handler.WorldspaceRend.ShowText($"This ain't your business!", 3f);
@@ -954,7 +902,8 @@ namespace CartelEnforcer
 
         public override void MinPass()
         {
-            if (!registered || carMeetupCompleted || this == null || this.State != EQuestState.Active) return; // because in il2cpp it doesnt just work to remove listener
+            if (!registered || SaveManager.Instance.IsSaving || carMeetupCompleted || this.State != EQuestState.Active) return;
+
 #if MONO
             base.MinPass(); // Is this necessary in mono or does cause recursion??
 #endif
@@ -1002,7 +951,7 @@ namespace CartelEnforcer
                     }
                     return;
                 }
-                else if (!playerSightedActive)
+                else if (!playerSightedActive && spawnedGoons.Keys.Contains("guard"))
                 {
                     Player nearest = Player.GetClosestPlayer(QuestEntry_StopCarMeetup.PoI.transform.position, out _);
                     // Check player distance if nearby 30 units evaluate vision of guard
@@ -1061,6 +1010,10 @@ namespace CartelEnforcer
             yield return Wait10;
 
             Player.Local.CrimeData.SetPursuitLevel(PlayerCrimeData.EPursuitLevel.Investigating);
+
+            // this is not guaranteed dispatch, limited by offc qty in station + car limit
+            // works without it too but officers should traverse to player?
+            // todo fix
 #if MONO
             PoliceStation.PoliceStations.FirstOrDefault().Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
 #else
@@ -1076,7 +1029,7 @@ namespace CartelEnforcer
         }
         private void HourPass()
         {
-            if (!registered || carMeetupCompleted || this == null || this.State != EQuestState.Active) return;
+            if (!registered || SaveManager.Instance.IsSaving || carMeetupCompleted || this == null || this.State != EQuestState.Active) return;
 
             Log("HourPass In Quest");
             if (!InstanceFinder.IsServer)
@@ -1125,16 +1078,8 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                try
-                {
-                    kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
-                } catch { }
-
-                try
-                {
-                    kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
-                }
-                catch { }
+                kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
+                kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
 
                 if (kvp.Value.Health.IsDead)
                     kvp.Value.Health.Revive();
@@ -1146,7 +1091,6 @@ namespace CartelEnforcer
                 kvp.Value.Health.Health = 100f;
 
                 kvp.Value.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpTime = GiveUpTime;
                 kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
                 kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
 
@@ -1160,6 +1104,7 @@ namespace CartelEnforcer
             }
             spawnedGoons.Clear();
             spawnedGoonsGuids.Clear();
+
             yield return null;
         }
 

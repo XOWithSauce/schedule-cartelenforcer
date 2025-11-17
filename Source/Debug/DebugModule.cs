@@ -221,6 +221,7 @@ namespace CartelEnforcer
             debounce = false;
             yield return null;
         }
+
         public static IEnumerator MakeUI()
         {
             _playerTransform = Player.Local.CenterPointTransform;
@@ -240,11 +241,11 @@ namespace CartelEnforcer
         {
             Log("Spawning Debug visuals for Ambush Areas");
             // prevent stripping
-            var meshRenderer = new MeshRenderer();
+            //var meshRenderer = new MeshRenderer();
 #if MONO
-            var meshFilter = new MeshFilter();
-            var boxCollider = new BoxCollider();
-            var capsuleCollider = new CapsuleCollider();
+            //var meshFilter = new MeshFilter();
+            //var boxCollider = new BoxCollider();
+            //var capsuleCollider = new CapsuleCollider();
 #endif
 
             Shader standardShader = Shader.Find("Unlit/Color");
@@ -321,11 +322,10 @@ namespace CartelEnforcer
         public static IEnumerator SpawnDriveByAreaVisual()
         {
             Log("Spawning Debug visuals for Drive By Triggers");
-            // prevent stripping
-            var meshRenderer = new MeshRenderer();
+            //var meshRenderer = new MeshRenderer();
 #if MONO
-            var meshFilter = new MeshFilter();
-            var sphereCollider = new SphereCollider();
+            //var meshFilter = new MeshFilter();
+            //var sphereCollider = new SphereCollider();
 #endif
             // Shader select order
             Shader standardShader = Shader.Find("Unlit/Color");

@@ -4,7 +4,7 @@ using UnityEngine;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InterceptEvent;
-
+using static CartelEnforcer.AmbushOverrides;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -477,7 +477,7 @@ namespace CartelEnforcer
                         if (i == maxAttempts) break; // just send it
 
                         randomDirection = UnityEngine.Random.onUnitSphere;
-                        randomDirection.y = 0;
+                        randomDirection.y = 0f;
                         randomDirection.Normalize();
                         randomRadius = UnityEngine.Random.Range(16f, 24f);
                         randomPoint = dealer.transform.position + randomDirection * randomRadius;

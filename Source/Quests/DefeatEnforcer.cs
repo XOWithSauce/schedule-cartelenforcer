@@ -4,11 +4,9 @@ using System.Collections;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UI;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
-using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.EndGameQuest;
 
 #if MONO
@@ -18,7 +16,6 @@ using static ScheduleOne.AvatarFramework.AvatarSettings;
 using ScheduleOne.Combat;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Interaction;
-using ScheduleOne.Map;
 using ScheduleOne.Cartel;
 using ScheduleOne.GameTime;
 using ScheduleOne.Quests;
@@ -82,7 +79,6 @@ namespace CartelEnforcer
 
         // store the combat variables
         private float GiveUpRange = 0f;
-        private float GiveUpTime = 0f;
         private int GiveUpAfterSuccessfulHits = 0;
         private float DefaultSearchTime = 0f;
 
@@ -149,14 +145,6 @@ namespace CartelEnforcer
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
 #endif
-                if (Quest.ActiveQuests.Contains(this))
-                    Quest.ActiveQuests.Remove(this);
-
-                if (Quest.Quests.Contains(this))
-                    Quest.Quests.Remove(this);
-
-                coros.Add(MelonCoroutines.Start(SetActiveSoon(false)));
-
                 Log("Quest_DefeatEnforcer: Base End method finished successfully.");
             }
             catch (Exception ex)
@@ -164,12 +152,8 @@ namespace CartelEnforcer
                 Log($"Quest_DefeatEnforcer: An error occurred in base.End: {ex.Message}");
                 throw;
             }
-        }
-        private IEnumerator SetActiveSoon(bool active)
-        {
-            yield return Wait2; // because of hud ui anim
+
             this.gameObject.SetActive(false);
-            yield return null;
         }
         #endregion
 
@@ -222,7 +206,6 @@ namespace CartelEnforcer
             TrackOnBegin = true;
             autoInitialize = false;
             AutoCompleteOnAllEntriesComplete = false;
-
             onActiveState = new UnityEvent();
             onComplete = new UnityEvent();
             onInitialComplete = new UnityEvent();
@@ -241,9 +224,12 @@ namespace CartelEnforcer
                 this.transform.SetParent(target);
             }
 
-            MakeIcon();
-            MakeUIPrefab();
-            MakePOI();
+            // UI related code and the benzies logo
+            RectTransform rt = MakeIcon(this.transform);
+            rtIcon = rt;
+            this.IconPrefab = rt;
+            UiPrefab = MakeUIPrefab(this.transform);
+            PoIPrefab = MakePOI(this.transform, UiPrefab);
 
             // Create the QuestEntry GameObjects and parent them.
             GameObject investigateObject = new GameObject("QuestEntry_Investigate");
@@ -258,7 +244,6 @@ namespace CartelEnforcer
             QuestEntry investigate = investigateObject.AddComponent<QuestEntry>();
             QuestEntry contact = contactObject.AddComponent<QuestEntry>();
             QuestEntry defeat = defeatObject.AddComponent<QuestEntry>();
-
 
             Log("Setting Entries");
             this.QuestEntry_Investigate = investigate;
@@ -334,9 +319,6 @@ namespace CartelEnforcer
             defeat.ParentQuest = this;
             defeat.CompleteParentQuest = false;
 
-            Quest.Quests.Add(this);
-            Quest.ActiveQuests.Add(this);
-            this.InitializeSaveable();
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
@@ -344,10 +326,10 @@ namespace CartelEnforcer
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
 #endif
             instance.onMinutePass.Add(new Action(this.MinPass));
-            coros.Add(MelonCoroutines.Start(StartQuestDetail()));
+            StartQuestDetail();
         }
 
-        private IEnumerator StartQuestDetail() // todo fixme this dumb
+        private void StartQuestDetail() // todo fixme this dumb
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
@@ -373,79 +355,8 @@ namespace CartelEnforcer
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
 
-            yield return null;
-        }
-
-        #region Quest prefabs
-        private void MakeIcon()
-        {
-            GameObject logo = new("BenziesLogoQuest");
-            Image imgComp = logo.AddComponent<Image>();
-            imgComp.sprite = benziesLogo;
-            RectTransform rt = logo.AddComponent<RectTransform>();
-            logo.AddComponent<CanvasRenderer>();
-            logo.transform.SetParent(this.transform);
-
-            rtIcon = rt;
-            this.IconPrefab = rt;
-        }
-
-        private void MakeUIPrefab()
-        {
-            GameObject go = new("CartelEnforcerLogo");
-            GameObject IconContainer = new("IconContainer");
-            GameObject MainLabel = new("MainLabel");
-            IconContainer.transform.parent = go.transform;
-            MainLabel.transform.parent = go.transform;
-
-            RectTransform rtr1 = go.AddComponent<RectTransform>();
-            rtr1.anchoredPosition = new Vector2(0f, 0f);
-            rtr1.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr1.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr1.offsetMax = new Vector2(25f, 25f);
-            rtr1.offsetMin = new Vector2(-25f, -25f);
-            rtr1.pivot = new Vector2(0.5f, 0.5f);
-            rtr1.sizeDelta = new Vector2(50f, 50f);
-
-            go.AddComponent<CanvasRenderer>();
-            go.AddComponent<Image>();
-
-            RectTransform rtr2 = IconContainer.AddComponent<RectTransform>();
-            rtr2.sizeDelta = new Vector2(50f, 50f);
-            Image logo = IconContainer.AddComponent<Image>();
-            logo.sprite = benziesLogo;
-
-            RectTransform rtr3 = MainLabel.AddComponent<RectTransform>();
-            rtr3.anchoredPosition = new Vector2(0f, -46f);
-            rtr3.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr3.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr3.offsetMax = new Vector2(250f, 14f);
-            rtr3.offsetMin = new Vector2(-250f, -106f);
-            rtr3.pivot = new Vector2(-250f, -106f);
-            rtr3.sizeDelta = new Vector2(500f, 120f);
-            MainLabel.AddComponent<CanvasRenderer>();
-            MainLabel.AddComponent<Text>();
-            UiPrefab = go;
-            go.transform.parent = this.transform;
-
             return;
         }
-
-        private void MakePOI()
-        {
-            GameObject poiPrefabObject = new GameObject($"CartelEnforcer_POI");
-            poiPrefabObject.transform.SetParent(this.transform);
-            poiPrefabObject.SetActive(false);
-            POI poi = poiPrefabObject.AddComponent<POI>();
-            poi.AutoUpdatePosition = true;
-            poi.MainText = "Test";
-            poi.DefaultMainText = "TestText";
-            poi.UIPrefab = UiPrefab;
-            PoIPrefab = poiPrefabObject;
-            return;
-        }
-        #endregion
-
         private IEnumerator ContactSpawn()
         {
             Log("Spawning Contact NPC");
@@ -746,13 +657,11 @@ namespace CartelEnforcer
             if (GiveUpRange == 0f)
             {
                 GiveUpRange = _bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
-                GiveUpTime = _bossGoon.Behaviour.CombatBehaviour.GiveUpTime;
                 GiveUpAfterSuccessfulHits = _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
                 DefaultSearchTime = _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
             }
 
             _bossGoon.Behaviour.CombatBehaviour.GiveUpRange = 70f;
-            _bossGoon.Behaviour.CombatBehaviour.GiveUpTime = 300f;
             _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 200;
             _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
 
@@ -766,8 +675,6 @@ namespace CartelEnforcer
             }
             bossGoon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)OnBossDied);
 
-            //Log("Create Compass Element");
-            //QuestEntry_DefeatBoss.CreateCompassElement();
             yield return null;
         }
 
@@ -907,7 +814,7 @@ namespace CartelEnforcer
 
         public override void MinPass()
         {
-            if (!registered || completed || this == null || this.State != EQuestState.Active) return; // because in il2cpp it doesnt just work to remove listener
+            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return; 
 #if MONO
             base.MinPass(); // Is this necessary in mono or does cause recursion??
 
@@ -1010,7 +917,7 @@ namespace CartelEnforcer
 
         private void HourPass()
         {
-            if (!registered || completed || this == null || this.State != EQuestState.Active) return;
+            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return;
 
             Log("HourPass In Quest");
             if (!InstanceFinder.IsServer)
@@ -1073,6 +980,8 @@ namespace CartelEnforcer
         {
             if (bossGoon != null)
             {
+                if (bossGoon.Behaviour.CombatBehaviour.Active)
+                    bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 // Reset all non default stats that would carry on modified
                 bossGoon.Health.MaxHealth = 100f;
                 bossGoon.Movement.MoveSpeedMultiplier = 0.8f;
@@ -1081,7 +990,6 @@ namespace CartelEnforcer
                 bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
 
                 bossGoon.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
-                bossGoon.Behaviour.CombatBehaviour.GiveUpTime = GiveUpTime;
                 bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
                 bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
             }

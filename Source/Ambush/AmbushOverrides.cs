@@ -1,13 +1,22 @@
 ﻿using System.Collections;
 using UnityEngine;
+using HarmonyLib;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
+using ScheduleOne.AvatarFramework.Equipping;
+using ScheduleOne.Levelling;
+using ScheduleOne.Economy;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.AvatarFramework.Equipping;
+using Il2CppScheduleOne.Levelling;
+using Il2CppScheduleOne.Economy;
 #endif
 
 namespace CartelEnforcer
@@ -17,14 +26,23 @@ namespace CartelEnforcer
 
         public static ListNewAmbush ambushConfig;
         public static ListNewAmbush gameDefaultAmbush;
+        public static AmbushGeneralSettingsSerialized ambushSettings;
 
+        // These 2 are for the ambush class + dealer death spawned defenders, populated based on Ambush/settings.json
+        public static AvatarWeapon[] MeleeWeapons;
+        public static AvatarWeapon[] RangedWeapons;
         public static IEnumerator ApplyGameDefaultAmbush()
         {
             yield return Wait5;
             if (!registered) yield break;
 
+            // Load the positional configs and game default positions
             ambushConfig = ConfigLoader.LoadAmbushConfig();
             gameDefaultAmbush = ConfigLoader.LoadDefaultAmbushConfig();
+
+            // Load the general settings from settings.json
+            ambushSettings = ConfigLoader.LoadAmbushSettings();
+
             Log("Loaded Ambush Config Data");
 
             CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
@@ -73,7 +91,6 @@ namespace CartelEnforcer
             Log("Done Applying Game Default Ambushes");
             yield return null;
         }
-
         public static IEnumerator AddUserModdedAmbush() // Todo optimize this code is ugly
         {
             yield return Wait2;
@@ -119,7 +136,7 @@ namespace CartelEnforcer
                     newLocations[newLocations.Length - 1] = baseComp;
                     regActivity.AmbushLocations = newLocations;
 
-                    // Important to add this at the end - otherwise the networked object refuses to swap out the array for locations
+                    // Important to add this at the end -> otherwise the networked object refuses to swap out the array for locations
                     newAmbushObj.transform.parent = nextParent;
                 }
 
@@ -130,6 +147,127 @@ namespace CartelEnforcer
                 Log("No User Added Ambushes found");
             }
         }
+        public static IEnumerator SetAmbushGeneralSettings()
+        {
+            Log("Setting Ambush general settings...");
 
+            if (ambushSettings.RangedWeaponAssetPaths != null)
+            {
+                RangedWeapons = new AvatarWeapon[ambushSettings.RangedWeaponAssetPaths.Count];
+            }
+            if (ambushSettings.MeleeWeaponAssetPaths != null)
+            {
+                MeleeWeapons = new AvatarWeapon[ambushSettings.MeleeWeaponAssetPaths.Count];
+            }
+
+            int assetPaths = ambushSettings.RangedWeaponAssetPaths.Count;
+            Log("  Ranged asset paths count: " + assetPaths);
+            for (int i = 0; i < assetPaths; i++) 
+            {
+                Log("  Load: " + i);
+                // Instantiate Load into array
+#if MONO
+                GameObject gameObject = Resources.Load(ambushSettings.RangedWeaponAssetPaths[i]) as GameObject;
+#else
+                UnityEngine.Object obj = Resources.Load(ambushSettings.RangedWeaponAssetPaths[i]);
+                GameObject gameObject = obj.TryCast<GameObject>();
+#endif
+                Log("    Resource Loaded: " + i);
+                Log("  Cast AvatarEquippable: " + i);
+                AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
+                Log("    Cast Done: " + i);
+
+                if (equippable == null) 
+                { 
+                    Log($"Equippable failed to load from {ambushSettings.RangedWeaponAssetPaths[i]}");
+                    continue;
+                }
+#if MONO
+                Log("  AvatarWeaponCast: " + i);
+                if (equippable is AvatarWeapon rangedWeapon)
+                {
+                    Log("    AvatarWeaponCast Done: " + i);
+                    RangedWeapons[i] = rangedWeapon;
+                }
+#else
+                AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
+                if (weapon != null)
+                    RangedWeapons[i] = weapon;
+#endif
+                Log($"Succesfully loaded {ambushSettings.RangedWeaponAssetPaths[i]}");
+            }
+
+            assetPaths = ambushSettings.MeleeWeaponAssetPaths.Count;
+            Log("Melee asset paths count: " + assetPaths);
+            for (int i = 0; i < assetPaths; i++)
+            {
+                // same
+#if MONO
+                GameObject gameObject = Resources.Load(ambushSettings.MeleeWeaponAssetPaths[i]) as GameObject;
+#else
+                UnityEngine.Object obj = Resources.Load(ambushSettings.MeleeWeaponAssetPaths[i]);
+                GameObject gameObject = obj.TryCast<GameObject>();
+#endif
+
+                AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
+                if (equippable == null)
+                {
+                    Log($"Equippable failed to load from {ambushSettings.MeleeWeaponAssetPaths[i]}");
+                    continue;
+                }
+#if MONO
+                if (equippable is AvatarWeapon weapon)
+                    MeleeWeapons[i] = weapon;
+#else
+                AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
+                if (weapon != null)
+                    MeleeWeapons[i] = weapon;
+#endif
+                Log($"Succesfully loaded {ambushSettings.MeleeWeaponAssetPaths[i]}");
+            }
+
+            FullRank MinRankForRanged = new ((ERank)ambushSettings.MinRankForRanged, 1); // cast from int thats validated in config load
+            if (MinRankForRanged != null)
+            {
+                Ambush.MIN_RANK_FOR_RANGED_WEAPONS = MinRankForRanged;
+            } else
+            {
+                Log("Failed to assing ambush ranged weapon rank restriction");
+            }
+
+            // assign pointer to the weapon fields
+            CartelActivities instanceActivities = NetworkSingleton<Cartel>.Instance.Activities;
+            foreach (CartelActivity globalActivity in instanceActivities.GlobalActivities)
+            {
+#if MONO        
+                if (globalActivity is Ambush ambush)
+                {
+                    ambush.RangedWeapons = RangedWeapons;
+                    ambush.MeleeWeapons = MeleeWeapons;
+                    
+                }
+#else
+                Ambush temp = globalActivity.TryCast<Ambush>();
+                if (temp != null)
+                {
+                    temp.RangedWeapons = RangedWeapons;
+                    temp.MeleeWeapons = MeleeWeapons;
+                }
+#endif
+            }
+            Log("Finished applying ambush general settings");
+            yield return null;
+        }
+
+        // harmony patch for the after deal ambush
+        [HarmonyPatch(typeof(Ambush), "ContractReceiptRecorded")]
+        public static class Ambush_ContractReceiptRecorded_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(Ambush __instance, ContractReceipt receipt)
+            {
+                return ambushSettings.AfterDealAmbushEnabled;
+            }
+        }
     }
 }

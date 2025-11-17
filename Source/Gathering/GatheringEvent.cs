@@ -6,8 +6,7 @@ using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
 using static CartelEnforcer.EndGameQuest;
-
-
+using static CartelEnforcer.AmbushOverrides;
 
 #if MONO
 using ScheduleOne.Quests;
@@ -46,6 +45,7 @@ namespace CartelEnforcer
             { 5, new List<GatheringLocation>
                 {
                     new GatheringLocation(new Vector3(151.39f, 2.18f, -16.93f), 5, "forest next to the barn in the Uptown region."),
+                    new GatheringLocation(new Vector3(98.23f, 1.43f, 3.16f), 5, "sewer entrance next to Handy Hank's in the Uptown region."),
                     new GatheringLocation(new Vector3(126.84f, 1.46f, 55.52f), 5, "parking lot infront of the Church in the Uptown region."),
                     new GatheringLocation(new Vector3(65.94f, 1.46f, 65.51f), 5, "alley between the Hyland towers.")
                 }
@@ -61,7 +61,7 @@ namespace CartelEnforcer
             { 3, new List<GatheringLocation>
                 {
                     new GatheringLocation(new Vector3(-53.69f, -1.14f, -84.46f), 3, "shipping containers in the Docks region."),
-                    new GatheringLocation(new Vector3(-29.78f, -3.99f, -9.49f), 3, "canal in the Docks region."),
+                    new GatheringLocation(new Vector3(-19.31f, -3.17f, -5.31f), 3, "canal in the Docks region."),
                     new GatheringLocation(new Vector3(-66.38f, -1.14f, 21.06f), 3, "southern wharf next to warehouse.")
                 }
             },
@@ -70,6 +70,7 @@ namespace CartelEnforcer
                 {
                     new GatheringLocation(new Vector3(43.65f, 1.46f, 24.20f), 2, "town hall."),
                     new GatheringLocation(new Vector3(-8.86f, 1.56f, 79.54f), 2, "parking garage in the Downtown region."),
+                    new GatheringLocation(new Vector3(3.50f, 5.56f, 84.00f), 2, "parking garage in the Downtown region."),
                     new GatheringLocation(new Vector3(23.46f, 1.46f, 84.16f), 2, "casino in the Downtown region.")
                 }
             },

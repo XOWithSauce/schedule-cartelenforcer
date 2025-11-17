@@ -3,18 +3,22 @@ using MelonLoader.Utils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using UnityEngine;
+
 using static CartelEnforcer.CartelInventory;
+
 
 #if MONO
 using ScheduleOne.Cartel;
+using ScheduleOne.Levelling;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Persistence;
 #else
 using Il2CppScheduleOne.Cartel;
+using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Persistence;
 #endif
-
+ 
 namespace CartelEnforcer
 {
 
@@ -48,6 +52,8 @@ namespace CartelEnforcer
         public float deadDropStealFrequency = 1.0f;
         public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
         public float cartelRobberyFrequency = 1.0f;
+        // For drive by its different, random range cooldown is defined by the range -1 -> 1
+        public float driveByFrequency = 0.7f;
 
         public bool driveByEnabled = true;
 
@@ -95,6 +101,7 @@ namespace CartelEnforcer
         private static string pathModConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "config.json");
         private static string pathAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "ambush.json");
         private static string pathDefAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "default.json");
+        private static string pathSettingsAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "settings.json");
         private static string pathDealerConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Dealers", "dealer.json");
         private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
         private static string pathInfluenceConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Influence", "influence.json");
@@ -252,6 +259,54 @@ namespace CartelEnforcer
             }
             return currentState;
         }
+        #endregion
+
+        #region Ambush Settings config
+        // Read or generate the ambush settings config from Ambush/settings.json
+        public static AmbushGeneralSettingsSerialized LoadAmbushSettings()
+        {
+            AmbushGeneralSettingsSerialized config;
+            if (File.Exists(pathSettingsAmbushes))
+            {
+                try
+                {
+                    string json = File.ReadAllText(pathSettingsAmbushes);
+                    config = JsonConvert.DeserializeObject<AmbushGeneralSettingsSerialized>(json);
+                    // For list of strings asset path should only be alpahanumeric + "/" symbols indicating asset path, sanitize or validate?? todo
+
+                    // Ensure rank is within bounds
+                    // Get enum length so it works in future updates too dont have to hardcode any off that here
+                    Array ranks = Enum.GetValues(typeof(ERank));
+                    int max = ranks.Cast<int>().Max();
+                    if (config.MinRankForRanged >= max || config.MinRankForRanged < 0)
+                    {
+                        config.MinRankForRanged = Mathf.Clamp(config.MinRankForRanged, 0, max - 1);
+                    }
+
+                }
+                catch (Exception ex)
+                {
+                    config = new AmbushGeneralSettingsSerialized();
+                    config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
+                    config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+                    MelonLogger.Warning("Failed to read Ambush/settings.json config: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Could not find settings.json at Ambush/settings.json. Generating default template.");
+                config = new AmbushGeneralSettingsSerialized();
+                config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
+                config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+
+                string json = JsonConvert.SerializeObject(config, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(pathSettingsAmbushes));
+                File.WriteAllText(pathSettingsAmbushes, json);
+            }
+
+            return config;
+        }
+
         #endregion
 
         #region Persistence for Cartel Stolen Items
@@ -451,7 +506,7 @@ namespace CartelEnforcer
                 catch (Exception ex)
                 {
                     config = new CartelDealerConfig();
-                    MelonLogger.Warning("Failed to read CartelEnforcer config: " + ex);
+                    MelonLogger.Warning("Failed to read CartelEnforcer Dealer config: " + ex);
                 }
             }
             else
@@ -492,11 +547,14 @@ namespace CartelEnforcer
                     config.ambushDefeated = ClampInfluence(config.ambushDefeated, false);
 
                     config.passiveInfluenceGainPerDay = ClampInfluence(config.passiveInfluenceGainPerDay, true);
+
+                    config.graffitiInfluenceReduction = ClampInfluence(config.graffitiInfluenceReduction, false);
+
                 }
                 catch (Exception ex)
                 {
                     config = new InfluenceConfig();
-                    MelonLogger.Warning("Failed to read CartelEnforcer config: " + ex);
+                    MelonLogger.Warning("Failed to read CartelEnforcer influence config: " + ex);
                 }
             }
             else

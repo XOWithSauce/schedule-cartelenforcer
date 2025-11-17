@@ -1,3 +1,21 @@
+# Version 1.6.1
+- Compiled against 0.4.1f5 latest default / alternate game version for Halloween + Sewers Update
+- Added Ambush triggers into the sewers in the ambush.json file (note: these do need to have y value defined in spawn pos to be exact negative coordinate, unlike what the documentation currently states)
+- Added configuration support for changing Graffiti rewarded Cartel Influence Reduction (graffitiInfluenceReduction in influence.json)
+- Added configuration support for Ambush settings, changing the Weapon Arrays, Ranged weapon usage rank and also flag that allows disabling the after deal ambushes where ambush spawns randomly after deals.
+- Added configuration value in config.json to allow for changing Drive-By frequency (range -1.0 -> 1.0)
+- Changed the way which Drive-by events frequency and cooldowns are handled to fix a bug where the cooldown reduction is essentially doubled
+- Increased robbery feature adrenaline boost duration for the robber goon so they run longer after looting dealer body
+- Fixed a bug again with mod added quests where saving the game would cause crashes occasionally in IL2CPP version, as a tradeoff now the quest state and quest entry state can NOT be changed with ingame console commands
+- Fixed 1 gathering location at Docks and added 2 new gathering locations
+- Fixed a bug in the spawn logic of defender goons who can spawn after cartel dealer dies, where spawn locations would not be selected properly
+- Fixed again frequency related logic where using lower activityFrequency than 0 would cause atleast 1 hour pass ingame to not account for slowed tickrate unintentionally
+- Fixed a bug in IL2CPP code where extending the available goon pool npcs could cause crash with improper "is" casting
+- Fixed a bug in Drive-by vehicle where on spawn it would have land vehicle marked as static and could not proceed with navigation
+- Fixed a bug in the robbery feature where the goon could stay spawned after timeout and still kill the dealer when not intended
+- Clean up code all over the place where relevant and add safeguards to prevent errors where applicable
+- Added MelonLoader versioning related restrictions into assembly, now can only load on ML versions above 0.7.0 and in future this will have 0.7.1 excluded in IL2CPP version of the mod once ML 0.7.2 is out of nightly
+
 # Version 1.6.0
 - Added new Car Meetup Quest where player has to stop Cartel from transporting cocaine in the Northern Waterfront area
 - Updated mod compatibility to match latest alternate-beta and beta versions for game version 0.4.0f7

@@ -3,6 +3,7 @@ using MelonLoader;
 using UnityEngine;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
+using static CartelEnforcer.FrequencyOverrides;
 
 
 #if MONO
@@ -254,6 +255,9 @@ namespace CartelEnforcer
                 if (driveByVeh != null)
                 {
                     driveByVeh.TopSpeed = 100f;
+                    if (driveByVeh.isStatic)
+                        driveByVeh.SetIsStatic(false);
+
                     ParkData data = new();
                     data.spotIndex = -1; // set visible false
                     ParkingLot lot = UnityEngine.Object.FindObjectOfType<ParkingLot>(); // find any parking lot
@@ -348,7 +352,6 @@ namespace CartelEnforcer
             }
 
             Log("Starting Drive By Evaluation");
-            float elapsedSec = 0f;
             while (registered)
             {
                 yield return Wait2;
@@ -372,33 +375,23 @@ namespace CartelEnforcer
                 }
 #endif
 
-                elapsedSec += 2f;
-
                 if (driveByActive)
                 {
                     yield return Wait60;
                     if (!registered) yield break;
-
-                    elapsedSec += 60f;
                     continue;
                 }
 
-                if (elapsedSec >= 60f)
-                {
-                    if (hoursUntilDriveBy != 0)
-                        hoursUntilDriveBy = hoursUntilDriveBy - 1;
-                    elapsedSec = elapsedSec - 60f;
-                }
                 // Only at 22:30 until 05:00
+
                 if ((TimeManager.Instance.CurrentTime >= 2230 || TimeManager.Instance.CurrentTime <= 500) && hoursUntilDriveBy <= 0)
                 {
                     foreach (DriveByTrigger trig in driveByLocations)
                     {
                         yield return Wait05;
-                        elapsedSec += 0.5f;
                         if (!registered) yield break;
 
-                        if (Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius)
+                        if (Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius && Player.Local.CurrentVehicle == null)
                         {
                             if (!driveByActive)
                                 coros.Add(MelonCoroutines.Start(BeginDriveBy(trig)));
@@ -410,8 +403,6 @@ namespace CartelEnforcer
                 {
                     yield return Wait30;
                     if (!registered) yield break;
-
-                    elapsedSec += 30f;
                 }
 
             }
@@ -459,12 +450,16 @@ namespace CartelEnforcer
             Vector3 toPlayer;
             float angleToPlayer;
             bool wepHits;
+            int maxIter = 80;
+            int j = 0;
             Log("Falling into driveby");
             while (driveByActive)
             {
+                j++;
                 yield return Wait025;
                 if (!registered) yield break;
                 if (bulletsShot >= maxBulletsShot) break;
+                if (j >= maxIter) break;
 
                 distToPlayer = Vector3.Distance(thomasInstance.transform.position, player.CenterPointTransform.position);
                 offsetPosition = thomasInstance.transform.position + thomasInstance.transform.up * 1.7f - thomasInstance.transform.right * 0.8f;
@@ -545,7 +540,21 @@ namespace CartelEnforcer
             driveByActive = false;
             thomasInstance.gameObject.SetActive(false);
             Log("[DRIVE BY] Drive By Complete");
-            hoursUntilDriveBy = UnityEngine.Random.Range(16, 48);
+            // Note: this is not proper use of the mechanic implemented, but alternative where its not used as cap but base random roll for the generated new hours...
+            int hours = GetActivityHours(currentConfig.driveByFrequency);
+            if (hours <= 24)
+            {
+                hoursUntilDriveBy = UnityEngine.Random.Range(hours, 32);
+            }
+            else if (hours > 24 && hours <= 49)
+            {
+                hoursUntilDriveBy = UnityEngine.Random.Range(16, hours);
+            }
+            else
+            {
+                hoursUntilDriveBy = UnityEngine.Random.Range(32, hours);
+            }
+
         }
 
         public class HitComparer : IComparer<RaycastHit>

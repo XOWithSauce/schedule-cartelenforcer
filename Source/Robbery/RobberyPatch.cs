@@ -2,6 +2,7 @@
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
+using UnityEngine.AI;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DealerRobbery;
@@ -238,7 +239,7 @@ namespace CartelEnforcer
 
                 Log("[TRY ROB]    Finding Spawn Robber Position");
                 randomDirection = UnityEngine.Random.onUnitSphere;
-                randomDirection.y = 0;
+                randomDirection.y = 0f;
                 randomDirection.Normalize();
                 randomRadius = UnityEngine.Random.Range(8f, 16f);
                 randomPoint = dealer.transform.position + randomDirection * randomRadius;
@@ -246,7 +247,13 @@ namespace CartelEnforcer
                 j++;
             } while (spawnPos == Vector3.zero && j <= maxAttempts); // Because GetClosestReachablePoint can return V3.Zero as default (unreachable)
 
-            if (spawnPos == Vector3.zero) yield break;
+            Log("[TRY ROB]    Position for robber: " + spawnPos.ToString());
+
+            if (spawnPos == Vector3.zero)
+            {
+                Log("[TRY ROB]    Failed to find valid spawn position for robber");
+                yield break;
+            }
 
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
             if (goon == null)
@@ -254,7 +261,7 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    Failed to spawn goon. Robbery failed.");
                 yield break;
             }
-
+            Log("[TRY ROB]    Send Message");
             string text = "";
             switch (UnityEngine.Random.Range(0, 5))
             {
@@ -280,19 +287,19 @@ namespace CartelEnforcer
 
             dealer.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, false, -1), true, true);
             goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
-            if (UnityEngine.Random.Range(0f, 1f) > 0.7f && RangedWeapons != null && RangedWeapons.Length > 0)
+            if (UnityEngine.Random.Range(0f, 1f) > 0.7f && AmbushOverrides.RangedWeapons != null && AmbushOverrides.RangedWeapons.Length > 0)
             {
-                goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
+                goon.Behaviour.CombatBehaviour.DefaultWeapon = AmbushOverrides.RangedWeapons[UnityEngine.Random.Range(0, AmbushOverrides.RangedWeapons.Length)];
             }
-            else if (MeleeWeapons != null && MeleeWeapons.Length > 0)
+            else if (AmbushOverrides.MeleeWeapons != null && AmbushOverrides.MeleeWeapons.Length > 0)
             {
-                goon.Behaviour.CombatBehaviour.DefaultWeapon = MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)];
+                goon.Behaviour.CombatBehaviour.DefaultWeapon = AmbushOverrides.MeleeWeapons[UnityEngine.Random.Range(0, AmbushOverrides.MeleeWeapons.Length)];
             }
-
+            Log("[TRY ROB]    Warp to spawn");
             goon.Movement.Warp(spawnPos);
             yield return Wait05;
             if (!registered) yield break;
-
+            Log("[TRY ROB]    Set combat target");
             dealer.Behaviour.CombatBehaviour.SetTarget(goon.GetComponent<ICombatTargetable>().NetworkObject); 
             dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
 
@@ -487,7 +494,8 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    Player outside of range. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
-                dealer.Behaviour.CombatBehaviour.End();
+                dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
+                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
 
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
                 if (changeInfluence)
@@ -498,9 +506,10 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    State Timed Out. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
-                dealer.Behaviour.CombatBehaviour.End();
+                dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
+                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
 
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
+                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
             }
         }
 
@@ -536,11 +545,7 @@ namespace CartelEnforcer
                 yield return Wait60;
             if (!registered) yield break;
 
-
-            if (goon.IsGoonSpawned)
-            {
-                goon.Despawn();
-            }
+            goon.Despawn();
             goon.Behaviour.CombatBehaviour.Disable_Networked(null);
             goon.Health.MaxHealth = 100f;
             goon.Health.Health = 100f;
@@ -679,6 +684,8 @@ namespace CartelEnforcer
 #endif
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
+                if (goon.Behaviour.CombatBehaviour.isActiveAndEnabled)
+                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
 
                 if (stayInside != null)
                 {
@@ -780,7 +787,7 @@ namespace CartelEnforcer
             goon.Movement.MoveSpeedMultiplier = 1.4f;
             goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, goon.Health.MaxHealth, 0.15f));
 
-            for (int i = 0; i < 40; i++)
+            for (int i = 0; i < 50; i++)
             {
                 yield return Wait05;
                 if (!registered) yield break;

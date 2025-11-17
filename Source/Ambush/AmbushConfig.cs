@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿
+using UnityEngine;
 
 namespace CartelEnforcer
 {
@@ -18,4 +19,17 @@ namespace CartelEnforcer
     {
         public List<NewAmbushConfig> addedAmbushes = new List<NewAmbushConfig>();
     }
+
+    // from Ambush/settings.json, defaults to just 2 weps m1911 knife (v0.7.1), paths case sensitive for resource.load?
+    [Serializable]
+    public class AmbushGeneralSettingsSerialized
+    {
+        public List<string> RangedWeaponAssetPaths;
+
+        public List<string> MeleeWeaponAssetPaths;
+
+        public int MinRankForRanged = 2; // default 3 see below
+        public bool AfterDealAmbushEnabled = true; // By default in source code its enabled (see Ambush.ContractReceiptRecorded), patched prefix true/false by this condition
+    }
+
 }

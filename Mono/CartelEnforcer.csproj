@@ -22,8 +22,8 @@
 		<TargetFramework>net48</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.6.0.0</FileVersion>
-		<Version>1.6.0</Version>
+		<FileVersion>1.6.1.0</FileVersion>
+		<Version>1.6.1</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2025 Source MIT</Copyright>
@@ -46,7 +46,7 @@
 	<ItemGroup>
 		<PackageReference Include="BepInEx.AssemblyPublicizer.MSBuild" Version="0.4.3" PrivateAssets="all" />
 		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
-		<PackageReference Include="Lib.Harmony" Version="2.4.0" />
+		<PackageReference Include="Lib.Harmony" Version="2.4.2" />
 	</ItemGroup>
 
 	<ItemGroup>

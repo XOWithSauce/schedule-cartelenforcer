@@ -7,9 +7,11 @@ using static CartelEnforcer.DriveByEvent;
 using static CartelEnforcer.DealerActivity;
 
 
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
+
 using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;
@@ -100,36 +102,6 @@ namespace CartelEnforcer
             activityGlobalHrs.hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
             activityGlobalHrs.cartelActivityClass = -1; // -1 reserved for the global ambushes
             regActivityHours.Add(activityGlobalHrs); // Always first element
-            // Also populate the weapon arrays
-            foreach (CartelActivity globalActivity in instanceActivities.GlobalActivities)
-            {
-#if MONO
-                if (globalActivity is Ambush ambush)
-                {
-                    if ((MeleeWeapons == null || MeleeWeapons.Length == 0) && (ambush.MeleeWeapons != null && ambush.MeleeWeapons.Length > 0))
-                    {
-                        MeleeWeapons = ambush.MeleeWeapons;
-                    }
-                    if ((RangedWeapons == null || RangedWeapons.Length == 0) && (ambush.RangedWeapons != null && ambush.RangedWeapons.Length > 0))
-                    {
-                        RangedWeapons = ambush.RangedWeapons;
-                    }
-                }
-#else
-                Ambush temp = globalActivity.TryCast<Ambush>();
-                if (temp != null)
-                {
-                    if ((MeleeWeapons == null || MeleeWeapons.Length == 0) && (temp.MeleeWeapons != null && temp.MeleeWeapons.Length > 0))
-                    {
-                        MeleeWeapons = temp.MeleeWeapons;
-                    }
-                    if ((RangedWeapons == null || RangedWeapons.Length == 0) && (temp.RangedWeapons != null && temp.RangedWeapons.Length > 0))
-                    {
-                        RangedWeapons = temp.RangedWeapons;
-                    }
-                }
-#endif
-            }
 
             CartelRegionActivities[] regInstanceActivies = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
             foreach (CartelRegionActivities act in regInstanceActivies)
@@ -328,7 +300,7 @@ namespace CartelEnforcer
             {
                 // Because we are decreasing / resetting the hours value, we must avoid changing the value while its at 1 to avoid repeating the same
                 // state change from 1->0 by normal hourpass function logic
-                if (hpmap.Getter() < 2) yield break;
+                if (hpmap.Getter() == 1) yield break;
 
                 float ticksReqForPass = Mathf.Lerp(1, 10, -currentConfig.activityFrequency);
 

@@ -40,7 +40,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
-- **Enhanced Cartel Dealers:** Cartel dealers are now officially bug fixed in this mod and they will roam the map by default. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
+- **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
 
@@ -49,8 +49,29 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 
 1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/).
 2. With **Melon Loader** install version **0.7.0** or **0.7.2 nightly builds** for Schedule I (0.7.1 is incompatible in IL2CPP)
+    - If you use "alternate" Beta version in Steam -> Game Properties -> Betas, then any 0.7.x version is compatible (Must download MONO)
 3. Manually download the correct .zip file and unzip it.
 4. Copy the **.dll file** and the **Cartel Enforcer** folder into your **Mods** folder.
+
+#### Mods folder structure
+
+```
+[Game Root]
+└── Mods/
+    ├── CartelEnforcer.dll (or CartelEnforcer-IL2Cpp.dll)
+    └── CartelEnforcer/
+        ├── config.json
+        ├── Ambush/
+        |   ├── ambush.json
+        |   ├── default.json
+        |   └── settings.json
+        ├── CartelItems/ 
+        |   └── (Persistent save data gets generated here)
+        ├── Dealers/
+        |   └── dealer.json
+        └── Influence/
+            └── influence.json
+```
 
 ---
 
@@ -70,6 +91,7 @@ You can customize the mod's settings through the **config.json** file.
     "deadDropStealFrequency": 1.0,
     "cartelCustomerDealFrequency": 1.0,
     "cartelRobberyFrequency": 1.0,
+    "driveByFrequency":  0.7,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
     "defaultRobberyEnabled": true,
@@ -109,6 +131,10 @@ You can customize the mod's settings through the **config.json** file.
     - `1.0`: Can happen as often as every 1 in-game hour.
     - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days
+- **`driveByFrequency`**: Adjusts the frequency of the Drive-By events.
+    - `1.0`: Random cooldown can have values down to 1 in-game hour.
+    - `0.0`: Random cooldown is around 2 in-game days.
+    - `-1.0`: Random cooldown can have values up to 4 in-game days.
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -149,7 +175,7 @@ When a dealer is being robbed, a robber will spawn and engage them in a fight. Y
 - **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 50.
 - **Player flees:** If you run out of range, regional influence increases by 80.
 - **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 80.
-
+- **Timeout:** If the combat is timed out dealer defends the robbery.
 ---
 
 <img src="https://i.imgur.com/xJzpiAK.png">
@@ -180,7 +206,7 @@ These events only happen when the Cartel is hostile.
 - Only happens at Night Time from 22:30 to 04:00
 - Thomas will spawn in a car and try to shoot the player.
 - They are triggered when the player is near one of the 14 designated hotspots (common dealing locations, homes, and businesses).
-- These events have a randomized cooldown of 16-48 in-game hours.
+- These events have a randomized cooldown of 1-96 in-game hours based on the `driveByFrequency` parameter.
 - Their frequency can be adjusted with the `activityFrequency` parameter.
 
 ---
@@ -318,7 +344,7 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 
 ### Four Wheels
 
-The End Game Quest can be started by speaking to Cranky Frank between 16:00 and 18:00 when they are smoking a cigarette near at the Northern Waterfront. This Quest can be completed only once per session.
+The End Game Quest can be started by speaking to Cranky Frank between 16:00 and 18:00 when they are smoking a cigarette near the Northern Waterfront. This Quest can be completed only once per session.
 
 > Note: The *Four Wheels* Quest is in early phase development and is subject to change in content, difficulty and rewards.
 
@@ -386,7 +412,7 @@ You can add or modify custom ambush locations.
 2. Edit existing entries or add new ones. Each entry has:
     - **`mapRegion`**: A number from `0-5` for the region.
     - **`ambushPosition`**: The X, Y, and Z coordinates of the trigger area.
-    - **`spawnPoints`**: At least four spawn points for enemies (only X and Z values matter).
+    - **`spawnPoints`**: At least four spawn points for enemies (only X and Z values matter for ambushes above ground, in Sewers you need the exact negative y value too).
     - **`detectionRadius`**: A decimal number for how close the player must be to the `ambushPosition`.
 
 ```json
@@ -488,6 +514,3 @@ Not all events and activities added by this mod support multiplayer fully and mi
 ---
 
 Contribute, Build from Source or Verify Integrity -> [GitHub](https://github.com/XOWithSauce/schedule-cartelenforcer/)
-
-
-Finance the development or support my creations -> [Ko-fi](https://ko-fi.com/dahjp)

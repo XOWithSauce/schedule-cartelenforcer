@@ -10,12 +10,16 @@ using MelonLoader;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Map;
+using ScheduleOne.Graffiti;
+using ScheduleOne.Levelling;
 using ScheduleOne.PlayerScripts;
 using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.Graffiti;
+using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppFishNet;
 #endif
@@ -90,6 +94,7 @@ namespace CartelEnforcer
                         activity.InfluenceRequirement = result;
                     }
                 }
+
             }
             Log("Finished changing Activity Influence Requirements");
             yield return null;
@@ -138,6 +143,8 @@ namespace CartelEnforcer
         public float ambushDefeated = -0.025f;
 
         public float passiveInfluenceGainPerDay = 0.050f;
+
+        public float graffitiInfluenceReduction = -0.05f;
     }
 
     // Patch the cartel dealer on died to have modifiable influence
@@ -233,6 +240,27 @@ namespace CartelEnforcer
 
         }
 
+    }
+
+    // Patch graffiti influence reward function as blocking, so its basically same as in source but bound to config with influence
+    [HarmonyPatch(typeof(SpraySurfaceInteraction), "Reward")]
+    public static class SpraySurfaceInteraction_Reward_Patch
+    {
+        public static bool Prefix(SpraySurfaceInteraction __instance)
+        {
+            NetworkSingleton<LevelManager>.Instance.AddXP(50);
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile)
+            {
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile)
+            {
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
+#endif
+            }
+            return false;
+        }
     }
 
 }

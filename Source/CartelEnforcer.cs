@@ -16,7 +16,6 @@ using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
 
 #if MONO
-using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Property;
 using ScheduleOne.Cartel;
 using ScheduleOne.NPCs;
@@ -32,7 +31,6 @@ using FishNet.Managing;
 using FishNet.Object;
 
 #else
-using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Persistence;
@@ -54,6 +52,14 @@ using Il2CppScheduleOne.NPCs.Schedules;
 [assembly: MelonOptionalDependencies("FishNet.Runtime")]
 [assembly: MelonGame("TVGS", "Schedule I")]
 
+#if MONO
+[assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.MONO)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
+#else // Note this block cant exclude 0.7.1 IL2CPP and allow again 0.7.2 nightlys? Source code has major diff for checking ML version hardcode is possible
+[assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
+#endif
+
 namespace CartelEnforcer
 {
     public static class BuildInfo
@@ -62,7 +68,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.6.0";
+        public const string Version = "1.6.1";
         public const string DownloadLink = null;
     }
 
@@ -75,10 +81,6 @@ namespace CartelEnforcer
         public static bool registered = false;
         private bool firstTimeLoad = false;
         private static bool isSaving = false;
-
-        // These 2 are from the Ambush class we use them as references to set weapons, populated in frequency overrides while parsing all activities
-        public static AvatarWeapon[] MeleeWeapons;
-        public static AvatarWeapon[] RangedWeapons;
 
         #region No Suffering for GC anymore because of this code region
         public static WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
@@ -94,10 +96,13 @@ namespace CartelEnforcer
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
+
             Instance = this;
             currentConfig = ConfigLoader.Load();
             influenceConfig = ConfigLoader.LoadInfluenceConfig();
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
+
+            return;
         }
 
         #region Unity Methods
@@ -208,6 +213,8 @@ namespace CartelEnforcer
 
                 }
             }
+
+            return;
         }
 
         public override void OnSceneWasInitialized(int buildIndex, string sceneName)
@@ -231,6 +238,8 @@ namespace CartelEnforcer
                     ExitPreTask();
                 }
             }
+
+            return;
         }
         #endregion
 
@@ -287,22 +296,37 @@ namespace CartelEnforcer
                 MelonCoroutines.Start(MakeUI());
 
             coros.Add(MelonCoroutines.Start(ExtendGoonPool()));
+
+            return;
         }
 
+        public static void ReduceDriveByHours()
+        {
+            hoursUntilDriveBy = Mathf.Clamp(hoursUntilDriveBy - 1, 0, 96);
+        }
         public static IEnumerator InitializeAndEvaluateDriveBy()
         {
             yield return MelonCoroutines.Start(InitializeDriveByData());
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onHourPass += ReduceDriveByHours;
+#else
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)ReduceDriveByHours;
+#endif
 
             coros.Add(MelonCoroutines.Start(EvaluateDriveBy()));
             if (currentConfig.debugMode)
                 yield return MelonCoroutines.Start(SpawnDriveByAreaVisual());
+            yield return null;
         }
 
         public static IEnumerator InitializeAmbush()
         {
             yield return MelonCoroutines.Start(ApplyGameDefaultAmbush());
             yield return MelonCoroutines.Start(AddUserModdedAmbush());
+            yield return MelonCoroutines.Start(SetAmbushGeneralSettings());
             yield return MelonCoroutines.Start(AfterAmbushInitComplete());
+
+            yield return null;
         }
 
         public static IEnumerator AfterAmbushInitComplete()
@@ -320,6 +344,8 @@ namespace CartelEnforcer
 #endif
             if (currentConfig.debugMode)
                 yield return MelonCoroutines.Start(SpawnAmbushAreaVisual());
+
+            yield return null;
         }
 
         public static IEnumerator InitializeAndEvaluateMiniQuest()
@@ -335,6 +361,7 @@ namespace CartelEnforcer
             NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassNewDiag;
 #endif
             coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
+
             yield return null;
         }
 
@@ -465,11 +492,11 @@ namespace CartelEnforcer
                 yield return Wait01;
                 if (!registered) yield break;
 
-                // fix having unassigned values here otherwise they afk on first spawn (maybe not needed after doing the nob instantiate instead of unity engine obj)
-                if (goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_StayInBuilding stayInside)
+                if (goon.Behaviour.ScheduleManager.ActionList.Count > 0)
                 {
-                    stayInside.Resume();
+                    goon.Behaviour.ScheduleManager.ActionList[0].Resume();
                 }
+
                 goon.IsGoonSpawned = true;
                 yield return Wait05;
                 if (!registered) yield break;
@@ -478,6 +505,7 @@ namespace CartelEnforcer
 
             }
             Log("Array swapped now count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
+            yield return null;
         }
 
         #endregion
@@ -547,9 +575,9 @@ namespace CartelEnforcer
             CartelActivities_TryStartActivityPatch.activitiesReadyToStart.Clear();
             CartelActivities_TryStartActivityPatch.validRegionsForActivity.Clear();
 #endif
-    }
-
-    [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
+        }
+        
+        [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
         public static class SaveManager_Save_String_Patch
         {
             public static bool Prefix(SaveManager __instance, string saveFolderPath)
@@ -567,6 +595,7 @@ namespace CartelEnforcer
                 return true;
             }
         }
+
         [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { })]
         public static class SaveManager_Save_Patch
         {
