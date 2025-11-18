@@ -301,7 +301,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
             Log("[TRY ROB]    Set combat target");
             dealer.Behaviour.CombatBehaviour.SetTarget(goon.GetComponent<ICombatTargetable>().NetworkObject); 
-            dealer.Behaviour.CombatBehaviour.Enable_Networked(null);
+            dealer.Behaviour.CombatBehaviour.Enable_Networked();
 
             goon.Health.MaxHealth = 160f;
             goon.Health.Health = 160f;
@@ -540,10 +540,10 @@ namespace CartelEnforcer
 
         public static IEnumerator DespawnSoon(CartelGoon goon, bool instant = false)
         {
-            Log("[TRY ROB]    Despawned Goon");
             if (!instant)
                 yield return Wait60;
             if (!registered) yield break;
+            Log("[TRY ROB]    Despawned Goon");
 
             goon.Despawn();
             goon.Behaviour.CombatBehaviour.Disable_Networked(null);
@@ -600,14 +600,26 @@ namespace CartelEnforcer
             goon.Movement.GetClosestReachablePoint(destination, out Vector3 closest);
             coros.Add(MelonCoroutines.Start(ApplyAdrenalineRush(goon)));
 
+            bool isFleeing = false;
             if (destination == Vector3.zero || !goon.Movement.CanGetTo(closest)) // If the destination look up fails or cant traverse to
             {
+                // Does this get prio overidden by stay inside schedule?
                 goon.Behaviour.FleeBehaviour.SetEntityToFlee(Player.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
-                goon.Behaviour.FleeBehaviour.Begin_Networked(null);
+                goon.Behaviour.FleeBehaviour.Enable_Networked();
+                isFleeing = true;
+                // Testing the theory wether it gets overridden.
+                yield return Wait05;
+                Log("[TRY ROB]    Robber fleeing player");
+                if (!goon.Behaviour.FleeBehaviour.isActiveAndEnabled)
+                    Log("[TRY ROB]    Fleeing Behaviour is not enabled, expected to be active");
+                // if not active and enabled at this point it would require the stay inside event to be disabled and disable schedule
+                // after the event ends it needs to be checked again that those 2 arent disabled anymore
             }
             else
             {
                 goon.Movement.SetDestination(closest);
+                Log("[TRY ROB]    Robber fleeing to cartel dealer");
+
             }
 
             // While not dead or escape has elapsed under 60 seconds
@@ -619,14 +631,18 @@ namespace CartelEnforcer
                 goon.IsGoonSpawned &&
                 !goon.Health.IsDead &&
                 !goon.Health.IsKnockedOut &&
-                !goon.isInBuilding &&
-                Vector3.Distance(closest, goon.CenterPointTransform.position) > 3f)
+                !goon.isInBuilding)
             {
                 yield return Wait05;
                 if (!registered) yield break;
-                currDist = Vector3.Distance(closest, goon.CenterPointTransform.position);
-                if (currDist < remainingDist)
-                    remainingDist = currDist;
+                if (!isFleeing)
+                {
+                    currDist = Vector3.Distance(closest, goon.CenterPointTransform.position);
+                    if (currDist < remainingDist)
+                        remainingDist = currDist;
+                    if (Vector3.Distance(closest, goon.CenterPointTransform.position) < 3f)
+                        break;
+                }
                 elapsedNav += 0.5f;
             }
 

@@ -97,6 +97,10 @@ namespace CartelEnforcer
         private int GiveUpAfterSuccessfulHits = 0;
         private float DefaultSearchTime = 0f;
 
+        // Store the callbacks
+        UnityEngine.Events.UnityAction combatStartedAction = null;
+        UnityEngine.Events.UnityAction goonDiedAction = null;
+        UnityEngine.Events.UnityAction combatEndCrouchAction = null;
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
         // simplified from source and removed networking so its client only
@@ -295,6 +299,7 @@ namespace CartelEnforcer
             talkToJeremy.SetState(EQuestState.Active, true);
             talkToJeremy.ParentQuest = this;
             talkToJeremy.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction talkToJeremyAction = null;
             void OnTalkToJeremyComplete()
             {
                 if (talkToJeremy != null && talkToJeremy.State == EQuestState.Failed) return;
@@ -310,9 +315,14 @@ namespace CartelEnforcer
 
                 coros.Add(MelonCoroutines.Start(SpawnCarMeetup()));
 
-                talkToJeremy.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnTalkToJeremyComplete);
+                if (talkToJeremyAction != null)
+                {
+                    talkToJeremy.onComplete.RemoveListener(talkToJeremyAction);
+                    talkToJeremyAction = null;
+                }
             }
-            talkToJeremy.onComplete.AddListener((UnityEngine.Events.UnityAction)OnTalkToJeremyComplete);
+            talkToJeremyAction = (UnityEngine.Events.UnityAction)OnTalkToJeremyComplete;
+            talkToJeremy.onComplete.AddListener(talkToJeremyAction);
 
             stopMeetup.SetEntryTitle("• Stop the Benzies from transporting cocaine\n• Avoid police attention");
             stopMeetup.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -323,6 +333,7 @@ namespace CartelEnforcer
             stopMeetup.SetState(EQuestState.Inactive, false);
             stopMeetup.ParentQuest = this;
             stopMeetup.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction stopMeetupAction = null;
             void OnStopMeetupComplete()
             {
                 if (stopMeetup != null && stopMeetup.State == EQuestState.Failed) return;
@@ -334,9 +345,15 @@ namespace CartelEnforcer
                     escape.PoI.gameObject.SetActive(false);
                 if (escape.compassElement != null)
                     escape.compassElement.Visible = false;
-                stopMeetup.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnStopMeetupComplete);
+
+                if (stopMeetupAction != null)
+                {
+                    stopMeetup.onComplete.RemoveListener(stopMeetupAction);
+                    stopMeetupAction = null;
+                }
             }
-            stopMeetup.onComplete.AddListener((UnityEngine.Events.UnityAction)OnStopMeetupComplete);
+            stopMeetupAction = (UnityEngine.Events.UnityAction)OnStopMeetupComplete;
+            stopMeetup.onComplete.AddListener(stopMeetupAction);
 
             escape.SetEntryTitle("• Steal Cocaine from the SUV\n• Escape before police arrive");
             escape.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -362,7 +379,7 @@ namespace CartelEnforcer
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
-            SetupHudUI();
+            SetupHUDUI();
 
             if (hudUI != null)
             {
@@ -393,12 +410,17 @@ namespace CartelEnforcer
             combatBegun = true;
             foreach (KeyValuePair<string, CartelGoon> kvp in spawnedGoons)
             {
-                kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
-                kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
+                if (combatStartedAction != null)
+                    kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
+                if (goonDiedAction != null)
+                    kvp.Value.Health.onDieOrKnockedOut.RemoveListener(goonDiedAction);
             }
             Player p = Player.GetClosestPlayer(spawnedGoons["guard"].CenterPointTransform.position, out float _);
             spawnedGoons["guard"].AttackEntity(p.GetComponent<ICombatTargetable>());
             spawnedGoons["extra1"].AttackEntity(p.GetComponent<ICombatTargetable>());
+
+            combatStartedAction = null;
+            goonDiedAction = null;
         }
 
         void OnCarMeetupGoonDie()
@@ -407,8 +429,10 @@ namespace CartelEnforcer
             combatBegun = true;
             foreach (KeyValuePair<string, CartelGoon> kvp in spawnedGoons)
             {
-                kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
-                kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
+                if (combatStartedAction != null)
+                    kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
+                if (goonDiedAction != null)
+                    kvp.Value.Health.onDieOrKnockedOut.RemoveListener(goonDiedAction);
             }
 
             CartelGoon guard = null;
@@ -424,6 +448,9 @@ namespace CartelEnforcer
 
             if (p != null && spawnedGoons.Keys.Contains("extra1"))
                 spawnedGoons["extra1"].AttackEntity(p.GetComponent<ICombatTargetable>());
+
+            combatStartedAction = null;
+            goonDiedAction = null;
         }
 
         private IEnumerator SpawnCarMeetup()
@@ -490,7 +517,7 @@ namespace CartelEnforcer
                 if (product.StoredItem != null && product.StoredItem is FilledPackaging_StoredItem storedItemInst)
                 {
                     Log("Parsing Brick");
-                    GameObject brickOriginal = storedItemInst.Visuals.cocaineVisuals.Container.gameObject;
+                    GameObject brickOriginal = storedItemInst.Visuals.CocaineVisuals.VisualsContainer.gameObject;
                     if (brickOriginal != null) 
                     { 
                         brickBase = UnityEngine.Object.Instantiate(brickOriginal);
@@ -518,7 +545,7 @@ namespace CartelEnforcer
                     if (storedItemInst != null)
                     {
                         Log("Parsing Brick");
-                        GameObject brickOriginal = storedItemInst.Visuals.cocaineVisuals.Container.gameObject;
+                        GameObject brickOriginal = storedItemInst.Visuals.CocaineVisuals.VisualsContainer.gameObject;
                         if (brickOriginal != null) 
                         { 
                             brickBase = UnityEngine.Object.Instantiate(brickOriginal);
@@ -705,6 +732,9 @@ namespace CartelEnforcer
             goonGuard.AddGoonMate(goonHandler);
             goonExtra1.AddGoonMate(goonHandler);
 
+            combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
+            goonDiedAction = (UnityEngine.Events.UnityAction)OnCarMeetupGoonDie;
+
             foreach (KeyValuePair<string, CartelGoon> kvp in spawnedGoons)
             {
                 if (kvp.Value.Health.IsDead || kvp.Value.Health.IsKnockedOut)
@@ -715,8 +745,8 @@ namespace CartelEnforcer
                 kvp.Value.Health.Health = Mathf.Round(Mathf.Lerp(100f, randMaxHP, questDifficultyScalar - 1f));
                 kvp.Value.Movement.MoveSpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.1f, 1.3f), 1.5f, questDifficultyScalar - 1f);
 
-                kvp.Value.Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStarted);
-                kvp.Value.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
+                kvp.Value.Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
+                kvp.Value.Health.onDieOrKnockedOut.AddListener(goonDiedAction);
 
                 if (GiveUpRange == 0f)
                 {
@@ -807,9 +837,14 @@ namespace CartelEnforcer
             void EndCrouchOnCombat()
             {
                 goonHandler.Avatar.Animation.SetCrouched(false);
-                goonHandler.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)EndCrouchOnCombat);
+                if (combatEndCrouchAction != null)
+                {
+                    goonHandler.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatEndCrouchAction);
+                    combatEndCrouchAction = null;
+                }
             }
-            goonHandler.Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)EndCrouchOnCombat);
+            combatEndCrouchAction = (UnityEngine.Events.UnityAction)EndCrouchOnCombat;
+            goonHandler.Behaviour.CombatBehaviour.onBegin.AddListener(combatEndCrouchAction);
 
             yield return null;
         }
@@ -1078,8 +1113,14 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
-                kvp.Value.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnCarMeetupGoonDie);
+                if (combatStartedAction != null)
+                    kvp.Value.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
+
+                if (goonDiedAction != null)
+                    kvp.Value.Health.onDieOrKnockedOut.RemoveListener(goonDiedAction);
+
+                if (combatEndCrouchAction != null)
+                    kvp.Value.Health.onDieOrKnockedOut.RemoveListener(combatEndCrouchAction);
 
                 if (kvp.Value.Health.IsDead)
                     kvp.Value.Health.Revive();
@@ -1104,6 +1145,10 @@ namespace CartelEnforcer
             }
             spawnedGoons.Clear();
             spawnedGoonsGuids.Clear();
+
+            combatStartedAction = null;
+            goonDiedAction = null;
+            combatEndCrouchAction = null;
 
             yield return null;
         }

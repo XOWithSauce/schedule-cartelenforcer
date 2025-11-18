@@ -197,7 +197,7 @@ namespace CartelEnforcer
                 radius = 6f,
                 startPosition = new Vector3(-17.13f, 1.37f, 61.00f),
                 spawnEulerAngles = new Vector3(0f, 0f, 0f),
-                endPosition = new Vector3(37.97f, -2.63f, 132.08f)
+                endPosition = new Vector3(-28.73f, -2.63f, 132.68f)
             };
             driveByLocations.Add(tacoTicklerTrigger);
 
@@ -255,8 +255,8 @@ namespace CartelEnforcer
                 if (driveByVeh != null)
                 {
                     driveByVeh.TopSpeed = 100f;
-                    if (driveByVeh.isStatic)
-                        driveByVeh.SetIsStatic(false);
+                    //if (driveByVeh.isStatic)
+                    //    driveByVeh.isStatic = false;
 
                     ParkData data = new();
                     data.spotIndex = -1; // set visible false

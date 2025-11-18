@@ -516,7 +516,7 @@ namespace CartelEnforcer
             bool inTimeWindow = NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1815 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1858;
 
             bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= 2500f;
-            bool isInPos = (Vector3.Distance(ray.CenterPoint, standPos) < 0.4f);
+            bool isInPos = (Vector3.Distance(ray.CenterPoint, standPos) < 1f);
             if (hasCash && inTimeWindow && isInPos)
             {
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-2500f, true, false);
@@ -528,6 +528,11 @@ namespace CartelEnforcer
             {
                 controller.handler.WorldspaceRend.ShowText("Talk with me at the courthouse between 18:15 and 19:00.", 7f);
                 controller.npc.PlayVO(EVOLineType.Annoyed);
+                Log("Refuse Quest Give Reason");
+                Log($"In Position: {isInPos} (distance: {Vector3.Distance(ray.CenterPoint, standPos)})");
+                Log("Has Cash: " + hasCash);
+                Log("In Time Window: " + inTimeWindow);
+
             }
 
         }

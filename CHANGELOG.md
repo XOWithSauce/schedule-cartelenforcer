@@ -1,3 +1,19 @@
+# Version 1.7.0
+- Compiled against 0.4.1f12 latest default / alternate game versions for the patch notes released today
+- Added new Event "Business Sabotage" where Cartel attempts to disrupt your money laundering operations by blowing up businesses
+- Added configuration value "businessSabotage" into the config.json file that allows disabling the newly added event
+- Added extra safeguard logic to the fleeing phase of a robbery event for the goon
+- Changed code for listeners and actions call back events to match latest source code and to track them during their usage
+- Removed cartel related bug fixes implemented by the mod now that the patch fixes them in default game source
+- Fixed 1 Drive-by event location having incorrect end position
+- Fixed a bug where in the Car Meetup quest goons could infinitely trigger the combat and weapon wielding script due to bug with listeners
+- Fixed a bug in the Defeat Enforcer quest where the sprinting speed up during boss combat rage stage would not work
+- Fixed a bug in the Infiltrate Manor end game quest where the property lights in mansion would not be enabled during the quest
+- Fixed a bug where during Defeat Enforcer quest the quest title can display higher numbers than intended for the dead drop stealed count and ambushes defeated count
+- Removed redundant callback code from goons during the Infiltrate Manor quest combat stage
+- Removed bug fix for drive by implemented in 1.6.1 for static vehicle bug
+
+
 # Version 1.6.1
 - Compiled against 0.4.1f5 latest default / alternate game version for Halloween + Sewers Update
 - Added Ambush triggers into the sewers in the ambush.json file (note: these do need to have y value defined in spawn pos to be exact negative coordinate, unlike what the documentation currently states)

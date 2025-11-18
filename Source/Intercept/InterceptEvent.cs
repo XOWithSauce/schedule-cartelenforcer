@@ -455,7 +455,7 @@ namespace CartelEnforcer
             contract.SetIsTracked(true);
             if (customer.CurrentContract.hudUI == null || customer.CurrentContract.hudUI?.gameObject == null)
             {
-                customer.CurrentContract.SetupHudUI();
+                customer.CurrentContract.SetupHUDUI();
             }
 
             if (!Contract.Contracts.Contains(contract))

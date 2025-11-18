@@ -69,6 +69,8 @@ namespace CartelEnforcer
         
         public bool cartelGatherings = true;
 
+        public bool businessSabotage = true;
+
         public bool endGameQuest = true;
         public float endGameQuestMonologueSpeed = 1f; // clamped to 1 0 at 0 dialogue speed is signifigantly slower, at 1 normal
 

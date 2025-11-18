@@ -10,6 +10,8 @@ using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
+using static CartelEnforcer.SabotageEvent;
+
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -48,22 +50,6 @@ namespace CartelEnforcer
         {
             if (currentConfig.debugMode)
                 MelonLogger.Msg(msg);
-        }
-
-        public static IEnumerator OnInputTestDealerInv()
-        {
-            Log("Testing Cartel Dealer Bug fix");
-
-            CartelDealer[] arr = UnityEngine.Object.FindObjectsOfType<CartelDealer>();
-            foreach (CartelDealer d in arr)
-            {
-                d.Inventory.Clear();
-            }
-            
-
-            yield return Wait2;
-            debounce = false;
-            yield return null;
         }
 
         public static IEnumerator OnInputGenerateManorQuest()
@@ -210,6 +196,15 @@ namespace CartelEnforcer
             Log("---------------\n\n\n");
             yield return Wait05;
 
+            Log("\nSabotage Event Status\n---------------");
+            foreach (SabotageEventLocation loc in locations)
+            {
+                Log($"  Name: {loc.business.PropertyName}");
+                Log($"    HoursUntilEnable: {loc.hoursUntilEnabled}");
+            }
+            Log("---------------\n\n\n");
+            yield return Wait05;
+
             debounce = false;
         }
 
@@ -219,6 +214,35 @@ namespace CartelEnforcer
             MelonCoroutines.Start(StartInterceptDeal());
             yield return Wait05;
             debounce = false;
+            yield return null;
+        }
+
+        // plant bomb at nearest business to player location
+        public static IEnumerator OnInputStartSabotage()
+        {
+            yield return Wait05;
+            debounce = false;
+
+            if (!registered) yield break;
+            if (sabotageEventActive) yield break;
+            sabotageEventActive = true;
+
+            SabotageEventLocation selected = null;
+            float distance = 50f;
+            foreach (SabotageEventLocation loc in locations)
+            {
+                if (Vector3.Distance(loc.business.transform.position, Player.Local.CenterPointTransform.position) < distance)
+                {
+                    distance = Vector3.Distance(loc.business.transform.position, Player.Local.CenterPointTransform.position);
+                    selected = loc;
+                }
+            }
+
+            Log($"[SABOTAGE] Starting sabotage event in 10sec at: {selected.business.PropertyName}");
+            yield return Wait10;
+            if (!registered) yield break;
+
+            coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
             yield return null;
         }
 
@@ -240,13 +264,6 @@ namespace CartelEnforcer
         public static IEnumerator SpawnAmbushAreaVisual()
         {
             Log("Spawning Debug visuals for Ambush Areas");
-            // prevent stripping
-            //var meshRenderer = new MeshRenderer();
-#if MONO
-            //var meshFilter = new MeshFilter();
-            //var boxCollider = new BoxCollider();
-            //var capsuleCollider = new CapsuleCollider();
-#endif
 
             Shader standardShader = Shader.Find("Unlit/Color");
             if (standardShader == null)
@@ -322,11 +339,6 @@ namespace CartelEnforcer
         public static IEnumerator SpawnDriveByAreaVisual()
         {
             Log("Spawning Debug visuals for Drive By Triggers");
-            //var meshRenderer = new MeshRenderer();
-#if MONO
-            //var meshFilter = new MeshFilter();
-            //var sphereCollider = new SphereCollider();
-#endif
             // Shader select order
             Shader standardShader = Shader.Find("Unlit/Color");
             if (standardShader == null)

@@ -4,12 +4,12 @@ using System.Collections;
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.UI;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
+
 
 #if MONO
 using ScheduleOne.PlayerScripts;
@@ -26,6 +26,7 @@ using ScheduleOne.Quests;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Persistence;
 using ScheduleOne.Levelling;
+using ScheduleOne.Misc;
 using FishNet;
 #else
 using Il2CppScheduleOne.PlayerScripts;
@@ -40,9 +41,10 @@ using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Persistence;
-using Il2CppFishNet;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Storage;
+using Il2CppScheduleOne.Misc;
+using Il2CppFishNet;
 using Il2CppInterop.Runtime.Injection;
 #endif
 
@@ -324,6 +326,7 @@ namespace CartelEnforcer
             investigate.SetState(EQuestState.Active, true);
             investigate.ParentQuest = this;
             investigate.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction investigateCompleteAction = null;
             void OnInvestigateComplete()
             {
                 if (investigate != null && investigate.State == EQuestState.Failed) return;
@@ -336,9 +339,14 @@ namespace CartelEnforcer
                 returnToRay.SetPoILocation(ray.transform.position);
 
                 MelonCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete));
-                investigate.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnInvestigateComplete);
+                if (investigateCompleteAction != null)
+                {
+                    investigate.onComplete.RemoveListener(investigateCompleteAction);
+                    investigateCompleteAction = null;
+                }
             }
-            investigate.onComplete.AddListener((UnityEngine.Events.UnityAction)OnInvestigateComplete);
+            investigateCompleteAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
+            investigate.onComplete.AddListener(investigateCompleteAction);
 
             returnToRay.SetEntryTitle("• Return to Ray and ask for more information");
             returnToRay.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -349,6 +357,7 @@ namespace CartelEnforcer
             returnToRay.SetState(EQuestState.Inactive, false);
             returnToRay.ParentQuest = this;
             returnToRay.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction returnToRayAction = null;
             void OnReturnToRayComplete()
             {
                 if (returnToRay != null && returnToRay.State == EQuestState.Failed) return;
@@ -359,10 +368,14 @@ namespace CartelEnforcer
                 if (waitForNight.compassElement != null)
                     waitForNight.compassElement.Visible = false;
                 coros.Add(MelonCoroutines.Start(this.SetupManor()));
-
-                returnToRay.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnReturnToRayComplete);
+                if (returnToRayAction != null)
+                {
+                    returnToRay.onComplete.RemoveListener(returnToRayAction);
+                    returnToRayAction = null;
+                }
             }
-            returnToRay.onComplete.AddListener((UnityEngine.Events.UnityAction)OnReturnToRayComplete);
+            returnToRayAction = (UnityEngine.Events.UnityAction)OnReturnToRayComplete;
+            returnToRay.onComplete.AddListener(returnToRayAction);
 
             waitForNight.SetEntryTitle("• Wait for night time");
             waitForNight.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -373,6 +386,7 @@ namespace CartelEnforcer
             waitForNight.SetState(EQuestState.Inactive, false);
             waitForNight.ParentQuest = this;
             waitForNight.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction waitForNightAction = null;
             void OnWaitForNightComplete()
             {
                 if (waitForNight != null && waitForNight.State == EQuestState.Failed) return;
@@ -383,9 +397,14 @@ namespace CartelEnforcer
                 breakIn.PoI.gameObject.SetActive(true);
                 if (breakIn.compassElement != null)
                     breakIn.compassElement.Visible = true;
-                waitForNight.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnWaitForNightComplete);
+                if (waitForNightAction != null)
+                {
+                    waitForNight.onComplete.RemoveListener(waitForNightAction);
+                    waitForNightAction = null;
+                }
             }
-            waitForNight.onComplete.AddListener((UnityEngine.Events.UnityAction)OnWaitForNightComplete);
+            waitForNightAction = (UnityEngine.Events.UnityAction)OnWaitForNightComplete;
+            waitForNight.onComplete.AddListener(waitForNightAction);
 
             breakIn.SetEntryTitle("• Break into Manor through the back door");
             breakIn.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -396,6 +415,7 @@ namespace CartelEnforcer
             breakIn.SetState(EQuestState.Inactive, false);
             breakIn.ParentQuest = this;
             breakIn.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction breakInAction = null;
             void OnBreakInComplete()
             {
                 if (breakIn != null && breakIn.State == EQuestState.Failed) return;
@@ -406,9 +426,14 @@ namespace CartelEnforcer
                 defeatGoons.PoI.gameObject.SetActive(false);
                 if (defeatGoons.compassElement != null)
                     defeatGoons.compassElement.Visible = false;
-                breakIn.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnBreakInComplete);
+                if (breakInAction != null)
+                {
+                    breakIn.onComplete.RemoveListener(breakInAction);
+                    breakInAction = null;
+                }
             }
-            breakIn.onComplete.AddListener((UnityEngine.Events.UnityAction)OnBreakInComplete);
+            breakInAction = (UnityEngine.Events.UnityAction)OnBreakInComplete;
+            breakIn.onComplete.AddListener(breakInAction);
 
             defeatGoons.SetEntryTitle("• Defeat the Manor Goons");
             defeatGoons.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -419,6 +444,7 @@ namespace CartelEnforcer
             defeatGoons.SetState(EQuestState.Inactive, false);
             defeatGoons.ParentQuest = this;
             defeatGoons.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction defeatGoonsAction = null;
             void OnDefeatGoonsComplete()
             {
                 if (defeatGoons != null && defeatGoons.State == EQuestState.Failed) return;
@@ -430,9 +456,15 @@ namespace CartelEnforcer
                 if (searchResidence.compassElement != null)
                     searchResidence.compassElement.Visible = true;
                 searchResidence.SetPoILocation(roomsPositions.Keys.FirstOrDefault());
-                defeatGoons.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnDefeatGoonsComplete);
+
+                if (defeatGoonsAction != null)
+                {
+                    defeatGoons.onComplete.RemoveListener(defeatGoonsAction);
+                    defeatGoonsAction = null;
+                }
             }
-            defeatGoons.onComplete.AddListener((UnityEngine.Events.UnityAction)OnDefeatGoonsComplete);
+            defeatGoonsAction = (UnityEngine.Events.UnityAction)OnDefeatGoonsComplete;
+            defeatGoons.onComplete.AddListener(defeatGoonsAction);
 
             searchResidence.SetEntryTitle("• Investigate the upstairs rooms (0/4)");
             searchResidence.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -443,6 +475,7 @@ namespace CartelEnforcer
             searchResidence.SetState(EQuestState.Inactive, false);
             searchResidence.ParentQuest = this;
             searchResidence.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction searchResidenceAction = null;
             void OnSearchResidenceComplete()
             {
                 if (searchResidence != null && searchResidence.State == EQuestState.Failed) return;
@@ -459,9 +492,14 @@ namespace CartelEnforcer
 #else
                 PoliceStation.PoliceStations[0].Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
 #endif
-                searchResidence.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnSearchResidenceComplete);
+                if (searchResidenceAction != null)
+                {
+                    searchResidence.onComplete.RemoveListener(searchResidenceAction);
+                    searchResidenceAction = null;
+                }
             }
-            searchResidence.onComplete.AddListener((UnityEngine.Events.UnityAction)OnSearchResidenceComplete);
+            searchResidenceAction = (UnityEngine.Events.UnityAction)OnSearchResidenceComplete;
+            searchResidence.onComplete.AddListener(searchResidenceAction);
 
             escapeManor.SetEntryTitle("• Escape the Manor before the Police arrive");
             escapeManor.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -488,7 +526,7 @@ namespace CartelEnforcer
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
-            SetupHudUI();
+            SetupHUDUI();
 
             if (hudUI != null)
             {
@@ -555,61 +593,53 @@ namespace CartelEnforcer
             InteractableObject interiorIntObj = doorContainer.GetChild(1).GetComponent<InteractableObject>();
             Log("Fetched INT objects");
 
+            UnityEngine.Events.UnityAction doorInteractedAction = null;
             void onDoorInteracted()
             {
                 if (QuestEntry_BreakIn.State == EQuestState.Active)
                 {
                     coros.Add(MelonCoroutines.Start(LerpDoorRotation(doorContainer, QuestEntry_BreakIn.Complete)));
-                    exteriorIntObj.onInteractStart.RemoveListener((UnityEngine.Events.UnityAction)onDoorInteracted);
+                    if (doorInteractedAction != null)
+                    {
+                        exteriorIntObj.onInteractStart.RemoveListener(doorInteractedAction);
+                        doorInteractedAction = null;
+                    }
                 }
             }
             exteriorIntObj.message = "Open Door";
-            exteriorIntObj.onInteractStart.AddListener((UnityEngine.Events.UnityAction)onDoorInteracted);
+            doorInteractedAction = (UnityEngine.Events.UnityAction)onDoorInteracted;
+            exteriorIntObj.onInteractStart.AddListener(doorInteractedAction);
             interiorIntObj.message = "Open Door";
             Log("Configured int objects");
 
-            // then setup lights because they are buggy if we dont disable the optimize light feature
+            // then setup lights
             List<Transform> rooms = new()
             {
                 manor.OriginalContainer.transform.GetChild(3),
                 manor.OriginalContainer.transform.GetChild(4),
                 manor.OriginalContainer.transform.GetChild(5)
             };
-            Log("Setup rooms done");
 
             foreach (Transform room in rooms)
             {
                 room.gameObject.SetActive(true);
-                LightOptimizer lightOptimizer = room.gameObject.GetComponent<LightOptimizer>();
-                Log("LightOpt fetched");
-                if (lightOptimizer == null)
+                ToggleableLight[] lights = room.GetComponentsInChildren<ToggleableLight>();
+                if (lights.Length == 0)
                 {
-                    Log("Light Optimizer is null!");
-                    continue;
-                }
-                if (lightOptimizer.lights == null || lightOptimizer.lights.Count() == 0)
-                {
-                    Log("Light optimizer light list is empty or null");
+                    Log("No lights found");
                     continue;
                 }
                 yield return Wait05;
                 if (!registered) yield break;
 
-                foreach (OptimizedLight optimizedLight in lightOptimizer.lights)
+                foreach (ToggleableLight light in lights)
                 {
                     yield return Wait05;
                     if (!registered) yield break;
-
-                    Log("LightOpt Swapping");
-                    optimizedLight.Enabled = false;
-                    optimizedLight.enabled = false;
-                    if (optimizedLight._Light != null)
-                    {
-                        optimizedLight._Light.enabled = true;
-                    }
-                    Log("LightOpt Done");
+                    light.isOn = true;
                 }
             }
+            Log("Setup rooms done");
 
             int index = UnityEngine.Random.Range(0, lootSafeSpawns.Count);
             spawnedSafe = UnityEngine.Object.Instantiate(safePrefab, Map.Instance.transform);
@@ -634,13 +664,28 @@ namespace CartelEnforcer
 
             doorAnim.Close();
 
+#if MONO
+            System.Action onOpenedAction = null;
+#else
+            Il2CppSystem.Action onOpenedAction = null;
+#endif
             void SecondaryTrigger()
             {
                 if (QuestEntry_SearchResidence.State == EQuestState.Active)
                     QuestEntry_SearchResidence.Complete();
-                safeComp.onOpened.RemoveListener((UnityEngine.Events.UnityAction)SecondaryTrigger);
+
+                if (onOpenedAction != null)
+                {
+                    safeComp.onOpened -= onOpenedAction;
+                    onOpenedAction = null;
+                }
             }
-            safeComp.onOpened.AddListener((UnityEngine.Events.UnityAction)SecondaryTrigger);
+#if MONO
+            onOpenedAction = (System.Action)SecondaryTrigger;
+#else
+            onOpenedAction = (Il2CppSystem.Action)SecondaryTrigger;
+#endif
+            safeComp.onOpened += onOpenedAction;
             safeComp.StorageEntitySubtitle = "Thomas' Safe";
 
             Func<string, ItemDefinition> GetItem;
@@ -776,29 +821,31 @@ namespace CartelEnforcer
                 }
             }
 
+            // then disable rooms lights
             List<Transform> rooms = new()
             {
                 manor.OriginalContainer.transform.GetChild(3),
                 manor.OriginalContainer.transform.GetChild(4),
                 manor.OriginalContainer.transform.GetChild(5)
             };
+
             foreach (Transform room in rooms)
             {
-                LightOptimizer lightOptimizer = room.gameObject.GetComponent<LightOptimizer>();
+                room.gameObject.SetActive(false);
+                ToggleableLight[] lights = room.GetComponentsInChildren<ToggleableLight>();
+                if (lights.Length == 0)
+                {
+                    Log("No lights found");
+                    continue;
+                }
                 yield return Wait05;
                 if (!registered) yield break;
 
-                foreach (OptimizedLight optimizedLight in lightOptimizer.lights)
+                foreach (ToggleableLight light in lights)
                 {
                     yield return Wait05;
                     if (!registered) yield break;
-
-                    optimizedLight.Enabled = true;
-                    optimizedLight.enabled = true;
-                    if (optimizedLight._Light != null)
-                    {
-                        optimizedLight._Light.enabled = false;
-                    }
+                    light.isOn = false;
                 }
             }
 
@@ -910,31 +957,18 @@ namespace CartelEnforcer
                 goon.Health.Health = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
                 goon.Movement.MoveSpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.3f, 1.5f), 1.75f, questDifficultyScalar - 1f);
 
-                void onCombatBehEnd()
-                {
-                    // Because sometimes it seems that they just end prematurely for no reason, check if is alive and not knocked out
-                    if (!goon.Health.IsKnockedOut && !goon.Health.IsDead && Player.Local.Health.CurrentHealth > 0f)
-                    {
-                        goon.Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
-                        goon.Behaviour.CombatBehaviour.Enable_Networked(null);
-                        if (goon.Behaviour.CombatBehaviour.currentWeapon == null) // does it retain prev weps?? this can cause issue
-                        {
-                            SetupGoonWeapon(goon);
-                        }
-                    }
-                    else
-                    {
-                        goon.Behaviour.CombatBehaviour.onEnd.RemoveListener((UnityEngine.Events.UnityAction)onCombatBehEnd);
-                    }
-                }
-                goon.Behaviour.CombatBehaviour.onEnd.AddListener((UnityEngine.Events.UnityAction)onCombatBehEnd);
-
+                UnityEngine.Events.UnityAction onGoonDiedAction = null;
                 void onGoonDie()
                 {
                     manorGoonsAlive--;
-                    goon.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)onGoonDie);
+                    if (onGoonDiedAction != null)
+                    {
+                        goon.Health.onDieOrKnockedOut.RemoveListener(onGoonDiedAction);
+                        onGoonDiedAction = null;
+                    }
                 }
-                goon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)onGoonDie);
+                onGoonDiedAction = (UnityEngine.Events.UnityAction)onGoonDie;
+                goon.Health.onDieOrKnockedOut.AddListener(onGoonDiedAction);
 
                 if (GiveUpRange == 0f)
                 {
@@ -948,7 +982,7 @@ namespace CartelEnforcer
                 goon.Behaviour.CombatBehaviour.DefaultSearchTime = 120f;
 
                 goon.Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject); // should swap to player get nearest?
-                goon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                goon.Behaviour.CombatBehaviour.Enable_Networked();
                 manorGoons.Add(goon);
                 manorGoonGuids.Add(goon.GUID.ToString());
             }
@@ -1018,7 +1052,6 @@ namespace CartelEnforcer
             if (!registered || SaveManager.Instance.IsSaving || manorCompleted || this.State != EQuestState.Active) return;
 #if MONO
             base.MinPass();
-
 #endif
             if (!InstanceFinder.IsServer)
             {

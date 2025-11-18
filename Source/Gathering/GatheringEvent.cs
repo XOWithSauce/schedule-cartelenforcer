@@ -99,6 +99,11 @@ namespace CartelEnforcer
         public static bool startedCombat = false;
         public static GatheringLocation currentGatheringLocation = null;
         public static GatheringLocation previousGatheringLocation = null;
+
+        // because these might not be consumed during the event it must be stored here
+        public static UnityEngine.Events.UnityAction combatStartedAction = null;
+        public static UnityEngine.Events.UnityAction endSmokeAction = null;
+        public static UnityEngine.Events.UnityAction endDrinkAction = null;
         public static void OnHourPassTryGather()
         {
             coros.Add(MelonCoroutines.Start(TryStartGathering()));
@@ -214,18 +219,22 @@ namespace CartelEnforcer
                     Player p = Player.GetClosestPlayer(location.position, out float _);
                     foreach (CartelGoon goon in spawnedGatherGoons)
                     {
-                        goon.Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStarted);
+                        if (combatStartedAction != null)
+                            goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
                         goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
                         goon.AttackEntity(p.GetComponent<ICombatTargetable>());
                     }
+                    combatStartedAction = null;
                 }
+
+                combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
 
                 for (int i = 0; i < spawnedGatherGoons.Count; i++)
                 {
                     spawnedGatherGoons[i].Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
                     spawnedGatherGoons[i].Behaviour.ScheduleManager.DisableSchedule();
                     spawnedGatherGoons[i].Movement.FacePoint(location.position);
-                    spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStarted);
+                    spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
                     if (DealerActivity.currentDealerActivity < 0f)
                     {
                         // increase hp
@@ -263,7 +272,6 @@ namespace CartelEnforcer
                     }
                 }
 
-
                 // Drink / Smoke animations on random basis
                 if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
                 {
@@ -274,9 +282,14 @@ namespace CartelEnforcer
                         drinkAct.End();
                         Player p = Player.GetClosestPlayer(location.position, out float _);
                         spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>());
-                        spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                        if (endDrinkAction != null)
+                        {
+                            spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
+                            endDrinkAction = null;
+                        }
                     }
-                    spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                    endDrinkAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
+                    spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.AddListener(endDrinkAction);
                 }
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
@@ -288,9 +301,14 @@ namespace CartelEnforcer
                         smokeAct.End();
                         Player p = Player.GetClosestPlayer(location.position, out float _);
                         spawnedGatherGoons[1].AttackEntity(p.GetComponent<ICombatTargetable>());
-                        spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                        if (endSmokeAction != null)
+                        {
+                            spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
+                            endSmokeAction = null;
+                        }
                     }
-                    spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener((UnityEngine.Events.UnityAction)CombatStartedEndAct);
+                    endSmokeAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
+                    spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener(endSmokeAction);
                 }
 
 
@@ -531,7 +549,7 @@ namespace CartelEnforcer
             {
                 if (ShouldChangeInfluence(region))
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.gatheringSuccess);
-                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active)
+                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active && StageGatheringsDefeated == 0)
                     StageGatheringsDefeated++;
             }
             else
@@ -561,10 +579,41 @@ namespace CartelEnforcer
                     goon.Despawn();
             }
 
+            if (combatStartedAction != null)
+            {
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
+                }
+                combatStartedAction = null;
+            }
+
+            if (endDrinkAction != null)
+            {
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
+                }
+                endDrinkAction = null;
+            }
+
+            if (endSmokeAction != null)
+            {
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
+                }
+                endSmokeAction = null;
+            }
+
+
             startedCombat = false;
             areGoonsGathering = false;
             spawnedGatherGoons.Clear();
             currentGatheringLocation = null;
+            endSmokeAction = null;
+            endDrinkAction = null;
+            combatStartedAction = null;
         }
 
     }

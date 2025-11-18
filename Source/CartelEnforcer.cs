@@ -14,6 +14,9 @@ using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
+using static CartelEnforcer.SabotageEvent;
+
+
 
 #if MONO
 using ScheduleOne.Property;
@@ -68,7 +71,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.6.1";
+        public const string Version = "1.7.0";
         public const string DownloadLink = null;
     }
 
@@ -189,16 +192,6 @@ namespace CartelEnforcer
                         }
                     }
 
-                    // Left CTRL + I Test bugfix
-                    else if (Input.GetKey(KeyCode.I))
-                    {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputTestDealerInv());
-                        }
-                    }
-
                     // Left CTRL + P Gathering Spawn
                     else if (Input.GetKeyDown(KeyCode.P))
                     {
@@ -208,6 +201,16 @@ namespace CartelEnforcer
                             hoursUntilNextGathering = 1;
                             MelonCoroutines.Start(TryStartGathering());
                             debounce = false;
+                        }
+                    }
+
+                    // Left CTRL + N Start sabotage event
+                    else if (Input.GetKeyDown(KeyCode.N))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            coros.Add(MelonCoroutines.Start(OnInputStartSabotage()));
                         }
                     }
 
@@ -292,6 +295,9 @@ namespace CartelEnforcer
 #endif
             }
 
+            if (currentConfig.businessSabotage)
+                coros.Add(MelonCoroutines.Start(InitializeAndEvaluateSabotage()));
+
             if (currentConfig.debugMode)
                 MelonCoroutines.Start(MakeUI());
 
@@ -348,6 +354,31 @@ namespace CartelEnforcer
             yield return null;
         }
 
+        public static IEnumerator InitializeAndEvaluateSabotage()
+        {
+            yield return Wait2;
+            if (!registered) yield break;
+            PopulateBombLocations();
+            PrepareBombFXObjects();
+            Log("Starting Sabotage Event evaluation");
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onHourPass += ReduceSabotageHours;
+#else
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)ReduceSabotageHours;
+#endif
+            coros.Add(MelonCoroutines.Start(EvaluateBombEvent()));
+
+            yield return null;
+        }
+
+        public static void ReduceSabotageHours()
+        {
+            foreach (SabotageEventLocation loc in locations)
+            {
+                loc.HourPass();
+            }
+        }
+
         public static IEnumerator InitializeAndEvaluateMiniQuest()
         {
             yield return Wait10;
@@ -372,6 +403,7 @@ namespace CartelEnforcer
 
             RV rv = UnityEngine.Object.FindObjectOfType<RV>();
             Transform target = rv.transform.Find("RV/rv/Small Safe");
+
             if (target == null)
             {
                 Log("No RV target to copy safe prefab from");
@@ -508,7 +540,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        #endregion
+#endregion
 
         #region Harmony Patches for Saving and Coroutine safety
         static void ExitPreTask()
@@ -534,6 +566,8 @@ namespace CartelEnforcer
             manorGoons.Clear();
             manorGoonGuids.Clear();
             spawnedGatherGoons.Clear();
+            burningPlayers.Clear();
+            locations.Clear();
 
             cartelCashAmount = 0f;
 
@@ -566,6 +600,16 @@ namespace CartelEnforcer
             areGoonsGathering = false;
             currentGatheringLocation = null;
             previousGatheringLocation = null;
+            // sabotage related
+            bombDefused = false;
+            sabotageEventActive = false;
+            interactionsUntilDefuse = 6;
+            intBomb = null;
+            reactiveFire = null;
+            bombInteractable = null;
+            bombLight = null;
+            bombCubeMat = null;
+            bombSound = null;
 
             hoursUntilNextGathering = 3;
             currentDealerActivity = 0f;

@@ -82,6 +82,8 @@ namespace CartelEnforcer
         private int GiveUpAfterSuccessfulHits = 0;
         private float DefaultSearchTime = 0f;
 
+        // To remove it later in edge cases
+        UnityEngine.Events.UnityAction bossDiedAction = null;
 
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
@@ -272,6 +274,7 @@ namespace CartelEnforcer
             investigate.SetState(EQuestState.Active, true);
             investigate.ParentQuest = this;
             investigate.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction investigateAction = null;
             void OnInvestigateComplete()
             {
                 if (investigate != null && investigate.State == EQuestState.Failed) return;
@@ -282,9 +285,14 @@ namespace CartelEnforcer
                     contact.PoI.gameObject.SetActive(false);
                 if (contact.compassElement != null)
                     contact.compassElement.Visible = false;
-                investigate.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnInvestigateComplete);
+                if (investigateAction != null)
+                {
+                    investigate.onComplete.RemoveListener(investigateAction);
+                    investigateAction = null;
+                }
             }
-            investigate.onComplete.AddListener((UnityEngine.Events.UnityAction)OnInvestigateComplete);
+            investigateAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
+            investigate.onComplete.AddListener(investigateAction);
 
             contact.SetEntryTitle("• Wait for Manny to contact you");
             contact.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -295,6 +303,7 @@ namespace CartelEnforcer
             contact.SetState(EQuestState.Inactive, false);
             contact.ParentQuest = this;
             contact.CompleteParentQuest = false;
+            UnityEngine.Events.UnityAction contactAction = null;
             void OnContactComplete()
             {
                 if (contact != null && contact.State == EQuestState.Failed) return;
@@ -305,9 +314,14 @@ namespace CartelEnforcer
                     defeat.PoI.gameObject.SetActive(false);
                 if (defeat.compassElement != null)
                     defeat.compassElement.Visible = false;
-                contact.onComplete.RemoveListener((UnityEngine.Events.UnityAction)OnContactComplete);
+                if (contactAction != null)
+                {
+                    contact.onComplete.RemoveListener(contactAction);
+                    contactAction = null;
+                }
             }
-            contact.onComplete.AddListener((UnityEngine.Events.UnityAction)OnContactComplete);
+            contactAction = (UnityEngine.Events.UnityAction)OnContactComplete;
+            contact.onComplete.AddListener(contactAction);
 
             defeat.SetEntryTitle("• Defeat the Cartel Brute");
             defeat.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
@@ -333,7 +347,7 @@ namespace CartelEnforcer
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
-            SetupHudUI();
+            SetupHUDUI();
 
             if (hudUI != null)
             {
@@ -671,9 +685,14 @@ namespace CartelEnforcer
                 MelonCoroutines.Start(QuestReward(bossGoon));
                 this.Complete(true);
 
-                bossGoon.Health.onDieOrKnockedOut.RemoveListener((UnityEngine.Events.UnityAction)OnBossDied);
+                if (bossDiedAction != null)
+                {
+                    bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
+                    bossDiedAction = null;
+                }
             }
-            bossGoon.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)OnBossDied);
+            bossDiedAction = (UnityEngine.Events.UnityAction)OnBossDied;
+            bossGoon.Health.onDieOrKnockedOut.AddListener(bossDiedAction);
 
             yield return null;
         }
@@ -751,7 +770,7 @@ namespace CartelEnforcer
                 if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
 
                 if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
-                    bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                    bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
 
                 if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null)
                 {
@@ -786,7 +805,7 @@ namespace CartelEnforcer
                     if (bossGoon.Behaviour.CombatBehaviour.Target == null)
                         bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
                     if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
-                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
                     yield return Wait01;
                     if (!registered) yield break;
 
@@ -797,13 +816,17 @@ namespace CartelEnforcer
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.95f)
                 {
-                    for (int i = 0; i < 6; i++)
+                    for (int i = 0; i < 3; i++)
                     {
-
                         yield return Wait05;
                         if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
-
-                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 1f, 0.1f);
+                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 2.6f, 0.33f);
+                    }
+                    for (int i = 0; i < 3; i++)
+                    {
+                        yield return Wait05;
+                        if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
+                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 0.4f, 0.33f);
                     }
                     bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
                 }
@@ -866,7 +889,7 @@ namespace CartelEnforcer
                     {
                         bossCombatBegun = true;
                         bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
-                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
                     }
 
                     if (bossCombatBegun)
@@ -877,7 +900,7 @@ namespace CartelEnforcer
                         if (!rageStageStarted)
                         {
                             if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
-                                bossGoon.Behaviour.CombatBehaviour.Enable_Networked(null);
+                                bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
 
                             if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null || bossGoon.Behaviour.CombatBehaviour.IsCurrentWeaponMelee())
                             {
@@ -982,6 +1005,12 @@ namespace CartelEnforcer
             {
                 if (bossGoon.Behaviour.CombatBehaviour.Active)
                     bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
+
+                if (bossDiedAction != null)
+                {
+                    bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
+                    bossDiedAction = null;
+                }
                 // Reset all non default stats that would carry on modified
                 bossGoon.Health.MaxHealth = 100f;
                 bossGoon.Movement.MoveSpeedMultiplier = 0.8f;

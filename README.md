@@ -15,13 +15,16 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Drive-By Events](#drive-by-events)
     * [Mini-Quests](#mini-quests)
     * [Cartel Gatherings](#cartel-gatherings)
+    * [Business Sabotage](#business-sabotage)
 * [End Game Quests](#end-game-quests)
     * [Unexpected Alliances](#unexpected-alliances)
     * [Infiltrate Manor](#infiltrate-manor)
     * [Four Wheels](#four-wheels) 
 * [Modifying Cartel Dealers](#modifying-cartel-dealers)
-* [Modifying Spawns](#modifying-spawns)
+* [Modifying Ambush Events](#modifying-ambush)
+    * [Modifying Ambush Spawns](#modifying-default-spawns)
     * [Modifying Default Spawns](#modifying-default-spawns)
+    * [Modifying Ambush Settings](#modifying-ambush-settings)
 * [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
 * [Modifying Influence Changing Events](#modifying-influence-changing-events)
 * [Debug Mode](#debug-mode)
@@ -40,6 +43,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
+- **Business Sabotage:** Cartel will try to actively interfere with your laundering activities at Post Office, Laundromat and Taco Ticklers. Defuse the planted explosive before your business blows up!
 - **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
@@ -99,6 +103,7 @@ You can customize the mod's settings through the **config.json** file.
     "interceptDeals": true,
     "enhancedDealers": true,
     "cartelGatherings": true,
+    "businessSabotage": true,
     "endGameQuest": true,
     "endGameQuestMonologueSpeed": 1.0
 }
@@ -155,6 +160,9 @@ You can customize the mod's settings through the **config.json** file.
     - `false`: Disables the feature.
 - **`cartelGatherings`**:
     - `true`: Enables the Cartel Gatherings event
+    - `false`: Disables the event.
+- **`businessSabotage`**:
+    - `true`: Enables the Business Sabotage event
     - `false`: Disables the event.
 - **`endGameQuest`**:
     - `true`: Enables the generation of End Game Quest.
@@ -256,6 +264,20 @@ If you have killed enough Cartel Dealers, the Gatherings will be hostile on sigh
 - If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
 
 ---
+
+<img src="https://i.imgur.com/HpUB672.png">
+
+
+### Business Sabotage
+
+Player owned businesses can now be sabotaged by Cartel. For these events you will get a notification indicating which business is being sabotaged. After the notification, a goon will spawn and go plant a bomb at your business. Defuse the bomb or your current laundering operation will fail!
+
+- A planted bomb will explode automatically after 2 in-game hours
+- If the planted bomb explodes, regional cartel influence increases by 200 and the current business laundering operations fail.
+- If the player defuses the bomb, regional cartel influence decreases by 150.
+- If the player kills the goon that is trying to plant a bomb, regional cartel influence decreases by 50.
+
+>The frequency of Business Sabotage events is linked directly to the total cartel influence across all regions. When the cartel total influence is lower, these events become more frequent!
 
 ## End Game Quests
 
@@ -404,7 +426,9 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 
 ---
 
-### Modifying Spawns
+### Modifying Ambush
+
+#### Modifying Ambush Spawns
 
 You can add or modify custom ambush locations.
 
@@ -455,6 +479,32 @@ You can add or modify custom ambush locations.
 2. You can only **modify** the values here; do not add or remove any ambushes.
 3. If the game receives a new update, delete `default.json` to ensure your configuration is up to date. It will be recreated the next time you load a save.
 
+#### Modifying Ambush Settings
+
+1. Open `Mods/CartelEnforcer/Ambush/settings.json`.
+2. You can modify the weapons used for ambush events, change the minimum rank required for ranged weapon usage in ambushes and also disable the ambushes that happen rarely after deals get completed by player.
+
+3. The file content is by default:
+```json
+{
+    "RangedWeaponAssetPaths": [
+        "Avatar/Equippables/Revolver",
+        "Avatar/Equippables/M1911",
+        "Avatar/Equippables/PumpShotgun"
+    ],
+    "MeleeWeaponAssetPaths": [
+        "Avatar/Equippables/Knife"
+    ],
+    "MinRankForRanged": 2,
+    "AfterDealAmbushEnabled": true
+}
+```
+
+- **RangedWeaponAssetPaths** & **MeleeWeaponAssetPaths**: Paths to the weapon assets that get used in Ambushes.
+    - Note: Must be a valid path and string is case sensitive (example: Revolver can't currently be loaded with "Avatar/Equippables/Revolver")
+- **MinRankForRanged**: Player Rank requirement that indicates when goons start using ranged weapons in ambushes.
+- **AfterDealAmbushesEnabled**: When true by default, after player completes a deal an ambush can happen instantly after. When disabled these stop happening and ambushes are only triggered by positional triggers.
+
 ---
 
 #### Modifying Cartel Stolen Items
@@ -497,8 +547,9 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
     - `Left CTRL + T`: Trigger an Intercept Deal event.
     - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
-    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Manny, without checking prerequirements.
+    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Jeremy, without checking prerequirements.
     - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
+    - `Left CTRL + N`: Start a Sabotage Event at nearest supported business
 
 ---
 

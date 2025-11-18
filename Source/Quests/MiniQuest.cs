@@ -423,20 +423,13 @@ namespace CartelEnforcer
                 Log($"[MINI QUEST]    MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
             }
             bool opened = false;
-            UnityEngine.Events.UnityAction onOpenedAction = null;
 
 #if MONO
-            onOpenedAction = () =>
-            {
-                Log("[MINI QUEST] Quest Complete");
-                NetworkSingleton<LevelManager>.Instance.AddXP(100);
-                opened = true;
-                if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
-                StageDeadDropsObserved += 1;
-                entity.Storage.onOpened.RemoveListener(onOpenedAction);
-            };
+            System.Action onOpenedAction = null;
 #else
+            Il2CppSystem.Action onOpenedAction = null;
+
+#endif
             void WrapOnOpenCallback()
             {
                 Log("[MINI QUEST] Quest Complete");
@@ -444,13 +437,22 @@ namespace CartelEnforcer
                 opened = true;
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
-                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active)
+                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active && StageDeadDropsObserved <= 1)
                     StageDeadDropsObserved += 1;
-                entity.Storage.onOpened.RemoveListener(onOpenedAction);
+
+                if (onOpenedAction != null)
+                {
+                    entity.Storage.onOpened -= onOpenedAction;
+                    onOpenedAction = null;
+                }
             }
-            onOpenedAction = (UnityEngine.Events.UnityAction)WrapOnOpenCallback;
+#if MONO
+            onOpenedAction = (System.Action)WrapOnOpenCallback;
+#else
+            onOpenedAction = (Il2CppSystem.Action)WrapOnOpenCallback;
 #endif
-            entity.Storage.onOpened.AddListener(onOpenedAction);
+            entity.Storage.onOpened += onOpenedAction;
+
 
             yield return Wait60;
             if (!registered) yield break;
@@ -462,7 +464,12 @@ namespace CartelEnforcer
                 entity.Storage.ClearContents();
             }
 
-            entity.Storage.onOpened.RemoveListener(onOpenedAction);
+            if (onOpenedAction != null)
+            {
+                entity.Storage.onOpened -= onOpenedAction;
+                onOpenedAction = null;
+            }
+
             Log($"[MINI QUEST] Removed MiniQuest Reward.");
             yield return null;
         }
