@@ -501,7 +501,7 @@ You can add or modify custom ambush locations.
 ```
 
 - **RangedWeaponAssetPaths** & **MeleeWeaponAssetPaths**: Paths to the weapon assets that get used in Ambushes.
-    - Note: Must be a valid path and string is case sensitive (example: Revolver can't currently be loaded with "Avatar/Equippables/Revolver")
+    - Note: Must be a valid path and string is case sensitive (example: Machete melee weapon can't currently be loaded with "Avatar/Equippables/Machete")
 - **MinRankForRanged**: Player Rank requirement that indicates when goons start using ranged weapons in ambushes.
 - **AfterDealAmbushesEnabled**: When true by default, after player completes a deal an ambush can happen instantly after. When disabled these stop happening and ambushes are only triggered by positional triggers.
 
