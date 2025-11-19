@@ -3,6 +3,7 @@ using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
 using static CartelEnforcer.CartelEnforcer;
+using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
@@ -428,6 +429,10 @@ namespace CartelEnforcer
             }
             Log("[INTERCEPT] Dealer Check attend start");
             dealer.CheckAttendStart();
+
+            // Because it seems that this gets reset every once in a while
+            dealer.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
+
             // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
             // The dealer will have the contract too and try to complete it, but this way player can do it too
             if (customer.CurrentContract != null)

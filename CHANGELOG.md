@@ -1,3 +1,8 @@
+# Version 1.7.1
+- Checked that mod is compatible with latest 0.4.1f13 (no mod changes related to patch)
+- Fixed a bug with Cartel Dealers having unassigned Avatar settings, causing them to appear as white characters
+- Partially fixed a bug where Cartel Dealers movement speed configuration value gets unset during some events
+-
 # Version 1.7.0
 - Compiled against 0.4.1f12 latest default / alternate game versions for the patch notes released today
 - Added new Event "Business Sabotage" where Cartel attempts to disrupt your money laundering operations by blowing up businesses

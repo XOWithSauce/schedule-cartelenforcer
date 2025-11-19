@@ -81,6 +81,13 @@ namespace CartelEnforcer
 
             SetupDealers();
 
+            yield return Wait2; // For some reason the move speed mult gets overriden on the setup dealers function so after this it gets set? weird
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
+            {
+                dealer.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
+                yield return Wait025;
+            }
+
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onDayPass = (Action)Delegate.Combine(instance.onDayPass, new Action(OnDayPassChange));
@@ -294,7 +301,7 @@ namespace CartelEnforcer
 
         public static void SetupDealers()
         {
-            Log("[DEALER ACTIVITY] Configuring Cartel Dealer Event values");
+            Log("[DEALER ACTIVITY] Configuring Cartel Dealers");
 
             string resourcePath = "";
             switch (dealerConfig.CartelDealerWeapon.ToLower())
@@ -505,10 +512,41 @@ namespace CartelEnforcer
                 }
                 dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)TrySpawnGoonsOnDeath);
 
-#endregion
+                #endregion
+
+                
 
             }
-            Log("    Done Configuring Cartel Dealer Event values");
+            Log("[DEALER ACTIVITY]    Done Configuring Cartel Dealer Event values");
+
+            #region Ensure that the dealers have avatar settings loaded
+            // in 0.4.1f12 > testings show that cartel dealers can have null avatar settings?
+            // to fix this just copy existing settings over if it is needed
+            List<CartelDealer> missingAvatar = new();
+            Log("[DEALER ACTIVITY] Ensure Cartel Dealers have avatar textures");
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers) 
+            {
+                if (dealer.Avatar.CurrentSettings == null)
+                {
+                    missingAvatar.Add(dealer);
+                }
+            }
+            if (missingAvatar.Count > 0)
+            {
+                Log($"[DEALER ACTIVITY]  Found {missingAvatar.Count} missing Dealer avatar settings");
+
+                foreach (CartelDealer dealer in missingAvatar)
+                {
+                    dealer.RandomizeAppearance();
+                }
+
+            }
+            missingAvatar.Clear();
+            missingAvatar = null;
+            Log("[DEALER ACTIVITY]  Done checking Cartel Dealer avatar textures");
+
+            #endregion
+
         }
 
 #if MONO
@@ -705,6 +743,10 @@ namespace CartelEnforcer
             MapRegionData mapRegionData = Singleton<Map>.instance.Regions[(int)d.Region];
             DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
             d.Movement.SetDestination(walkDest.CustomerStandPoint.position);
+
+            // Because it seems that this gets reset every once in a while
+            d.Movement.MoveSpeedMultiplier = dealerConfig.CartelDealerMoveSpeedMultiplier;
+
             if (!d.IsAcceptingDeals)
                 d.SetIsAcceptingDeals(true);
         }

@@ -24,8 +24,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.7.0.0</FileVersion>
-		<Version>1.7.0</Version>
+		<FileVersion>1.7.1.0</FileVersion>
+		<Version>1.7.1</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2025 Source MIT</Copyright>
