@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.FrequencyOverrides;

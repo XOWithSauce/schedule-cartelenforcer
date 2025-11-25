@@ -1,8 +1,50 @@
+# Version 1.7.2
+- Changed Cartel Inventory to give back stolen items already packaged
+- Changed Cartel Inventory to give out items in smaller quantities to ensure that the stolen products stay in their inventory
+- Changed Cartel Inventory logic to prevent stolen items and stolen balance from clearing out in certain mod added events
+- Changed code related to packaged product definitions for Car Meetup quest since the same code is shared with new cartel inventory changes
+- Changed the code which default game gives Cartel Dealers locked customers contracts, now the event is more likely to award contracts when it runs by parsing all regions locked customers until one hits (or if it doesnt hit event cancels and goes on cooldown)
+- Changed Intercept Event contract logic to prevent stealing contracts from customers that are nearby the player
+- Changed Intercept Event logic to search 80 units for nearby cartel dealers if the regions respective dealer is occupied whenever the event runs
+- Changed the Unexpected Alliances end game quest boss to have 100% chance to drop a shotgun up from 33%
+- Changed the Dealer Robbery spawned goon to be more likely to win combat while using a ranged weapon versus melee weapon
+- Changed the Sabotage Business event Fire FX Light to dim as the fire scales down
+- Changed the Sabotage Business event cooldown to be significantly longer to not make it game breaking and annoying
+- Changed the Sabotage Business event bomb explosion code to account for simple blast wave physics and incorporated the default code Impact class into it
+- Changed the Sabotage Business event bomb explosion to also deal Impacts to nearby NPCs and causing the nearby NPCs to flee and panic.
+- Changed the Sabotage Business event fire to deal incrementing damage infinitely when player is touching the fire (sometimes broken in current version tho)
+- Simplified the logic in Dealer Robbery escape location selection and overall code cleanup
+- Simplified the logic in Cartel Dealer free time walking
+- Simplified the logic which Intercept Event picks the contract
+- Added new Free time walking locations for Cartel Dealers, now in addition to roaming customer standpoints across their region, they also visit their respective regions dead drops
+- Added new configuration value to the dealer.json file, "CartelDealerLethality" value now controls how strong the selected weapon is in combat (at 0.0 default weapon stats)
+- Added Revolver weapon to the supported weapon strings in dealer.json now the weapon config value also supports "Revolver" or "revolver" to give cartel dealers revolvers
+- Replaced the movement speed multiplier with walk speed configuration value in dealer.json file to fix a bug where the speed gets reset
+- Added Sewer Key to the possible rare drops from the Mini Quest Dead Drops event
+- Revised the influence changing events values in influence.json to match the recent changes to the default game events influence changes
+- Added new influence changing event "customerUnlockInfluenceChange" to the influence.json file, controls how much influence decreases when unlocking customer
+- Added influence configuration parameters for the new Sabotage Event to the influence.json file
+- Lowered the mod added events influence increases
+- Passive daily influence increase is no longer provided in source code and is purely additive by the mod now. Lowered the passive influence gain 50 -> 25 per day.
+- Fixed a bug in the Sabotage Business event where unowned businesses could be targetted by the event
+- Fixed a bug in the Sabotage Business event where player could get false notifications for the event although it doesnt run
+- Fixed a bug in the Sabotage Business event where while defusing the bomb, it could explode even though player defused it
+- Fixed a bug where during the Infiltrate Manor quest or the Real Robbery feature, the default Cash items maximum stack size would unintentionally be permanently changed
+- Fixed a bug in Intercept Event where the picked contract could be invalid
+- Fixed a bug where unintentionally during Intercept Event the respective cartel dealers inventory would be filled with cartel stolen items, now only 1 slot is filled
+- Fixed a bug in the Intercept Event where the re-assignment of contract caused the description to disappear
+- Fixed a bug in Cartel Gathering events where the gathering could last overnight and the goons would not disperse properly on day pass
+- Fixed a bug in influence changing events where mod added events and also default game influence changes could change locked regions cartel influence
+- Fixed a bug where Player hired Dealers stolen contracts would not properly conclude when Cartel Dealers compete with them
+- Fixed a bug where Player hired Dealers stolen contracts would fail whenever the participating Cartel Dealer is killed or goes unconscious
+- Fixed a bug where Player hired Dealers stolen contracts would not properly reset rewarded XP causing succesfully done deals to not reward xp
+- Removed Cartel Dealer related bug fixes since the mod implementations were now redundant after source code changes
+
 # Version 1.7.1
 - Checked that mod is compatible with latest 0.4.1f13 (no mod changes related to patch)
 - Fixed a bug with Cartel Dealers having unassigned Avatar settings, causing them to appear as white characters
 - Partially fixed a bug where Cartel Dealers movement speed configuration value gets unset during some events
--
+
 # Version 1.7.0
 - Compiled against 0.4.1f12 latest default / alternate game versions for the patch notes released today
 - Added new Event "Business Sabotage" where Cartel attempts to disrupt your money laundering operations by blowing up businesses

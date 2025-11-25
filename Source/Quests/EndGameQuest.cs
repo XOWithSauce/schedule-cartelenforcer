@@ -57,6 +57,8 @@ namespace CartelEnforcer
 {
 
     // Fix shotgun ragdolls + flinches, but only for manor goons, boss and car meetup goons
+    // Previously this was used to fix a bug where it drops weapon when impacted, in 0.4.1f13 no longer an issue
+    // Now this provides just additional difficulty by preventing those mechanics
 
     [HarmonyPatch(typeof(NPC), "ProcessImpactForce")]
     public static class NPC_ProcessImpactForce_Patch
@@ -390,30 +392,15 @@ namespace CartelEnforcer
             ItemInstance goldChain = defChain.GetDefaultInstance(1);
             goon.Inventory.InsertItem(goldChain, true);
 
-            if (UnityEngine.Random.Range(0f, 1f) > 0.666f)
-            {
-                ItemDefinition defGun = GetItem("pumpshotgun");
-                ItemInstance gunInst = defGun.GetDefaultInstance(1);
-                goon.Inventory.InsertItem(gunInst, true);
-            }
+            ItemDefinition defGun = GetItem("pumpshotgun");
+            ItemInstance gunInst = defGun.GetDefaultInstance(1);
+            goon.Inventory.InsertItem(gunInst, true);
+
             ItemDefinition defShell = GetItem("shotgunshell");
             ItemInstance shell = defShell.GetDefaultInstance(UnityEngine.Random.Range(4, 10));
             goon.Inventory.InsertItem(shell, true);
 
             // Change globally customer relation
-#if MONO
-            using (List<Customer>.Enumerator enumerator = Customer.UnlockedCustomers.GetEnumerator())
-            {
-                while (enumerator.MoveNext())
-                {
-                    yield return Wait025;
-                    if (!registered) yield break;
-
-                    if (enumerator.Current.NPC.RelationData.RelationDelta != 5.0f)
-                        enumerator.Current.NPC.RelationData.ChangeRelationship(0.25f, true);
-                }
-            }
-#else
             for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
             {
                 yield return Wait025;
@@ -422,7 +409,7 @@ namespace CartelEnforcer
                 if (Customer.UnlockedCustomers[i].NPC.RelationData.RelationDelta != 5.0f)
                     Customer.UnlockedCustomers[i].NPC.RelationData.ChangeRelationship(0.25f, true);
             }
-#endif
+
             // Change influence in all unlocked regions
             if (InstanceFinder.IsServer)
             {
@@ -443,8 +430,8 @@ namespace CartelEnforcer
                 }
             }
 
-            // last reward lower Law intensity by 5%
-            float change = Mathf.Clamp01(Singleton<LawController>.Instance.internalLawIntensity * 0.05f);
+            // last reward lower Law intensity by 25%
+            float change = Mathf.Clamp(Singleton<LawController>.Instance.internalLawIntensity * 0.25f, 0f, 2.5f);
             if (change != 0f)
                 Singleton<LawController>.Instance.ChangeInternalIntensity(-change);
 

@@ -1,17 +1,15 @@
 ﻿using System.Collections;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.DriveByEvent;
 using static CartelEnforcer.DealerActivity;
 
-
-
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
-
 using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;

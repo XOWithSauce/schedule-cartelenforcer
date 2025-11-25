@@ -24,8 +24,6 @@ using ScheduleOne.Dialogue;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.Packaging;
 using ScheduleOne.Product;
-using ScheduleOne.Product.Packaging;
-using ScheduleOne.ObjectScripts;
 using ScheduleOne.Vehicles;
 using ScheduleOne.Levelling;
 using ScheduleOne.Persistence;
@@ -47,8 +45,6 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.Packaging;
 using Il2CppScheduleOne.Product;
-using Il2CppScheduleOne.Product.Packaging;
-using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.Vehicles;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Persistence;
@@ -461,7 +457,6 @@ namespace CartelEnforcer
 
             NetworkObject nobSuv = null;
             NetworkObject nobPallet = null;
-            NetworkObject nobBrickPress = null;
 
             for (int i = 0; i < spawnablePrefabs.GetObjectCount(); i++)
             {
@@ -474,26 +469,10 @@ namespace CartelEnforcer
                 {
                     nobPallet = prefab;
                 }
-                else if (prefab?.gameObject?.name == "BrickPress")
-                {
-                    nobBrickPress = prefab;
-                }
-            }
-
-            BrickPress brickPressComp = nobBrickPress.GetComponent<BrickPress>();
-            PackagingDefinition brickDef = null;
-
-            if (brickPressComp != null && brickPressComp.BrickPackaging != null)
-            {
-                Log("Assigned brick packaging");
-                brickDef = brickPressComp.BrickPackaging;
             }
 
             // bricks
-            ItemInstance item;
-            int qty;
             Func<string, ItemDefinition> GetItem;
-
 #if MONO
             GetItem = ScheduleOne.Registry.GetItem;
 #else
@@ -503,16 +482,13 @@ namespace CartelEnforcer
             ItemDefinition def = GetItem("cocaine");
             cokeInst = def.GetDefaultInstance();
 
-
-
 #if MONO
             if (cokeInst is ProductItemInstance product)
             {
-                if (brickDef != null)
-                    product.SetPackaging(brickDef);
+                if (CartelInventory.brickPackaging != null)
+                    product.SetPackaging(CartelInventory.brickPackaging);
                 else
                     Log("Brick definition is null");
-
 
                 if (product.StoredItem != null && product.StoredItem is FilledPackaging_StoredItem storedItemInst)
                 {
@@ -534,8 +510,8 @@ namespace CartelEnforcer
             ProductItemInstance product = cokeInst.TryCast<ProductItemInstance>();
             if (product != null)
             {
-                if (brickDef != null)
-                    product.SetPackaging(brickDef);
+                if (CartelInventory.brickPackaging != null)
+                    product.SetPackaging(CartelInventory.brickPackaging);
                 else
                     Log("Brick definition is null");
 
@@ -595,8 +571,8 @@ namespace CartelEnforcer
 #if MONO
                 if (cokeInst is ProductItemInstance productReward)
                 {
-                    if (brickDef != null)
-                        productReward.SetPackaging(brickDef);
+                    if (CartelInventory.brickPackaging != null)
+                        productReward.SetPackaging(CartelInventory.brickPackaging);
                     else
                         Log("Brick definition is null");
                 }
@@ -604,8 +580,8 @@ namespace CartelEnforcer
                 productReward = cokeInst.TryCast<ProductItemInstance>();
                 if (productReward != null)
                 {
-                    if (brickDef != null)
-                        productReward.SetPackaging(brickDef);
+                    if (CartelInventory.brickPackaging != null)
+                        productReward.SetPackaging(CartelInventory.brickPackaging);
                     else
                         Log("Brick definition is null");
                 }

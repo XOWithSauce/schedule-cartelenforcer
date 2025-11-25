@@ -2,18 +2,21 @@
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
-using UnityEngine.AI;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DealerRobbery;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.DealerActivity;
 
 #if MONO
+using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Cartel;
 using ScheduleOne.Combat;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Dialogue;
+using ScheduleOne.Doors;
 using ScheduleOne.Economy;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
@@ -23,10 +26,12 @@ using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Product;
 #else
+using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
+using Il2CppScheduleOne.Doors;
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
@@ -213,6 +218,9 @@ namespace CartelEnforcer
 
     public static class DealerRobbery
     {
+        // Cache this to allow temporary changes to the cash stack size during robbery for robber inventory
+        public static int cachedCashStackLimit = 0;
+
         public static IEnumerator RobberyCombatCoroutine(Dealer dealer)
         {
             yield return Wait2;
@@ -287,9 +295,22 @@ namespace CartelEnforcer
 
             dealer.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, false, -1), true, true);
             goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
-            if (UnityEngine.Random.Range(0f, 1f) > 0.7f && AmbushOverrides.RangedWeapons != null && AmbushOverrides.RangedWeapons.Length > 0)
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.7f) // Random roll for using ranged weapons
             {
-                goon.Behaviour.CombatBehaviour.DefaultWeapon = AmbushOverrides.RangedWeapons[UnityEngine.Random.Range(0, AmbushOverrides.RangedWeapons.Length)];
+                goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
+                // these stats need to be applied because melee vs ranged combat is busted
+                if (goon.Behaviour.CombatBehaviour.currentWeapon != null)
+                {
+                    if (goon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+                    {
+                        wep.AimTime_Max = 0.33f;
+                        wep.AimTime_Min = 0.1f;
+                        wep.CanShootWhileMoving = true;
+                        wep.MinUseRange = 0.1f;
+                    }
+                }
+
             }
             else if (AmbushOverrides.MeleeWeapons != null && AmbushOverrides.MeleeWeapons.Length > 0)
             {
@@ -340,40 +361,14 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    Dealer was defeated! Initiating partial robbery.");
                 goon.Behaviour.ScheduleManager.DisableSchedule();
                 goon.Behaviour.activeBehaviour = null;
+                goon.Behaviour.ScheduleManager.ActionList[0].End();
+                goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
 
-                // Event has to be disabled here otherwise the stay inside action will override. We pass this to the escape logic function too to re-enable on success
-                NPCEvent_CartelGoonExit stayInside = null;
-
-#if MONO
-                if (goon.Behaviour.ScheduleManager.ActionList != null && goon.Behaviour.ScheduleManager.ActionList[0] != null && goon.Behaviour.ScheduleManager.ActionList[0] is NPCEvent_CartelGoonExit ev)
-                {
-                    stayInside = ev;
-
-                    stayInside.End();
-                    stayInside.gameObject.SetActive(false);
-                }
-#else
-                NPCEvent_CartelGoonExit temp1;
-                if (goon.Behaviour.ScheduleManager.ActionList != null)
-                {
-                    for (int k = 0; k < goon.Behaviour.ScheduleManager.ActionList.Count; k++)
-                    {
-                        temp1 = goon.Behaviour.ScheduleManager.ActionList[k].TryCast<NPCEvent_CartelGoonExit>();
-                        if (temp1 != null)
-                            stayInside = temp1;
-                    }
-                }
-                if (stayInside != null)
-                {
-                    stayInside.End();
-                    stayInside.gameObject.SetActive(false);
-                }
-#endif
                 yield return Wait2; // wait ragdoll
                 if (!registered) yield break;
                 if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                 {
-                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
                     yield break;
                 }
 
@@ -390,7 +385,7 @@ namespace CartelEnforcer
                     if (!registered) yield break;
                     if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                     {
-                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
                         yield break;
                     }
 
@@ -417,7 +412,7 @@ namespace CartelEnforcer
                     if (!registered) yield break;
                     if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                     {
-                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                        coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
                         yield break;
                     }
 
@@ -425,7 +420,7 @@ namespace CartelEnforcer
                     {
                         takenSlots++;
                         int qtyRobbed = Mathf.Max(1, Mathf.RoundToInt(dealer.Inventory.ItemSlots[i].ItemInstance.Quantity * 0.6f));
-                        temp = dealer.Inventory.ItemSlots[i].ItemInstance.GetCopy(qtyRobbed); // this temp item trick maybe not functional relies on GetCopy
+                        temp = dealer.Inventory.ItemSlots[i].ItemInstance.GetCopy(qtyRobbed);
                         dealer.Inventory.ItemSlots[i].ChangeQuantity(-qtyRobbed, false); // is this networked
                         goon.Inventory.InsertItem(temp, true);
                     }
@@ -439,20 +434,44 @@ namespace CartelEnforcer
                 if (!registered) yield break;
                 if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                 {
-                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                    coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
                     yield break;
                 }
 
                 if (takenSlots < availableSlots && dealer.Cash > 1f)
                 {
                     // Also take cash if there is still available space
-                    float qtyCashLoss = dealer.Cash * 0.6f;
+                    Func<string, ItemDefinition> GetItem;
+#if MONO
+                    GetItem = ScheduleOne.Registry.GetItem;
+#else
+                    GetItem = Il2CppScheduleOne.Registry.GetItem;
+#endif
+                    int qtyCashLoss = Mathf.RoundToInt(dealer.Cash * UnityEngine.Random.Range(0.6f, 0.95f));
+                    dealer.ChangeCash(-(float)qtyCashLoss);
 
-                    float clamp = Mathf.Clamp(qtyCashLoss, 1f, 2000f);// For cash stack size max
+                    ItemDefinition defCash = GetItem("cash");
+                    if (qtyCashLoss > 2000)
+                    {
+                        // because the definition changes qty stack limit permanently we cache previous to reset it on event end
+                        cachedCashStackLimit = defCash.StackLimit;
+                        defCash.StackLimit = qtyCashLoss;
 
-                    dealer.ChangeCash(-clamp);
+                    }
+                    ItemInstance cashInstance = defCash.GetDefaultInstance(1);
+#if MONO
+                    if (cashInstance is CashInstance inst)
+                    {
+                        inst.Balance = qtyCashLoss;
+                    }
+#else
+                    CashInstance tempInst = cashInstance.TryCast<CashInstance>();
+                    if (tempInst != null)
+                    {
+                        tempInst.Balance = qtyCashLoss;
+                    }
+#endif
 
-                    CashInstance cashInstance = NetworkSingleton<MoneyManager>.Instance.GetCashInstance(clamp);
                     // Now insert cash stack
                     for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
                     {
@@ -460,13 +479,13 @@ namespace CartelEnforcer
                         if (!registered) yield break;
                         if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                         {
-                            coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon, stayInside)));
+                            coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
                             yield break;
                         }
 
                         if (goon.Inventory.ItemSlots[i].ItemInstance == null)
                         {
-                            Log($"[TRY ROB]    Inserting Cash to Slot {i}");
+                            Log($"[TRY ROB]    Inserting ${qtyCashLoss} to Slot {i}");
                             goon.Inventory.ItemSlots[i].InsertItem(cashInstance);
                             break;
                         }
@@ -474,7 +493,7 @@ namespace CartelEnforcer
                 }
                 Log("[TRY ROB    Finished Body Intercept]");
                 goon.Avatar.Animation.SetCrouched(false);
-                coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence, stayInside)));
+                coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence)));
             }
             else if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
@@ -513,28 +532,12 @@ namespace CartelEnforcer
             }
         }
 
-        public static IEnumerator EndBodyLootPrematurely(CartelGoon goon, NPCEvent_CartelGoonExit stayInside)
+        public static IEnumerator EndBodyLootPrematurely(CartelGoon goon)
         {
             yield return Wait60;
             if (!registered) yield break;
 
-            goon.Behaviour.ScheduleManager.EnableSchedule();
-
-            if (stayInside != null)
-            {
-                stayInside.gameObject.SetActive(true);
-                stayInside.Resume();
-            }
-
-            if (goon.IsGoonSpawned)
-            {
-                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-                goon.Despawn();
-            }
-            goon.Health.MaxHealth = 100f;
-            goon.Health.Health = 100f;
-            goon.Health.Revive();
-
+            coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
             yield return null;
         }
 
@@ -550,46 +553,68 @@ namespace CartelEnforcer
             goon.Health.MaxHealth = 100f;
             goon.Health.Health = 100f;
             goon.Health.Revive();
+            goon.Behaviour.ScheduleManager.EnableSchedule();
+            goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+            goon.Behaviour.ScheduleManager.ActionList[0].Resume();
+
+            // Reset cash definition stack size if necessary
+            if (cachedCashStackLimit != 0)
+            {
+                // because the definition changes qty stack limit permanently we cache previous to reset it on event end
+                Func<string, ItemDefinition> GetItem;
+#if MONO
+                GetItem = ScheduleOne.Registry.GetItem;
+#else
+                GetItem = Il2CppScheduleOne.Registry.GetItem;
+#endif
+                ItemDefinition defCash = GetItem("cash");
+                defCash.StackLimit = cachedCashStackLimit;
+                cachedCashStackLimit = 0;
+            }
 
             yield return null;
         }
-        public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence, NPCEvent_CartelGoonExit stayInside)
+        public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence)
         {
             if (!registered) yield break;
             Log("[TRY ROB]    Start Escape");
             // After succesful robbery, navigate goon towards nearest CartelDealer apartment door
-            CartelDealer[] cartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
             float distance = 150f;
             float distCalculated = 0f;
             NPCEnterableBuilding building = null;
-#if MONO
-            ScheduleOne.Doors.StaticDoor door = null;
-#else
-            Il2CppScheduleOne.Doors.StaticDoor door = null;
-#endif
+            StaticDoor door = null;
             Vector3 destination = Vector3.zero;
 
-            foreach (CartelDealer d in cartelDealers)
+            foreach (KeyValuePair<NPCEnterableBuilding, StaticDoor> kvp in dealerBuildings) 
             {
-                if (d.isInBuilding && d.CurrentBuilding != null)
+                Log($"Parsing, is null? {kvp.Key == null} , {kvp.Value == null}");
+                building = kvp.Key;
+                door = kvp.Value;
+                distCalculated = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
+                if (distCalculated < distance)
                 {
-                    building = d.CurrentBuilding;
-                    door = building.GetClosestDoor(goon.CenterPointTransform.position, false);
-                    distCalculated = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
-                    if (distCalculated < distance)
-                    {
-                        destination = door.AccessPoint.position;
-                        distance = distCalculated;
-                    }
+                    destination = door.AccessPoint.position;
+                    distance = distCalculated;
                 }
             }
-
-            if (stayInside != null)
+            Log("Done parsing");
+            for (int i = 0; i < goon.Behaviour.ScheduleManager.ActionList.Count; i++)
             {
-                stayInside.Door = door;
-                stayInside.Building = building;
+#if MONO
+                if (goon.Behaviour.ScheduleManager.ActionList[i] is NPCEvent_StayInBuilding ev)
+                {
+                    ev.Door = door;
+                    ev.Building = building;
+                }
+#else
+                NPCEvent_StayInBuilding ev = goon.Behaviour.ScheduleManager.ActionList[i].TryCast<NPCEvent_StayInBuilding>();
+                if (ev != null)
+                {
+                    ev.Door = door;
+                    ev.Building = building;
+                }
+#endif
             }
-
 
             Log($"[TRY ROB]    Escaping to: {destination}");
             Log($"[TRY ROB]    Distance: {distance}");
@@ -607,19 +632,12 @@ namespace CartelEnforcer
                 goon.Behaviour.FleeBehaviour.SetEntityToFlee(Player.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
                 goon.Behaviour.FleeBehaviour.Enable_Networked();
                 isFleeing = true;
-                // Testing the theory wether it gets overridden.
-                yield return Wait05;
                 Log("[TRY ROB]    Robber fleeing player");
-                if (!goon.Behaviour.FleeBehaviour.isActiveAndEnabled)
-                    Log("[TRY ROB]    Fleeing Behaviour is not enabled, expected to be active");
-                // if not active and enabled at this point it would require the stay inside event to be disabled and disable schedule
-                // after the event ends it needs to be checked again that those 2 arent disabled anymore
             }
             else
             {
                 goon.Movement.SetDestination(closest);
                 Log("[TRY ROB]    Robber fleeing to cartel dealer");
-
             }
 
             // While not dead or escape has elapsed under 60 seconds
@@ -665,6 +683,7 @@ namespace CartelEnforcer
 #if MONO
                     if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
                     {
+                        Log($"[TRY ROB]    Stolen {inst.Balance} cash");
                         cartelCashAmount += inst.Balance;
                         continue;
                     }
@@ -698,19 +717,7 @@ namespace CartelEnforcer
                 if (list.Count > 0)
                     coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
 #endif
-                if (goon.IsGoonSpawned)
-                    goon.Despawn();
-                if (goon.Behaviour.CombatBehaviour.isActiveAndEnabled)
-                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-
-                if (stayInside != null)
-                {
-                    stayInside.gameObject.SetActive(true);
-                    stayInside.Resume();
-                }
-
-                goon.Health.MaxHealth = 100f;
-                goon.Health.Health = 100f;
+                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
 
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
@@ -718,11 +725,6 @@ namespace CartelEnforcer
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeDead);
                 // The goon was defeated (dead or knocked out).
-                if (stayInside != null)
-                {
-                    stayInside.gameObject.SetActive(true);
-                    stayInside.Resume();
-                }
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
             else if (elapsedNav >= 60f && goon.IsGoonSpawned)
@@ -741,6 +743,7 @@ namespace CartelEnforcer
 #if MONO
                     if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
                     {
+                        Log($"[TRY ROB]    Stolen {inst.Balance} cash");
                         cartelCashAmount += inst.Balance;
                         continue;
                     }
@@ -775,18 +778,7 @@ namespace CartelEnforcer
                     coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
 #endif
 
-                if (stayInside != null)
-                {
-                    stayInside.gameObject.SetActive(true);
-                    stayInside.Resume();
-                }
-
-                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-
-                goon.Health.MaxHealth = 100f;
-                goon.Health.Health = 100f;
-                if (goon.IsGoonSpawned)
-                    goon.Despawn();
+                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
 
                 Log("[TRY ROB] End");
             }

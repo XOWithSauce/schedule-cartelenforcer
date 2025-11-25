@@ -1,6 +1,7 @@
 using System.Collections;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
@@ -32,7 +33,6 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.NPCs.Other;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.VoiceOver;
-
 #endif
 
 namespace CartelEnforcer
@@ -99,6 +99,9 @@ namespace CartelEnforcer
         public static bool startedCombat = false;
         public static GatheringLocation currentGatheringLocation = null;
         public static GatheringLocation previousGatheringLocation = null;
+        public static int lootGoblinIndex = -1;
+        public static int startEarliest = 0;
+        public static int startLatest = 0;
 
         // because these might not be consumed during the event it must be stored here
         public static UnityEngine.Events.UnityAction combatStartedAction = null;
@@ -116,9 +119,6 @@ namespace CartelEnforcer
             hoursUntilNextGathering = Mathf.Clamp(hoursUntilNextGathering - 1, 0, 18);
             if (hoursUntilNextGathering > 0) yield break;
 
-
-            int startEarliest = 0;
-            int startLatest = 0;
             if (DealerActivity.currentDealerActivity >= 0f)
             {
                 startEarliest = 1200;
@@ -245,9 +245,10 @@ namespace CartelEnforcer
                 }
                 // Fill random attendant inv slot with stolen item
                 List<ItemInstance> itemsFromPool = GetFromPool(3);
+                lootGoblinIndex = -1;
                 if (itemsFromPool.Count > 0)
                 {
-                    int lootGoblinIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
+                    lootGoblinIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                     spawnedGatherGoons[lootGoblinIndex].Inventory.Clear();
                     foreach (ItemInstance item in itemsFromPool)
                     {
@@ -339,7 +340,9 @@ namespace CartelEnforcer
                         dead++;
                 }
 
-                if (elapsed > 180 || dead == 3)
+                // Todo the goons actually stay over the night if player goes to sleep at 1800 when they are gathering
+                // here it needs to check for the current time is smaller than start earliest?
+                if (elapsed > 180 || dead == 3 || TimeManager.Instance.CurrentTime < startEarliest)
                 {
                     break;
                 }
@@ -606,7 +609,53 @@ namespace CartelEnforcer
                 endSmokeAction = null;
             }
 
+            if (!defeated)
+            {
+                // check lootgoblinindex first ??
+                if (lootGoblinIndex != -1)
+                {
+                    List<ItemInstance> restolen = new();
+                    foreach (ItemSlot slot in spawnedGatherGoons[lootGoblinIndex].Inventory.ItemSlots)
+                    {
+                        if (slot.ItemInstance != null)
+                        {
+                            if (slot.ItemInstance.Category == EItemCategory.Cash)
+                            {
+                                if (slot.ItemInstance.Quantity >= 500f)
+                                    cartelCashAmount += 500f;
+                                slot.ClearItemInstanceRequested();
+                            }
+                            else
+                            {
+                                restolen.Add(slot.ItemInstance);
+                            }
+                        }
+                    }
+                    // rest of slots msut be stolen
+                    CartelStealsItems(restolen);
+                    spawnedGatherGoons[lootGoblinIndex].Inventory.Clear();
+                    spawnedGatherGoons.RemoveAt(lootGoblinIndex);
+                }
 
+                // parse rest for money stacks
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    foreach (ItemSlot slot in goon.Inventory.ItemSlots)
+                    {
+                        if (slot.ItemInstance != null)
+                        {
+                            // must be one of the stolen items
+                            if (slot.ItemInstance.Category == EItemCategory.Cash)
+                            {
+                                if (slot.ItemInstance.Quantity >= 500f)
+                                    cartelCashAmount += 500f;
+                                slot.ClearItemInstanceRequested();
+                            }
+                        }
+                    }
+                }
+            }
+            
             startedCombat = false;
             areGoonsGathering = false;
             spawnedGatherGoons.Clear();
@@ -614,6 +663,7 @@ namespace CartelEnforcer
             endSmokeAction = null;
             endDrinkAction = null;
             combatStartedAction = null;
+            lootGoblinIndex = -1;
         }
 
     }

@@ -497,13 +497,14 @@ namespace CartelEnforcer
                 {
                     string json = File.ReadAllText(pathDealerConfig);
                     config = JsonConvert.DeserializeObject<CartelDealerConfig>(json);
+                    config.CartelDealerWalkSpeed = Mathf.Clamp(config.CartelDealerWalkSpeed, 1f, 7f);
+                    config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10f, 2000f);
+                    config.CartelDealerLethality = Mathf.Clamp01(config.CartelDealerLethality);
                     config.SafetyThreshold = Mathf.Clamp(config.SafetyThreshold, -1.0f, 1.0f); // Ensure limits
                     config.DealerActivityIncreasePerDay = Mathf.Clamp(config.DealerActivityIncreasePerDay, 0.0f, 1f); // Ensure limits
                     config.DealerActivityDecreasePerKill = Mathf.Clamp(config.DealerActivityDecreasePerKill, 0.0f, 1f); // Ensure limits
-                    config.CartelDealerMoveSpeedMultiplier = Mathf.Clamp(config.CartelDealerMoveSpeedMultiplier, 0.1f, 3f);
-                    config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10f, 2000f);
-                    config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f);
-                    config.StealPlayerPendingChance = Mathf.Clamp(config.StealPlayerPendingChance, 0f, 1f);
+                    config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f); // at 0.0 disables 
+                    config.StealPlayerPendingChance = Mathf.Clamp(config.StealPlayerPendingChance, 0f, 1f); // at 0.0 disables
                 }
                 catch (Exception ex)
                 {
@@ -544,13 +545,17 @@ namespace CartelEnforcer
                     config.robberyGoonDead = ClampInfluence(config.robberyGoonDead, false);
                     config.robberyGoonEscapeDead = ClampInfluence(config.robberyGoonEscapeDead, false);
 
-                    config.cartelDealerDied = ClampInfluence(config.cartelDealerDied, false);
-
-                    config.ambushDefeated = ClampInfluence(config.ambushDefeated, false);
+                    config.sabotageBombDefused = ClampInfluence(config.sabotageBombDefused, false);
+                    config.sabotageGoonKilled = ClampInfluence(config.sabotageGoonKilled, false);
+                    config.sabotageBombExploded = ClampInfluence(config.sabotageBombExploded, true);
 
                     config.passiveInfluenceGainPerDay = ClampInfluence(config.passiveInfluenceGainPerDay, true);
 
+                    config.cartelDealerDied = ClampInfluence(config.cartelDealerDied, false);
+                    config.ambushDefeated = ClampInfluence(config.ambushDefeated, false);
                     config.graffitiInfluenceReduction = ClampInfluence(config.graffitiInfluenceReduction, false);
+                    config.customerUnlockInfluenceChange = ClampInfluence(config.customerUnlockInfluenceChange, false);
+
 
                 }
                 catch (Exception ex)

@@ -10,7 +10,6 @@ using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
 
-
 #if MONO
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Combat;
@@ -74,6 +73,8 @@ namespace CartelEnforcer
         private int GiveUpAfterSuccessfulHits = 0;
         private float DefaultSearchTime = 0f;
 
+        // Cache this to allow temporary changes to the cash stack size during the quest lootable safe item slot (if used)
+        public static int cachedCashStackLimit = 0;
 
         private List<Vector3> forestSearchLocs = new()
         {
@@ -176,6 +177,22 @@ namespace CartelEnforcer
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
 #endif
+
+                // Reset cash definition stack size if necessary
+                if (cachedCashStackLimit != 0)
+                {
+                    // because the definition changes qty stack limit permanently we cache previous to reset it on quest end if it was changed
+                    Func<string, ItemDefinition> GetItem;
+#if MONO
+                    GetItem = ScheduleOne.Registry.GetItem;
+#else
+                    GetItem = Il2CppScheduleOne.Registry.GetItem;
+#endif
+                    ItemDefinition defCash = GetItem("cash");
+                    defCash.StackLimit = cachedCashStackLimit;
+                    cachedCashStackLimit = 0;
+                }
+
                 Log("Quest_InfiltrateManor: Base End method finished successfully.");
             }
             catch (Exception ex)
@@ -739,7 +756,10 @@ namespace CartelEnforcer
 
                 qty = (int)Math.Round((double)qty / 100) * 100;
                 if (qty > 2000)
+                {
+                    cachedCashStackLimit = defCash.StackLimit;
                     defCash.StackLimit = qty;
+                }
 
                 ItemInstance cashInstance = defCash.GetDefaultInstance(1);
 

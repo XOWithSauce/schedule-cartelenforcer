@@ -1,25 +1,30 @@
 ﻿using System.Collections;
 using UnityEngine;
 using HarmonyLib;
+using MelonLoader;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
-using MelonLoader;
 
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
-using ScheduleOne.Map;
+using ScheduleOne.Economy;
 using ScheduleOne.Graffiti;
 using ScheduleOne.Levelling;
+using ScheduleOne.Map;
+using ScheduleOne.NPCs.Relation;
 using ScheduleOne.PlayerScripts;
 using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
-using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.Graffiti;
 using Il2CppScheduleOne.Levelling;
+using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.NPCs.Relation;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppFishNet;
 #endif
@@ -121,30 +126,37 @@ namespace CartelEnforcer
         }
     }
 
+    // Passive influence gain is now no longer default source and purely additive by mod (0.4.1f13)
     [Serializable]
     public class InfluenceConfig
     {
-        public float interceptFail = 0.050f;
+        // Mod added
+        public float interceptFail = 0.025f;
         public float interceptSuccess = -0.050f;
 
-        public float deadDropFail = 0.050f;
-        public float deadDropSuccess = -0.025f;
+        public float deadDropFail = 0.025f;
+        public float deadDropSuccess = -0.050f;
 
         public float gatheringFail = 0.025f;
         public float gatheringSuccess = -0.080f;
 
-        public float robberyPlayerEscape = 0.080f; // Player out of range
-        public float robberyGoonEscapeSuccess = 0.080f; // goon escapes to dealer succesfully
+        public float robberyPlayerEscape = 0.025f; // Player out of range
+        public float robberyGoonEscapeSuccess = 0.025f; // goon escapes to dealer succesfully
         public float robberyGoonDead = -0.080f; // Player kills before goon kills dealer
         public float robberyGoonEscapeDead = -0.050f; // Player kills while goon is escaping
 
-        public float cartelDealerDied = -0.050f;
+        public float sabotageBombDefused = -0.150f;
+        public float sabotageGoonKilled = -0.050f;
+        public float sabotageBombExploded = 0.200f;
 
-        public float ambushDefeated = -0.025f;
+        // used to be in source
+        public float passiveInfluenceGainPerDay = 0.025f;
 
-        public float passiveInfluenceGainPerDay = 0.050f;
-
-        public float graffitiInfluenceReduction = -0.05f;
+        // Game defaults here
+        public float cartelDealerDied = -0.100f;
+        public float ambushDefeated = -0.100f;
+        public float graffitiInfluenceReduction = -0.050f;
+        public float customerUnlockInfluenceChange = -0.075f;
     }
 
     // Patch the cartel dealer on died to have modifiable influence
@@ -154,9 +166,18 @@ namespace CartelEnforcer
         public static bool Prefix(CartelDealer __instance)
         {
             if (!InstanceFinder.IsServer)
+                return false;
+            // Hostile status
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
+#endif
             {
                 return false;
             }
+
+
             NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Region, influenceConfig.cartelDealerDied);
             return false;
         }
@@ -202,7 +223,7 @@ namespace CartelEnforcer
             }
 
             // Monitor same state as the original enumerator if there are spawned ambushers
-            float maxAmbushElapsed = 360f;
+            float maxAmbushElapsed = (float)Ambush.CANCEL_AMBUSH_AFTER_MINS;
             float elapsed = 0f;
             List<CartelGoon> deadGoons = new();
             int spawnedCount = ambushSpawned.Count;
@@ -235,7 +256,9 @@ namespace CartelEnforcer
             if ((ambushSpawned.Count == 0 || deadGoons.Count == spawnedCount) && InstanceFinder.IsServer)
             {
                 // flip the original influence and apply the mod one
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, 0.075f + influenceConfig.ambushDefeated);
+                float change = -(Ambush.AMBUSH_DEFEATED_INFLUENCE_CHANGE) + influenceConfig.ambushDefeated;
+                if (change != 0f)
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, change);
             }
 
         }
@@ -249,18 +272,74 @@ namespace CartelEnforcer
         public static bool Prefix(SpraySurfaceInteraction __instance)
         {
             NetworkSingleton<LevelManager>.Instance.AddXP(50);
+
+            if (!InstanceFinder.IsServer)
+                return false;
 #if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile)
-            {
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
 #else
-            if (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile)
-            {
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
 #endif
+            {
+                return false;
             }
+
+            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
             return false;
         }
     }
+
+
+    // Change Influence needs 2 function patches for checking if the region is unlocked (0.4.1f13 no restriction for it so it allows changing influence in locked regs)
+    [HarmonyPatch(typeof(CartelInfluence), "ChangeInfluence", new Type[] { typeof(EMapRegion), typeof(float), typeof(float) })]
+    public static class CartelInfluence_ChangeInfluence_ObserverRPC_Patch
+    {
+        public static bool Prefix(CartelInfluence __instance, EMapRegion region, float oldInfluence, float newInfluence)
+        {
+            // because this can change influence of locked regions check region unlock
+            if (!Map.Instance.GetUnlockedRegions().Contains(region))
+                return false;
+            return true;
+        }
+    }
+    [HarmonyPatch(typeof(CartelInfluence), "ChangeInfluence", new Type[] { typeof(EMapRegion), typeof(float) })]
+    public static class CartelInfluence_ChangeInfluence_ServerRPC_Patch
+    {
+        public static bool Prefix(CartelInfluence __instance, EMapRegion region, float amount)
+        {
+            // because this can change influence of locked regions check region unlock
+            if (!Map.Instance.GetUnlockedRegions().Contains(region))
+                return false;
+            return true;
+        }
+    }
+
+    // Patch OnCustomerUnlocked to allow config applied influence changes
+    [HarmonyPatch(typeof(Customer), "OnCustomerUnlocked")]
+    public static class Customer_OnCustomerUnlocked_Patch
+    {
+        public static bool Prefix(Customer __instance, NPCRelationData.EUnlockType unlockType, bool notify)
+        {
+            // based on source the influence is guarded as follows
+            if (!notify || !NetworkSingleton<Cartel>.InstanceExists) return true;
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
+#endif
+            {
+                return true;
+            }
+
+            // original function is guaranteed to change influence, prefix overrides that change
+
+            // flip the original influence and apply the mod one
+            float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange;
+            if (change != 0f)
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
+            return true;
+        }
+    }
+
 
 }

@@ -101,6 +101,8 @@ namespace CartelEnforcer
         public static IEnumerator OnInputStartRob()
         {
             Log("TestTryRob");
+            yield return Wait025;
+            debounce = false;
 
             Transform playerLocal = Player.Local.transform;
             Dealer[] allDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(true);
@@ -120,8 +122,8 @@ namespace CartelEnforcer
                     nearest = d;
                 }
             }
+            Log("RunTryRob");
             nearest.TryRobDealer();
-            debounce = false;
             yield return null;
         }
         public static IEnumerator OnInputGiveMiniQuest()
@@ -178,9 +180,10 @@ namespace CartelEnforcer
             yield return Wait05;
 
             Log("\nCartel Stolen Items\n---------------");
+            Log($"Balance: {CartelInventory.cartelCashAmount}");
             foreach (QualityItemInstance itemInst in cartelStolenItems)
             {
-                Log($"\n  Item: {itemInst.Name}\n  Quantity: {itemInst.Quantity}\n  Quality: {itemInst.Quality}\n******");
+                Log($"\n  Item: {itemInst.ID}\n  Quantity: {itemInst.Quantity}\n  Quality: {itemInst.Quality}\n******");
             }
             Log("---------------\n\n\n");
 
@@ -196,7 +199,7 @@ namespace CartelEnforcer
             Log("---------------\n\n\n");
             yield return Wait05;
 
-            Log("\nSabotage Event Status\n---------------");
+            Log($"\nSabotage Event Status: {sabotageEventActive}\n---------------");
             foreach (SabotageEventLocation loc in locations)
             {
                 Log($"  Name: {loc.business.PropertyName}");
@@ -225,10 +228,9 @@ namespace CartelEnforcer
 
             if (!registered) yield break;
             if (sabotageEventActive) yield break;
-            sabotageEventActive = true;
 
             SabotageEventLocation selected = null;
-            float distance = 50f;
+            float distance = 500f;
             foreach (SabotageEventLocation loc in locations)
             {
                 if (Vector3.Distance(loc.business.transform.position, Player.Local.CenterPointTransform.position) < distance)
@@ -241,7 +243,8 @@ namespace CartelEnforcer
             Log($"[SABOTAGE] Starting sabotage event in 10sec at: {selected.business.PropertyName}");
             yield return Wait10;
             if (!registered) yield break;
-
+            
+            sabotageEventActive = true;
             coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
             yield return null;
         }

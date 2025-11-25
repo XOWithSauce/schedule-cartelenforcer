@@ -21,6 +21,10 @@ using Il2CppScheduleOne.Economy;
 
 namespace CartelEnforcer
 {
+    /*
+     Todo config the ranged weapons in ambushes the goon always loses versus melee weps because of how the combat works
+    to fix it ranged weps probably need to have the minRanged usage values and raise time and maybe even combat beh can shoot while moving???
+     */
     public static class AmbushOverrides
     {
 

@@ -59,6 +59,7 @@ namespace CartelEnforcer
             "goldchain",
             "oldmanjimmys",
             "brutdugloop",
+            "sewerkey"
         };
         public static List<string> commonDrops = new()
         {
@@ -299,14 +300,15 @@ namespace CartelEnforcer
                     listItems.Add(item);
                 }
                 // Then take from stolen items
+                List<ItemInstance> fromStolenPool = new();
                 if (cartelStolenItems.Count > 0)
                 {
-                    List<ItemInstance> fromPool = GetFromPool(2);
-                    if (fromPool.Count > 0)
-                        listItems.AddRange(fromPool);
+                    fromStolenPool = GetFromPool(2);
+                    if (fromStolenPool.Count > 0)
+                        listItems.AddRange(fromStolenPool);
                 }
 
-                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc)));
+                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc, fromStolenPool)));
                 controller.handler.ContinueSubmitted();
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
                 string prep = "";
@@ -410,7 +412,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public static IEnumerator CreateDropContent(DeadDrop entity, List<ItemInstance> filledItems, NPC npc)
+        public static IEnumerator CreateDropContent(DeadDrop entity, List<ItemInstance> filledItems, NPC npc, List<ItemInstance> itemsFromPool = null)
         {
             yield return Wait5;
             if (!registered) yield break;
@@ -461,6 +463,12 @@ namespace CartelEnforcer
             {
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropFail);
+                // Return stolen items back to pool
+                if (itemsFromPool != null && itemsFromPool.Count > 0)
+                {
+                    CartelStealsItems(itemsFromPool);
+                }
+                // clear the inserted reward + possible stolen items
                 entity.Storage.ClearContents();
             }
 

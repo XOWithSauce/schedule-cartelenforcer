@@ -16,15 +16,12 @@ using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
 using static CartelEnforcer.SabotageEvent;
 
-
-
 #if MONO
 using ScheduleOne.Property;
 using ScheduleOne.Cartel;
 using ScheduleOne.NPCs;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
-using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.Persistence;
 using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
@@ -32,7 +29,6 @@ using ScheduleOne.Dialogue;
 using FishNet.Managing.Object;
 using FishNet.Managing;
 using FishNet.Object;
-
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
@@ -58,20 +54,29 @@ using Il2CppScheduleOne.NPCs.Schedules;
 #if MONO
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.MONO)]
 [assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
-#else // Note this block cant exclude 0.7.1 IL2CPP and allow again 0.7.2 nightlys? Source code has major diff for checking ML version hardcode is possible
+#else // Note this block cant exclude 0.7.1 IL2CPP and allow again 0.7.2 nightlys?
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
 [assembly: MelonLoader.VerifyLoaderVersion("0.7.0", true)]
 #endif
 
 namespace CartelEnforcer
 {
+    /*
+     Todo: swap il2cpp and then test features real quick then changelog etc -> might need the newer assemblies built against...
+    - Future targets;
+    - Quick revive feature for dealers to respawn faster?
+    - Steal Back customers feature for cartel dealers -> Modify customer relationships and then at some threshold set customer back locked?
+        - How to handle re-unlocking and stuff, gotta test
+    - New Quest either the Casino lore or the Thomas Bossfight or something else exciting, aim for early game quest like the car meetup
+     */
+
     public static class BuildInfo
     {
         public const string Name = "Cartel Enforcer";
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.7.1";
+        public const string Version = "1.7.2";
         public const string DownloadLink = null;
     }
 
@@ -262,9 +267,13 @@ namespace CartelEnforcer
 #else
             NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassChangePassive;
 #endif
+            PreparePackagingRefs();
 
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
+
+            if (currentConfig.realRobberyEnabled)
+                ParseDealerBuildings();
 
             coros.Add(MelonCoroutines.Start(InitializeAmbush()));
 
@@ -568,8 +577,12 @@ namespace CartelEnforcer
             spawnedGatherGoons.Clear();
             burningPlayers.Clear();
             locations.Clear();
+            playerDealerStolen.Clear();
+            consumedGUIDs.Clear();
+            dealerBuildings.Clear();
 
             cartelCashAmount = 0f;
+            lootGoblinIndex = -1;
 
             // Now the created states and any boolean flags for events
             // QUests
@@ -610,6 +623,11 @@ namespace CartelEnforcer
             bombLight = null;
             bombCubeMat = null;
             bombSound = null;
+            fireHandler = null;
+            fireLight = null;
+            // cartel inv
+            jarPackaging = null;
+            brickPackaging = null;
 
             hoursUntilNextGathering = 3;
             currentDealerActivity = 0f;

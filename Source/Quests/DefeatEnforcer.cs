@@ -723,6 +723,7 @@ namespace CartelEnforcer
                     wep.ImpactForce = 28f;
                     wep.AimTime_Max = 1.2f;
                     wep.RepositionAfterHit = true;
+                    wep.CanShootWhileMoving = true;
                 }
 #else
                 AvatarRangedWeapon wep = null;
@@ -749,6 +750,7 @@ namespace CartelEnforcer
                     wep.ImpactForce = 28f;
                     wep.AimTime_Max = 1.2f;
                     wep.RepositionAfterHit = true;
+                    wep.CanShootWhileMoving = true;
                 }
 #endif
             }

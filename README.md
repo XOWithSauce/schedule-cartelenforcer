@@ -43,7 +43,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
-- **Business Sabotage:** Cartel will try to actively interfere with your laundering activities at Post Office, Laundromat and Taco Ticklers. Defuse the planted explosive before your business blows up!
+- **Business Sabotage:** Cartel will try to actively interfere with your laundering activities at Post Office, Laundromat and Taco Ticklers. Defuse the planted explosive before your business and customers blow up!
 - **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
@@ -181,8 +181,8 @@ You can customize the mod's settings through the **config.json** file.
 
 When a dealer is being robbed, a robber will spawn and engage them in a fight. Your actions affect the regional Cartel influence:
 - **Robber defeated:** If the robber is killed or knocked out before the dealer dies, regional influence decreases by 80. If the robber is knocked out while escaping, regional influence decreases by 50.
-- **Player flees:** If you run out of range, regional influence increases by 80.
-- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 80.
+- **Player flees:** If you run out of range, regional influence increases by 25.
+- **Successful escape:** If the robber kills the dealer and reaches a safehouse, regional influence increases by 25.
 - **Timeout:** If the combat is timed out dealer defends the robbery.
 ---
 
@@ -201,7 +201,7 @@ This is a new type of event where the Cartel actively attempts to intercept one 
     - A timer of 30 seconds begins before the Cartel dealer starts their intercept.
 - **Outcomes:**
     - If you complete the deal before the Cartel dealer does, regional influence decreases by 50 and your relationship with the customer increases slightly more.
-    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 50, and your relationship with the customer decreases slightly.
+    - If the Cartel dealer successfully intercepts the deal, regional influence increases by 25 and your relationship with the customer decreases slightly.
 
 
 ---
@@ -234,11 +234,11 @@ Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, Jeff, Dan
 
 - **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
 - You have a 60 seconds to find the dead drop.
-- **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 25.
-- **Failure:** If you fail to find it, the items vanish and regional influence increases by 50.
+- **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 50.
+- **Failure:** If you fail to find it, the items vanish and regional influence increases by 25.
 - **Loot Pools:** One of the following two pools is selected for each quest:
     - **Common (80% chance):** 3-10 items chosen from: Cocaine, Meth, Green Crack Seed, OG Kush Seed.
-    - **Rare (20% chance):** 1 item chosen from: Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
+    - **Rare (20% chance):** 1 item chosen from: Sewer Key, Silver Watch, Gold Watch, Silver Chain, Gold Chain, Old Man Jimmy's, Brut du Gloop.
     - **Stolen Items:** Mini-quest rewards now also include some of the items stolen by the Cartel. This is additional to the Loot Pool selected drop.
 
 ---
@@ -310,9 +310,9 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 
 - **Quest Rewards:**
     - XP Based on Total Cartel Influence (850 - 1700 XP)
-    - You get a Gold Watch, Gold Chain and shotgun shells from the Cartel Brute inventory
-    - Cartel Brute has a ~33% chance to drop a Shotgun
+    - You get a Shotgun, Gold Watch, Gold Chain and shotgun shells from the Cartel Brute inventory
     - Customer relationships increase by 5% for all unlocked customers
+    - Police Law Intensity is lowered by 25%
     - All unlocked regions have their Cartel Influence decreased by 25%
     - And lastly but most importantly: *Bragging Rights*
 
@@ -399,8 +399,9 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 
 ```json
 {
-  "CartelDealerMoveSpeedMultiplier": 1.65,
+  "CartelDealerWalkSpeed": 2.8,
   "CartelDealerHP": 200.0,
+  "CartelDealerLethality": 0.5,
   "CartelDealerWeapon": "M1911",
   "StealDealerContractChance": 0.06,
   "StealPlayerPendingChance": 0.08,
@@ -412,9 +413,10 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 }
 ```
 
-- **`CartelDealerMoveSpeedMultiplier`**: Adjusts the **movement speed** of Cartel Dealers (Range 0.1 - 3.0)
+- **`CartelDealerWalkSpeed`**: Adjusts the **walking speed** of Cartel Dealers (Range 1.0 - 7.0)
 - **`CartelDealerHP`**: Sets the **total health points** for a Cartel dealer (Range 10.0 - 2000.0)
-- **`CartelDealerWeapon`**: Specifies the **weapon** used by Cartel dealers. Supported values are: "M1911", "Knife" and "Shotgun".
+- **`CartelDealerLethality`**: Controls how lethal Cartel Dealers' weapons are (Range 0.0 - 1.0)
+- **`CartelDealerWeapon`**: Specifies the **weapon** used by Cartel dealers. Supported values are: "M1911", "Revolver", "Knife" and "Shotgun".
 - **`StealDealerContractChance`**: Controls the **probability** for the Cartel Dealer stealing Players hired dealers active contracts. (Range 0.0 - 1.0)
 - **`StealPlayerPendingChance`**: Controls the **probability** for the Cartel Dealer stealing Players pending deal requests. (Range 0.0 - 1.0)
 - **`DealerActivityDecreasePerKill`**: A decrease in dealer activity for **each kill** the player makes. (Range 0.0 - 1.0)
@@ -547,7 +549,7 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
     - `Left CTRL + T`: Trigger an Intercept Deal event.
     - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
-    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Jeremy, without checking prerequirements.
+    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Ray, without checking prerequirements.
     - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
     - `Left CTRL + N`: Start a Sabotage Event at nearest supported business
 

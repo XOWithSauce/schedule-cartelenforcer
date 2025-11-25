@@ -1,10 +1,10 @@
 ﻿using System.Collections;
 using MelonLoader;
 using UnityEngine;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.FrequencyOverrides;
-
 
 #if MONO
 using ScheduleOne.AvatarFramework.Equipping;

@@ -8,7 +8,6 @@ using static CartelEnforcer.CartelEnforcer;
 
 #if MONO
 using ScheduleOne.Interaction;
-using ScheduleOne.PlayerScripts.Health;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Property;
 using ScheduleOne.Storage;
@@ -17,7 +16,11 @@ using ScheduleOne.UI;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Cartel;
 using ScheduleOne.Money;
+using ScheduleOne.Lighting;
 using ScheduleOne.Map;
+using ScheduleOne.NPCs;
+using ScheduleOne.Combat;
+using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.VoiceOver;
 using FishNet;
 #else
@@ -28,9 +31,13 @@ using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.Lighting;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.Combat;
+using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.Injection;
@@ -49,25 +56,27 @@ namespace CartelEnforcer
         public static AudioSource bombSound = null;
         
         public static GameObject reactiveFire = null;
+        public static FlickeringLight fireLight = null;
+        public static FireCollisionHandler fireHandler = null;
 
         public static List<SabotageEventLocation> locations = new();
 
         public static List<Player> burningPlayers = new();
-
         public static int interactionsUntilDefuse = 6;
         public static bool bombDefused = false;
 
         public static bool sabotageEventActive = false;
 
-        static readonly float maxExplosionDistance = 12f;
-        static readonly float maxConcussionDistance = 7f;
-        static readonly float maxExplosionDmg = 90f;
-        static readonly float minExplosionDmg = 35f;
+        static readonly float maxExplosionDistance = 7f;
+        static readonly float maxConcussionDistance = 12f;
+        static readonly float maxExplosionDmg = 500f;
 
-        static readonly float maxFireTickDamage = 16f;
-        static readonly float minFireTickDamage = 6f;
+        static readonly float impactForce = 1450f;
 
-        static readonly int fireTicks = 7;
+        static readonly float maxFireTickDamage = 8f;
+        static readonly float minFireTickDamage = 2f;
+
+        static readonly int fireTicks = 2;
 
         public static void PopulateBombLocations()
         {
@@ -85,7 +94,6 @@ namespace CartelEnforcer
                         ),
                         new List<Vector3>()
                         {
-                            new Vector3(-5.49f, 1.61f, 30.52f), 
                             new Vector3(-43.82f, 1.46f, 49.71f), 
                             new Vector3(-7.46f, 1.36f, 10.72f), 
                             new Vector3(-11.14f, 1.46f, 67.10f)
@@ -122,7 +130,6 @@ namespace CartelEnforcer
                         ),
                         new List<Vector3>()
                         {
-                            new Vector3(-5.49f, 1.61f, 30.52f), 
                             new Vector3(-30.13f, 1.45f, 97.50f), 
                             new Vector3(-43.82f, 1.46f, 49.71f), 
                             new Vector3(-11.14f, 1.46f, 67.10f)
@@ -151,6 +158,8 @@ namespace CartelEnforcer
                 reactiveFire.SetActive(false);
             reactiveFire.name = "CartelEnforcer_ReactiveFire";
 
+            fireLight = reactiveFire.GetComponentInChildren<FlickeringLight>();
+
             // add to fire fx box collider with size and set is trigger = true, check for player - collider interaction for dealing damage overtime
             BoxCollider fireBc = reactiveFire.AddComponent<BoxCollider>();
             fireBc.size = new Vector3(2.7f, 3f, 8.3f);
@@ -160,7 +169,7 @@ namespace CartelEnforcer
             Rigidbody fireRb = reactiveFire.AddComponent<Rigidbody>(); // needed for trigger with player
             fireRb.isKinematic = true;
 
-            FireCollisionHandler fireHandler = reactiveFire.AddComponent<FireCollisionHandler>();
+            fireHandler = reactiveFire.AddComponent<FireCollisionHandler>();
 
             // Then the bomb, it can be instantiated based on definition, when exploding bomb it just disables it and moves to next location
             GameObject bombGo = null;
@@ -305,7 +314,7 @@ namespace CartelEnforcer
                     }
 
                     Player nearbyPlayer = Player.GetClosestPlayer(location.bombLocation.Item1, out float distance);
-                    if (distance < 20f && nearbyPlayer.CurrentBusiness != null && nearbyPlayer.CurrentBusiness == location.business)
+                    if (distance < 20f && nearbyPlayer.CurrentBusiness != null && nearbyPlayer.CurrentBusiness == location.business && location.business.IsOwned)
                     {
                         Log("[SABOTAGE] Selected by player inside business");
                         selected = location;
@@ -328,9 +337,10 @@ namespace CartelEnforcer
                 }
                 // When all influence is close to being max, the business sabotage becomes more infrequent
                 // when cartel gets more and more weaker as game progresses, this event should in theory become more common
+                // could use persistence because it can become nearly impossible to encounter if player just plays 1 day and quits each time?
                 float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
-                int minHrs = Mathf.RoundToInt(Mathf.Lerp(8f, 16f, allInfluenceNormalized));
-                int maxHrs = Mathf.RoundToInt(Mathf.Lerp(18f, 48f, allInfluenceNormalized));
+                int minHrs = Mathf.RoundToInt(Mathf.Lerp(16f, 38f, allInfluenceNormalized));
+                int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
                 selected.hoursUntilEnabled = UnityEngine.Random.Range(minHrs, maxHrs);
 
                 // pass
@@ -342,14 +352,6 @@ namespace CartelEnforcer
 
         public static IEnumerator GoonPlantBomb(SabotageEventLocation location)
         {
-            Singleton<NotificationsManager>.Instance.SendNotification(
-                location.business.PropertyName, 
-                $"<color=#FF1E12>Business Sabotage Alert!</color>", 
-                NetworkSingleton<MoneyManager>.Instance.LaunderingNotificationIcon, 
-                10f, 
-                true
-            );
-
             // Decide goon spawn pos
             Vector3 randomPoint = location.sabotagerSpawns[UnityEngine.Random.Range(0, location.sabotagerSpawns.Count)];
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
@@ -371,9 +373,8 @@ namespace CartelEnforcer
                 if (!registered) yield break;
                 if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                 {
-                    // todo reward for killing before plant
                     Log("[SABOTAGE] Goon killed while traverse");
-                    EventEnded(location, -0.050f);
+                    EventEnded(location, influenceConfig.sabotageGoonKilled);
                     sabotageEventActive = false;
                     coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
                     yield break;
@@ -399,7 +400,7 @@ namespace CartelEnforcer
             if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
                 Log("[SABOTAGE] Goon killed while planting");
-                EventEnded(location, -0.050f);
+                EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
                 coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
                 yield break;
@@ -411,9 +412,8 @@ namespace CartelEnforcer
             if (!registered) yield break;
             if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
-                // Todo reward for killing goon before plant
                 Log("[SABOTAGE] Goon killed while planting");
-                EventEnded(location, -0.050f);
+                EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
                 coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
                 yield break;
@@ -422,13 +422,22 @@ namespace CartelEnforcer
             goon.SetAnimationTrigger("GrabItem");
             SpawnBomb(location);
 
+            Singleton<NotificationsManager>.Instance.SendNotification(
+                location.business.PropertyName,
+                $"<color=#FF1E12>Business Sabotage Alert!</color>",
+                NetworkSingleton<MoneyManager>.Instance.LaunderingNotificationIcon,
+                10f,
+                true
+            );
+
             yield return Wait05;
             if (!registered) yield break;
 
             goon.Avatar.Animation.SetCrouched(false);
-            // should walk back inside on its own
+            // should walk back inside on its own, but doesnt on long render distances
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
+            Log($"[SABOTAGE] Goon planted bomb now at pos: {goon.CenterPoint}");
 
             goon.Movement.MoveSpeedMultiplier = 1.6f;
 
@@ -477,12 +486,14 @@ namespace CartelEnforcer
 
             while (!timeInitiated && !bombDefused)
             {
-                timeInitiated = (timeWaited >= maxWaitSecs);
+                // While not proximity initiated update the timeout initiation
+                // when proximity is triggered tick up until explosion
 
                 Player.GetClosestPlayer(location.bombLocation.Item1, out distanceToBomb);
                 if (!proximityInitiated)
                 {
                     proximityInitiated = (distanceToBomb < 6f);
+                    timeInitiated = (timeWaited >= maxWaitSecs);
                 }
                 if (proximityInitiated)
                 {
@@ -514,7 +525,7 @@ namespace CartelEnforcer
             yield return Wait05;
             if (bombDefused)
             {
-                EventEnded(location, -0.150f);
+                EventEnded(location, influenceConfig.sabotageBombDefused);
                 Log("[SABOTAGE] Bomb succesfully defused");
                 sabotageEventActive = false;
                 yield break;
@@ -537,21 +548,56 @@ namespace CartelEnforcer
             reactiveFire.transform.SetPositionAndRotation(location.fireLocation.Item1, Quaternion.Euler(location.fireLocation.Item2));
             reactiveFire.SetActive(true);
 
+            // maybe in the future do something similiar like the drive by shooting raycasting but use radial then max penetration of layers by 3 or something similiar??
+            // this way it doesnt always go through multiple walls??
+            bool playerConcussed = false;
             Player player = Player.GetClosestPlayer(location.bombLocation.Item1, out float distance);
-            if (distance <= maxExplosionDistance)
+            IDamageable damageablePlayer = player.GetComponent<IDamageable>();
+            if (distance <= maxExplosionDistance && damageablePlayer != null)
             {
-                float t = distance / maxExplosionDistance;
+                ProcessExplosionImpact(player.CenterPointTransform.position, damageablePlayer);
+            }
+            if (distance <= maxConcussionDistance)
+            {
+                playerConcussed = true;
+                player.Seizure = true;
+                player.Disoriented = true;
+            }
 
-                float explosionDamage = Mathf.Round(Mathf.Lerp(maxExplosionDmg, minExplosionDmg, t));
-                Log($"[SABOTAGE] Direct explosion damage: {explosionDamage}, dist: {distance}");
-                player.Health.TakeDamage(explosionDamage);
+            List<NPC> npcsFleeing = new();
+            foreach (NPC npc in NPCManager.NPCRegistry) 
+            {
+                // Officers excluded for flee/panicked? maybe in future custom beh
 
-                if (distance <= maxConcussionDistance)
+                // Because running process explosion impact on cartel goons breaks for some reason
+#if MONO
+                if (npc is CartelGoon) continue;
+#else
+                if (npc.TryCast<CartelGoon>() != null) continue;
+#endif
+                distance = Vector3.Distance(intBomb.transform.position, npc.CenterPoint);
+                if (distance <= maxExplosionDistance)
                 {
-                    player.Seizure = true;
-                    player.Disoriented = true;
+                    // Can have benzies goon on it, at long ranged render distance the goon that plants bomb dies here?
+                    // during same time they bug out the fire for some reason what happens there? couldnt reprod but try again later...
+                    Log("NPC Explosion effect: " + npc.fullName);
+                    IDamageable damageableNpc = npc.GetComponent<IDamageable>();
+                    ProcessExplosionImpact(npc.CenterPoint, damageableNpc);
+                    if (!npc.Health.IsDead && !npc.Health.IsKnockedOut)
+                    {
+                        npc.Behaviour.FleeBehaviour.FleeMode = FleeBehaviour.EFleeMode.Point;
+                        npc.Behaviour.FleeBehaviour.SetPointToFlee(intBomb.transform.position);
+                        npc.Behaviour.FleeBehaviour.Enable_Networked();
+                        npcsFleeing.Add(npc);
+                    }
+                    
+                }
+                else if (distance <= maxConcussionDistance)
+                {
+                    npc.SetPanicked();
                 }
             }
+
 
             Log("[SABOTAGE] Cancel business launder");
             foreach (LaunderingOperation operation in location.business.LaunderingOperations)
@@ -562,29 +608,52 @@ namespace CartelEnforcer
 
             yield return Wait5;
             if (!registered) yield break;
-            if (distance <= maxConcussionDistance)
+            if (playerConcussed)
             {
                 player.Seizure = false;
                 player.Disoriented = false;
             }
 
-            EventEnded(location, 0.200f);
+            EventEnded(location, influenceConfig.sabotageBombExploded);
+            Log("[SABOTAGE] End Event");
 
             yield return Wait30;
             if (!registered) yield break;
+            Log("[SABOTAGE] Clear Fleeing");
+
+            foreach (NPC npc in npcsFleeing)
+            {
+                if (npc.Behaviour.FleeBehaviour.Active)
+                    npc.Behaviour.FleeBehaviour.Disable_Networked(null);
+
+                if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
+                    npc.SetPanicked();
+            }
+            npcsFleeing.Clear();
 
             // scale down fire and setactive false
             float currentScale = 1f;
             float targetScale = 0.05f;
             float scaleDownStep = 0.025f;
+
+            float maxIntensity = 14f;
+            float minIntensity = 10f;
+            Log("[SABOTAGE] Scale down");
+
             while (currentScale >= targetScale)
             {
                 yield return Wait025;
                 currentScale -= scaleDownStep;
                 reactiveFire.transform.localScale = new Vector3(currentScale, currentScale, currentScale);
+
+                fireLight.maxIntensity = Mathf.SmoothStep(maxIntensity, 0f, 1f - currentScale);
+                fireLight.minIntensity = Mathf.SmoothStep(minIntensity, 0f, 1f - currentScale);
             }
             reactiveFire.SetActive(false);
             reactiveFire.transform.localScale = new Vector3(1f, 1f, 1f);
+
+            fireLight.maxIntensity = 14f;
+            fireLight.minIntensity = 10f;
 
             sabotageEventActive = false;
             bombDefused = false;
@@ -593,23 +662,54 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public static IEnumerator SetPlayerBurning(Player player)
+        public static void ProcessExplosionImpact(Vector3 receivePosition, IDamageable recipient) // recipient as type NPC or Player, this function contains problematic code??
+        {
+            float ratio = 1 / (intBomb.transform.position - receivePosition).sqrMagnitude;
+            float force = Mathf.Clamp(impactForce * ratio, 0f, 350f);
+            float dmg = Mathf.Clamp(maxExplosionDmg * ratio, 0f, 200f);
+            Vector3 impactDirection = (receivePosition - intBomb.transform.position).normalized;
+            Impact newImpact = new Impact(
+                        receivePosition,
+                        impactDirection,
+                        force,
+                        dmg,
+                        EImpactType.PhysicsProp,
+                        impactSource: null
+                    );
+            Log($"[SABOTAGE] Direct explosion damage: {maxExplosionDmg * ratio}\n  force: {impactForce * ratio}\n  ratio: {ratio}");
+            recipient.SendImpact(newImpact);
+            return;
+        }
+
+        public static IEnumerator SetPlayerBurning(Player player, Collider coll)
         {
             if (burningPlayers.Contains(player))
                 yield break;
 
             burningPlayers.Add(player);
 
-            for (int i = 0; i < fireTicks; i++)
+            // idk fix this it doesnt stop ticking until player dies lmao
+            // maybe the collider exit has problems?
+            int successiveBurns = 0;
+            for (; ; )
             {
-                yield return Wait05;
-                if (!registered) yield break;
-                if (!player.Health.IsAlive) break;
+                successiveBurns++;
+                int currentTicks = fireTicks * successiveBurns;
 
-                float dmg = UnityEngine.Random.Range(minFireTickDamage, maxFireTickDamage);
-                Log($"[SABOTAGE] Fire damage: {dmg}, tick {i}");
+                for (int i = 0; i < currentTicks; i++)
+                {
+                    yield return Wait05;
+                    if (!registered) yield break;
+                    if (!player.Health.IsAlive) break;
+                    if (!fireHandler.inCollision.Contains(coll)) break;
 
-                player.Health.TakeDamage(dmg, true, true);
+                    float dmg = UnityEngine.Random.Range(minFireTickDamage, maxFireTickDamage);
+                    dmg *= successiveBurns;
+                    Log($"[SABOTAGE] Fire damage: {dmg}, tick {i}");
+
+                    player.Health.TakeDamage(dmg, true, true);
+                }
+                if (!fireHandler.inCollision.Contains(coll)) break;
             }
 
             if (burningPlayers.Contains(player))
@@ -622,6 +722,7 @@ namespace CartelEnforcer
         {
             yield return Wait30;
             if (!registered) yield break;
+            Log($"[SABOTAGE] Goon despawned now at pos: {goon.CenterPoint}");
 
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
@@ -667,7 +768,17 @@ namespace CartelEnforcer
                 this.bombLocation = bombLocation;
                 this.fireLocation = fireLocation;
                 this.sabotagerSpawns = sabotagerSpawns;
-                this.hoursUntilEnabled = UnityEngine.Random.Range(3, 8);
+
+                float allInfluence = 0f;
+                foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
+                {
+                    allInfluence += data.Influence;
+                }
+                float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
+                int minHrs = Mathf.RoundToInt(Mathf.Lerp(16f, 38f, allInfluenceNormalized));
+                int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
+
+                this.hoursUntilEnabled = UnityEngine.Random.Range(minHrs, maxHrs);
             }
 
             public void HourPass()
@@ -681,7 +792,7 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     return;
 #endif
-                this.hoursUntilEnabled = Mathf.Clamp(hoursUntilEnabled - 1, 0, 48);
+                this.hoursUntilEnabled = Mathf.Clamp(hoursUntilEnabled - 1, 0, 64);
             }
         }
     }
@@ -697,22 +808,39 @@ namespace CartelEnforcer
         public FireCollisionHandler() : base(ClassInjector.DerivedConstructorPointer<FireCollisionHandler>())
             => ClassInjector.DerivedConstructorBody(this);
 #endif
-        private void OnTriggerEnter(Collider collision)
+        public List<Collider> inCollision = new();
+
+        private void OnTriggerEnter(Collider other)
         {
-            GameObject other = collision.gameObject;
-            int otherLayer = other.layer;
+            if (!inCollision.Contains(other))
+                inCollision.Add(other);
+
+            GameObject otherGo = other.gameObject;
+            int otherLayer = otherGo.layer;
 
             if (otherLayer != 6) return;
 
-            Player playerComp = collision.GetComponentInParent<Player>();
+            Player playerComp = otherGo.GetComponentInParent<Player>();
             if (playerComp == null)
             {
                 Log("No player component found");
                 return;
             }
 
-            coros.Add(MelonCoroutines.Start(SabotageEvent.SetPlayerBurning(playerComp)));
+            coros.Add(MelonCoroutines.Start(SabotageEvent.SetPlayerBurning(playerComp, other)));
         }
+
+        private void OnTriggerExit(Collider other)
+        {
+            if (inCollision.Contains(other))
+                inCollision.Remove(other);
+        }
+
+        private void OnDisable()
+        {
+            inCollision.Clear();
+        }
+
     }
 
 
