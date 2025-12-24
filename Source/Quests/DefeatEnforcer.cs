@@ -496,8 +496,7 @@ namespace CartelEnforcer
             offc.Avatar.ApplyBodyLayerSettings(offc.Avatar.CurrentSettings);
             offc.Avatar.ApplyAccessorySettings(offc.Avatar.CurrentSettings);
 
-            if (offc.Avatar.UseImpostor)
-                offc.Avatar.Impostor.SetAvatarSettings(offc.Avatar.CurrentSettings);
+            offc.Avatar.Impostor.SetAvatarSettings(offc.Avatar.CurrentSettings);
 
             if (offc.Avatar.onSettingsLoaded != null)
                 offc.Avatar.onSettingsLoaded.Invoke();
@@ -508,7 +507,7 @@ namespace CartelEnforcer
             Vector3 spawnPos = QuestEntry_WaitForContact.PoILocation.position;
             offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
             offc.Behaviour.ScheduleManager.DisableSchedule();
-            offc.Awareness.VisionCone.VisionEnabled = false;
+            offc.Awareness.VisionCone.enabled = false;
             offc.ChatterEnabled = false;
             offc.Movement.Agent.enabled = true;
             yield return Wait2;
@@ -644,8 +643,7 @@ namespace CartelEnforcer
             _bossGoon.Avatar.CurrentSettings.AccessorySettings = accessorySettings;
             _bossGoon.Avatar.ApplyAccessorySettings(_bossGoon.Avatar.CurrentSettings);
 
-            if (_bossGoon.Avatar.UseImpostor)
-                _bossGoon.Avatar.Impostor.SetAvatarSettings(_bossGoon.Avatar.CurrentSettings);
+            _bossGoon.Avatar.Impostor.SetAvatarSettings(_bossGoon.Avatar.CurrentSettings);
 
             if (_bossGoon.Avatar.onSettingsLoaded != null)
                 _bossGoon.Avatar.onSettingsLoaded.Invoke();

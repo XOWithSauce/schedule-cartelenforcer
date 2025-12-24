@@ -116,7 +116,7 @@ namespace CartelEnforcer
 #if MONO
                 if (itemSlot.ItemInstance != null)
                 {
-                    num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtilityForNPCs);
+                    num = Mathf.Max(num, (itemSlot.ItemInstance.Definition as StorableItemDefinition).CombatUtility);
                 }
 #else
                 if (itemSlot.ItemInstance != null)
@@ -124,7 +124,7 @@ namespace CartelEnforcer
                     StorableItemDefinition tempDef = itemSlot.ItemInstance.Definition.TryCast<StorableItemDefinition>();
                     if (tempDef != null)
                     {
-                        num = Mathf.Max(num, tempDef.CombatUtilityForNPCs);
+                        num = Mathf.Max(num, tempDef.CombatUtility);
                     }
                     else
                     {
@@ -501,7 +501,7 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    Goon was defeated! Robbery attempt defended.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
-                dealer.Behaviour.CombatBehaviour.End();
+                dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
 
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
                 if (changeInfluence)

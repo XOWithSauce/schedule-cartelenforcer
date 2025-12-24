@@ -1,3 +1,7 @@
+# Version 1.7.3
+- Compiled mod source against game version 0.4.2f5
+- Fixed functions which used refactored code to make mod compatible with latest open beta
+
 # Version 1.7.2
 - Changed Cartel Inventory to give back stolen items already packaged
 - Changed Cartel Inventory to give out items in smaller quantities to ensure that the stolen products stay in their inventory

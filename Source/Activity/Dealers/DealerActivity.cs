@@ -437,7 +437,6 @@ namespace CartelEnforcer
 
                 #region Stay Inside and Deal Signal actions
                 NPCEvent_StayInBuilding event1 = null;
-                NPCSignal_HandleDeal event2 = null;
                 if (dealer.Behaviour.ScheduleManager.ActionList != null)
                 {
                     foreach (NPCAction action in dealer.Behaviour.ScheduleManager.ActionList)
@@ -446,21 +445,11 @@ namespace CartelEnforcer
                         if (action is NPCEvent_StayInBuilding ev1)
                             event1 = ev1;
 
-                        else if (action is NPCSignal_HandleDeal ev2)
-                            event2 = ev2;
 #else
                         NPCEvent_StayInBuilding ev1_temp = action.TryCast<NPCEvent_StayInBuilding>();
                         if (ev1_temp != null)
                         {
                             event1 = ev1_temp;
-                        }
-                        else
-                        {
-                            NPCSignal_HandleDeal ev2_temp = action.TryCast<NPCSignal_HandleDeal>();
-                            if (ev2_temp != null)
-                            {
-                                event2 = ev2_temp;
-                            }
                         }
 #endif
                     }
@@ -476,33 +465,6 @@ namespace CartelEnforcer
                                 dealer.SetIsAcceptingDeals(true);
                             coros.Add(MelonCoroutines.Start(WalkToInterestPoint(dealer, Wait5)));
                         }
-                        else
-                        {
-                            dealer.DealSignal.gameObject.SetActive(true);
-                            if (dealer.IsAcceptingDeals)
-                                dealer.SetIsAcceptingDeals(false);
-                        }
-
-                    }
-
-                    void onDealSignalEnd()
-                    {
-                        Log("[DEALER ACTIVITY] OnDealSignalEnd");
-
-                        if (interceptingDeal && interceptor != null && dealer == interceptor) return;
-
-                        if (dealer.ActiveContracts.Count == 0)
-                        {
-                            if (!dealer.IsAcceptingDeals)
-                                dealer.SetIsAcceptingDeals(true);
-                            coros.Add(MelonCoroutines.Start(WalkToInterestPoint(dealer, Wait2)));
-                        }
-                        if (dealer.ActiveContracts.Count > 0)
-                        {
-                            // Check active contracts for completed
-                            if (dealer.ActiveContracts[0].State != EQuestState.Active)
-                                dealer.ActiveContracts[0].End();
-                        }
                     }
 
                     if (event1 != null)
@@ -514,16 +476,6 @@ namespace CartelEnforcer
                         event1.onEnded = (Action)Delegate.Combine(event1.onEnded, new Action(onStayInsideEnd));
 #else
                         event1.onEnded += (Il2CppSystem.Action)onStayInsideEnd;
-#endif
-                    }
-                    if (event2 != null)
-                    {
-                        event2.MaxDuration = 60;
-                        // event2.StartTime = defaultDealSignalStart; This is not needed
-#if MONO
-                        event2.onEnded = (Action)Delegate.Combine(event2.onEnded, new Action(onDealSignalEnd));
-#else
-                        event2.onEnded += (Il2CppSystem.Action)onDealSignalEnd;
 #endif
                     }
                 }
@@ -742,7 +694,8 @@ namespace CartelEnforcer
                             Dealer originalDealer = contract.Dealer;
                             playerDealerStolen.Add(contract.GUID.ToString(), new Tuple<Dealer, int>(originalDealer, originalXP));
                             d.AddContract(contract);
-                            d.DealSignal.gameObject.SetActive(true);
+                            if (!d._attendDealBehaviour.Active)
+                                d.CheckAttendStart();
                             Log($"[DEALER ACTIVITY]     Stolen Contract");
                         }
                         else
@@ -783,7 +736,8 @@ namespace CartelEnforcer
                                 contract.CompletionXP = 0;
                                 contract.completedContractsIncremented = false;
                                 d.AddContract(contract);
-                                d.DealSignal.gameObject.SetActive(true);
+                                if (!d._attendDealBehaviour.Active)
+                                    d.CheckAttendStart();
                                 actionTaken = true;
                             }
                         }
