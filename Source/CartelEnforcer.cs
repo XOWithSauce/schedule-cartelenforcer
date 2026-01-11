@@ -76,7 +76,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.7.3";
+        public const string Version = "1.7.4";
         public const string DownloadLink = null;
     }
 
@@ -583,7 +583,7 @@ namespace CartelEnforcer
 
             cartelCashAmount = 0f;
             lootGoblinIndex = -1;
-
+            
             // Now the created states and any boolean flags for events
             // QUests
             activeQuest = null;
@@ -606,6 +606,7 @@ namespace CartelEnforcer
 
             // Mini quests and events
             StageDeadDropsObserved = 0;
+            StageGatheringsDefeated = 0;
             driveByActive = false;
             interceptingDeal = false;
             interceptor = null;

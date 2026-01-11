@@ -1,3 +1,7 @@
+# Version 1.7.4
+- Compiled mod source against game version 0.4.2f9
+- Fixed a bug in the Unexpected Alliances quest where exiting the save would not properly reset the gatherings defeated amount
+
 # Version 1.7.3
 - Compiled mod source against game version 0.4.2f5
 - Fixed functions which used refactored code to make mod compatible with latest open beta
