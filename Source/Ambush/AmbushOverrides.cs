@@ -95,6 +95,8 @@ namespace CartelEnforcer
             Log("Done Applying Game Default Ambushes");
             yield return null;
         }
+
+        // TODO there was something in logs about user modded ambushes accessing index out of bounds? what was that
         public static IEnumerator AddUserModdedAmbush() // Todo optimize this code is ugly
         {
             yield return Wait2;
@@ -113,6 +115,7 @@ namespace CartelEnforcer
                     Log($"  Generating Ambush object {i} in region: {regActivity.Region}");
                     Transform nextParent = regActivity.transform.Find("Ambush locations");
                     GameObject newAmbushObj = new($"AmbushLocation ({nextParent.childCount})");
+                    newAmbushObj.SetActive(false); // To not call the awake for CartelAmbushLocation
                     CartelAmbushLocation baseComp = newAmbushObj.AddComponent<CartelAmbushLocation>();
                     newAmbushObj.transform.position = config.ambushPosition;
                     baseComp.DetectionRadius = config.detectionRadius;
@@ -139,6 +142,7 @@ namespace CartelEnforcer
                     Array.Copy(originalLocations, newLocations, originalLocations.Length);
                     newLocations[newLocations.Length - 1] = baseComp;
                     regActivity.AmbushLocations = newLocations;
+                    newAmbushObj.SetActive(true);
 
                     // Important to add this at the end -> otherwise the networked object refuses to swap out the array for locations
                     newAmbushObj.transform.parent = nextParent;
@@ -231,13 +235,7 @@ namespace CartelEnforcer
             }
 
             FullRank MinRankForRanged = new ((ERank)ambushSettings.MinRankForRanged, 1); // cast from int thats validated in config load
-            if (MinRankForRanged != null)
-            {
-                Ambush.MIN_RANK_FOR_RANGED_WEAPONS = MinRankForRanged;
-            } else
-            {
-                Log("Failed to assing ambush ranged weapon rank restriction");
-            }
+            Ambush.MIN_RANK_FOR_RANGED_WEAPONS = MinRankForRanged;
 
             // assign pointer to the weapon fields
             CartelActivities instanceActivities = NetworkSingleton<Cartel>.Instance.Activities;

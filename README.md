@@ -16,17 +16,25 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Mini-Quests](#mini-quests)
     * [Cartel Gatherings](#cartel-gatherings)
     * [Business Sabotage](#business-sabotage)
+    * [Steal Back Customers](#steal-back-customers)
+* [Allied Extensions](#allied-extensions)
+    * [Persuade Cartel Dealers](#persuade-cartel-dealers)
+    * [Greet the Gathering Goons](#greet-the-gathering-goons)
+    * [Allied Intro](#allied-intro)
+    * [Allied Supplies](#allied-supplies)
 * [End Game Quests](#end-game-quests)
     * [Unexpected Alliances](#unexpected-alliances)
     * [Infiltrate Manor](#infiltrate-manor)
     * [Four Wheels](#four-wheels) 
-* [Modifying Cartel Dealers](#modifying-cartel-dealers)
-* [Modifying Ambush Events](#modifying-ambush)
-    * [Modifying Ambush Spawns](#modifying-default-spawns)
-    * [Modifying Default Spawns](#modifying-default-spawns)
-    * [Modifying Ambush Settings](#modifying-ambush-settings)
-* [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
-* [Modifying Influence Changing Events](#modifying-influence-changing-events)
+* [Modifying Configs](#modifying-configs-and-spawns)
+    * [Modifying Cartel Dealers](#modifying-cartel-dealers)
+    * [Modifying Ambush Events](#modifying-ambush)
+        * [Modifying Ambush Spawns](#modifying-default-spawns)
+        * [Modifying Default Spawns](#modifying-default-spawns)
+        * [Modifying Ambush Settings](#modifying-ambush-settings)
+    * [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
+    * [Modifying Influence Changing Events](#modifying-influence-changing-events)
+    * [Modifying Allied Settings](#modifying-allied-settings)
 * [Debug Mode](#debug-mode)
 * [In Multiplayer](#in-multiplayer)
 
@@ -42,9 +50,11 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
 - **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
+- **Steal Back Customers:** While hostile with the Cartel your customers might be stolen back by the Cartel, requiring you to re-unlock them with free samples!
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
 - **Business Sabotage:** Cartel will try to actively interfere with your laundering activities at Post Office, Laundromat and Taco Ticklers. Defuse the planted explosive before your business and customers blow up!
 - **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
+- **Allied Extensions:** Allied extensions is a bundle of features that allow the player to progress and complete the game even while cartel is Truced. While enabled, the player can hire Cartel Dealers and collect supplies awarded by the cartel!
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
 
@@ -65,6 +75,10 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     ├── CartelEnforcer.dll (or CartelEnforcer-IL2Cpp.dll)
     └── CartelEnforcer/
         ├── config.json
+        ├── Allied/
+        |   ├── config.json
+        |   ├── QuestData/
+        |       └── (Persistent save data gets generated here)
         ├── Ambush/
         |   ├── ambush.json
         |   ├── default.json
@@ -81,7 +95,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 
 ### Configuration
 
-You can customize the mod's settings through the **config.json** file.
+You can customize the basic mod settings through the **config.json** file.
 
 1. Open the **CartelEnforcer** folder inside your **Mods** directory.
 2. Open the **config.json** file. Its contents by default are:
@@ -104,6 +118,8 @@ You can customize the mod's settings through the **config.json** file.
     "enhancedDealers": true,
     "cartelGatherings": true,
     "businessSabotage": true,
+    "stealBackCustomers": true,
+    "alliedExtensions": true,
     "endGameQuest": true,
     "endGameQuestMonologueSpeed": 1.0
 }
@@ -164,6 +180,12 @@ You can customize the mod's settings through the **config.json** file.
 - **`businessSabotage`**:
     - `true`: Enables the Business Sabotage event
     - `false`: Disables the event.
+- **`stealBackCustomers`**:
+    - `true`: Enables the Steal Back Customers feature
+    - `false`: Disables the feature.
+- **`alliedExtensions`**:
+    - `true`: Enables usage of Allied Extensions features. (Requires `endGameQuest` to be `true`)
+    - `false`: Disables the features.
 - **`endGameQuest`**:
     - `true`: Enables the generation of End Game Quest.
     - `false`: Disables the generation.
@@ -225,15 +247,15 @@ These events only happen when the Cartel is hostile.
 
 Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, Jeff, Dan, Jeremy, Marco or Herbert).
 - The quest-giving NPCs are chosen randomly every 4 ingame hours. Random Choice prefers Unlocked NPCs more.
-- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a base 20% chance (at worst relations) to a base 50% chance (at best relations).
+- **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a base 40% chance (at worst relations) to a base 75% chance (at best relations).
 - **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the __Intercept Cartel Dead Drop__ quest.
 - **Payment:** The cost to get a tip is dynamic, ranging from $100 (at best relations) to $500 (at worst relations).
-- **Cartel Gathering Effect:** When asking for rumours during time which cartel is gathering, there is higher likelyhood of the NPC Revealing the __active Gathering Location__ instead of giving a quest.
+- **Cartel Gathering Effect:** When asking for rumours during time which cartel is gathering, there is higher likelihood of the NPC Revealing the __active Gathering Location__ instead of revealing a Dead Drop location.
 
 #### Intercept Cartel Dead Drop
 
-- **Dead Drop Location:** Based on the NPC relations there is 60% chance (at best relations) to tell exact location of the dead drop, and 40% chance to tell only the region. At worst relations there is 30% chance to tell the exact location and 70% chance to tell only the region.
-- You have a 60 seconds to find the dead drop.
+- **Dead Drop Location:** Based on the NPC relations there is 75% chance (at best relations) to tell exact location of the dead drop, and 25% chance to tell only the region. At worst relations there is 25% chance to tell the exact location and 75% chance to tell only the region.
+- You have a 60 seconds to find the dead drop if the exact location is revealed and 120 seconds if you only know the region.
 - **Success:** If you find the dead drop in time, you get +100 XP and the regional influence decreases by 50.
 - **Failure:** If you fail to find it, the items vanish and regional influence increases by 25.
 - **Loot Pools:** One of the following two pools is selected for each quest:
@@ -262,6 +284,7 @@ If you have killed enough Cartel Dealers, the Gatherings will be hostile on sigh
 - Gathering lasts for 3 hours after which the goons go away
 - Killing a gathering will decrease regional cartel influence by 80.
 - If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
+- If the player has a Truce with the cartel then greeting all the gathering goons lowers influence by 150 and the Gathering will not be hostile or annoyed
 
 ---
 
@@ -278,6 +301,104 @@ Player owned businesses can now be sabotaged by Cartel. For these events you wil
 - If the player kills the goon that is trying to plant a bomb, regional cartel influence decreases by 50.
 
 >The frequency of Business Sabotage events is linked directly to the total cartel influence across all regions. When the cartel total influence is lower, these events become more frequent!
+
+---
+
+
+### Steal Back Customers
+
+Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock your customers by giving them free samples. This event scales in difficulty and frequency depending on how low the Cartels influence is across all regions. The lower their influence is, the harder they fight back!
+
+- The feature can be disabled in the `CartelEnforcer/config.json` by setting `stealBackCustomer` to `false`
+- Player must have atleast 18 customers in total unlocked for this feature to kick in
+- The maximum amount of customers Cartel can steal each day is 2
+- Customer stealing prefers recently unlocked customers more
+- Customer must have all of its connections unlocked to be valid for stealing
+- Customers that have been stolen are harder to re-unlock with free samples, with successive samples increasing probability of unlock.
+
+
+
+---
+
+
+## Allied Extensions
+
+Allied Extensions consists of multiple features that are added to the game while the Cartel is Truced. These features aim to provide new means of reducing influence even while Cartel is Truced in order to progress and complete the game. Additionally the Allied Extensions allow the player to Persude the Cartel Dealers to work for them!
+
+> Allied Extensions features and cooldowns can be modified from the `CartelEnforcer/Allied/config.json` file
+
+> The Allied Extensions saves persistent data and progression to the `CartelEnforcer/Allied/QuestData` folder for each save
+
+---
+### Persuade Cartel Dealers
+
+After choosing to Truce with the Cartel, each Cartel Dealer gets new Persuade Dialogue Options! Each of the choices offer different probability of success to persuade the Cartel Dealer. Once successfully persuaded, the player can hire the Cartel Dealer to work for them! Each persuasion attempt lowers the regions Cartel Influence!
+
+- Cooldown time can be changed from the `CartelEnforcer/Allied/config.json` file at `PersuadeCooldownMins`
+
+
+**Choice 1:** *Clothing Similarity*
+- Change your clothes to match the Cartel Dealers clothes to increase the probability of a succesful persuasion
+
+**Choice 2:** *Overall Cartel Influence*
+- Decrease the overall Cartel Influence to increase the probability of a succesful persuasion
+
+**Choice 3:** *Threatening*
+- Wield your biggest and most powerful weapon before talking to the Cartel Dealer to increase the probability of a succesful persuasion
+
+**Choice 4:** *Spread Rumours*
+- Each rumour you spread increases the probability of a succesful persuasion
+
+
+After hiring a succesfully persuaded Cartel Dealer the regions Cartel Influence is set to 0 instantly.
+
+---
+
+### Greet the Gathering Goons
+
+While a Cartel Goon Gathering is active, greeting all 3 goons in a short timeframe will award the player with influence reduction in the respective region.
+
+- The influence reduction can be changed from `CartelEnforcer/Influence/influence.json` by changing the `trucedGreetingChallenge` value
+
+---
+
+### Allied Intro
+
+After player attends the meeting with Thomas and chooses Truce or loads into a save where Westville Cartel Dealer is not recruited and Cartel is Truced, the Allied Intro Quest will be automatically enabled.
+
+> Completion XP: 200
+
+- Find the Westville Cartel Dealer
+- Persuade the Westville Cartel Dealer
+- Hire the Westville Cartel Dealer
+
+---
+### Allied Supplies
+
+When the Cartel is Truced an Allied Supplies Quest will periodically appear! Grab the Cartel supplies before they disappear.
+
+> Completion XP: 300
+
+- Cooldown time can be changed from the `CartelEnforcer/Allied/config.json` file at `SupplyQuestCooldownHours`
+- Starts at 08:00 whenever the cooldown time has been waited
+- The quest begins by Thomas Benzies sending you a message containing information about the supply location
+- Find the supply location and grab the supplies to complete the quest
+- Remember: Dont mess with the Allied Guard!!!
+
+**Supply Loot by type:**
+- Blue Barrels:
+    - Acid
+    - Phosphorus
+    - Gasoline
+
+- White Van:
+    - Full spectrum grow lights
+    - Drying racks
+    - Air pots
+
+
+---
+
 
 ## End Game Quests
 
@@ -300,7 +421,7 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 
 - Upon paying the $5000 Bribe to Manny, you get a custom active quest:
     - First you must intercept cartel dead drops twice
-    - Additionally you must stop a Cartel Gathering once
+    - OR you must stop a Cartel Gathering once
     - After completing the first step you must wait for Manny to arrange a meeting and send a text.
     - After player attends the meeting and finishes the dialogue they get the final quest step
     - Kill the Cartel Brute
@@ -523,10 +644,65 @@ You can add or modify custom ambush locations.
 2. Each type of event and its corresponding influence change is listed in the file. 
 3. Positive values means that Cartel Influence Increases and Negative values mean that Cartel Influence Decreases.
 4. Values are divided by a thousand, meaning that for example 0.050 corresponds to 50 increase in Cartel Influence.
+5. The file content is by default:
+
+```json
+{
+    "interceptFail": 0.025,
+    "interceptSuccess": -0.050,
+    "deadDropFail": 0.025,
+    "deadDropSuccess": -0.050,
+    "gatheringFail": 0.025,
+    "gatheringSuccess": -0.080,
+    "robberyPlayerEscape": 0.025,
+    "robberyGoonEscapeSuccess": 0.025,
+    "robberyGoonDead": -0.080,
+    "robberyGoonEscapeDead": -0.050,
+    "sabotageBombDefused": -0.150,
+    "sabotageGoonKilled": -0.050,
+    "sabotageBombExploded": 0.200,
+    "cartelDealerPersuaded": -0.100,
+    "trucedGreetingChallenge": -0.150,
+    "passiveInfluenceGainPerDay": 0.025,
+    "cartelDealerDied": -0.100,
+    "ambushDefeated": -0.100,
+    "graffitiInfluenceReduction": -0.050,
+    "customerUnlockInfluenceChange": -0.075
+}
+```
 
 Note: Due to the way which the mod handles some of the influence changes, sometimes the displayed influence change is __not__ displaying the correct change and can rarely display the change twice for the event
 
 ---
+
+### Modifying Allied Settings
+
+1. Open `Mods/CartelEnforcer/Allied/config.json`.
+2. Each Cartel Dealers "Cut" is defined in this file
+3. Additionally the Persuade Cooldown (in-game) minutes and Supply Quest Cooldown (in-game) Hours are defined in this file
+
+
+4. The file content is by default:
+
+```json
+{
+  "WestvilleCartelDealerCut": 0.3,
+  "DowntownCartelDealerCut": 0.4,
+  "DocksCartelDealerCut": 0.5,
+  "SuburbiaCartelDealerCut": 0.55,
+  "UptownCartelDealerCut": 0.60,
+  "PersuadeCooldownMins": 60,
+  "SupplyQuestCooldownHours": 48
+}
+```
+
+- **(Region)CartelDealerCut**: Amount of money the cartel dealer takes from each deal (percentage)
+    - A number in range of 0.0 to 1.0 (0.0 = Dealer takes no cut, 1.0 = Dealer takes all of the money from deals)
+- **PersuadeCooldownMins**: Minutes in-game that the player must wait until they can attempt to persuade a Cartel Dealer again
+    - Note: Must be an Integer without decimal point.
+- **SupplyQuestCooldownHours**: Hours in-game that the player must wait until the Supply Quest can trigger again
+    - Note: Must be an Integer without decimal point.
+
 
 ### Debug Mode
 
@@ -552,6 +728,9 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Ray, without checking prerequirements.
     - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
     - `Left CTRL + N`: Start a Sabotage Event at nearest supported business
+    - `Left CTRL + O`: Steal back the nearest customer to the player without checking prerequirements
+    - `Left CTRL + I`: Start the Allied Intro Quest (note: might cause errors or break the game)
+    - `Left CTRL + K`: Start the Allied Supplies Quest (note: might cause errors or break the game)
 
 ---
 
@@ -559,10 +738,11 @@ In debug mode, you can see various visual cues and use keybinds to test features
 
 For multiplayer to function correctly, all players must have the same `default.json`, `ambush.json` and `config.json` content.
 
-Not all events and activities added by this mod support multiplayer fully and might have bugs on server clients.
+Most of the events and activities added by this mod **do not** support multiplayer yet.
 
 ---
-> **Note:** The `config.json`, `default.json` and persistent cartel stolen items files will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
+
+> **Note:** The configuration files and directory structure described in this document will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
 
 ---
 

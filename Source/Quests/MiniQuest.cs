@@ -225,7 +225,7 @@ namespace CartelEnforcer
         public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller, float paid)
         {
             Log("[MINI QUEST]    Option Chosen");
-            float chance = Mathf.Lerp(0.20f, 0.50f, npc.RelationData.NormalizedRelationDelta); // At max rela 50% chance to refuse
+            float chance = Mathf.Lerp(0.40f, 0.75f, npc.RelationData.NormalizedRelationDelta); // At max rela 75% chance to accept
             bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= paid;
             if ((TimeManager.Instance.CurrentTime >= 1200 || TimeManager.Instance.CurrentTime <= 1800))
             {
@@ -236,8 +236,8 @@ namespace CartelEnforcer
             if (CartelGathering.areGoonsGathering)
             {
                 // If the gathering is active we decrease the chance to give the dead drop mini quest so that 
-                // the chance can also dynamically prefer this feature if its active, linear decrease 30%
-                chance = Mathf.Lerp(chance, 0.0f, 0.3f);
+                // the chance can also dynamically prefer this feature if its active, linear decrease 50%
+                chance = Mathf.Lerp(chance, 0.0f, 0.5f);
             }
 
             if (UnityEngine.Random.Range(0f, 1f) < chance && hasCash)
@@ -258,7 +258,7 @@ namespace CartelEnforcer
 
                 string location = "";
                 bool hasPreposition = false;
-                if (UnityEngine.Random.Range(0f, 1f) > chance) // At max rela only 40% chance to tell only region
+                if (UnityEngine.Random.Range(0f, 1f) > chance) // At max rela 25% chance to tell only region
                     location = random.Region.ToString() + " region";
                 else
                 {
@@ -308,7 +308,7 @@ namespace CartelEnforcer
                         listItems.AddRange(fromStolenPool);
                 }
 
-                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc, fromStolenPool)));
+                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc, fromStolenPool, hasPreposition)));
                 controller.handler.ContinueSubmitted();
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
                 string prep = "";
@@ -412,7 +412,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public static IEnumerator CreateDropContent(DeadDrop entity, List<ItemInstance> filledItems, NPC npc, List<ItemInstance> itemsFromPool = null)
+        public static IEnumerator CreateDropContent(DeadDrop entity, List<ItemInstance> filledItems, NPC npc, List<ItemInstance> itemsFromPool = null, bool useShortTimeout = true)
         {
             yield return Wait5;
             if (!registered) yield break;
@@ -458,6 +458,13 @@ namespace CartelEnforcer
 
             yield return Wait60;
             if (!registered) yield break;
+
+            // if the player only knows region, add 1min
+            if (!useShortTimeout)
+            {
+                yield return Wait60;
+                if (!registered) yield break;
+            }
 
             if (!opened)
             {

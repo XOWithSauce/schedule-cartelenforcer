@@ -144,7 +144,7 @@ namespace CartelEnforcer
 
         public override void End()
         {
-            MelonLogger.Msg("Quest_CarMeetup: End method called.");
+            Log("Quest_CarMeetup: End method called.");
             try
             {
                 if (hudUI != null)
@@ -285,7 +285,7 @@ namespace CartelEnforcer
 #endif
             Log("Config Entries");
 
-            talkToJeremy.SetEntryTitle("• Ask Jeremy about the cars at their home after curfew");
+            talkToJeremy.SetEntryTitle("Ask Jeremy about the cars at their home after curfew");
             talkToJeremy.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             talkToJeremy.PoILocation.name = "TalkToJeremyEntry_POI";
             talkToJeremy.PoILocation.transform.SetParent(talkToJeremy.transform);
@@ -364,10 +364,11 @@ namespace CartelEnforcer
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
+            instance.onMinutePass.Add(new Action(this.MinPass));
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
+            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
 #endif
-            instance.onMinutePass.Add(new Action(this.MinPass));
             StartQuestDetail();
         }
 

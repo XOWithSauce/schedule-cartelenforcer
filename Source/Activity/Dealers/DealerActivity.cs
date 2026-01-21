@@ -7,6 +7,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.AmbushOverrides;
+using static CartelEnforcer.CartelInventory;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -22,7 +23,6 @@ using ScheduleOne.Quests;
 using ScheduleOne.Product;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.UI.Handover;
-using ScheduleOne.Doors;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
@@ -37,7 +37,6 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.UI.Handover;
-using Il2CppScheduleOne.Doors;
 #endif
 
 namespace CartelEnforcer
@@ -46,7 +45,7 @@ namespace CartelEnforcer
     {
 
         private static List<Dealer> allDealers = new();
-        private static CartelDealer[] allCartelDealers;
+        public static CartelDealer[] allCartelDealers;
         public static CartelDealerConfig dealerConfig;
 
         public static float currentDealerActivity = 0f;
@@ -70,55 +69,19 @@ namespace CartelEnforcer
         // Key: Contract GUID
         // Value: Tuple: Original Player Dealer, Original Contract XP
         public static Dictionary<string, Tuple<Dealer, int>> playerDealerStolen = new();
+        public static readonly object playerDealerStolenLock = new object();
         public static List<string> consumedGUIDs = new();
 
-        // Parse the Cartel Dealer buildings and respective access doors on load
-        // used in RobberyPatch to set destination of robber
-        public static Dictionary<NPCEnterableBuilding, StaticDoor> dealerBuildings = new();
-        // if config real robberies enabled run below
-        public static void ParseDealerBuildings()
-        {
-            CartelDealer[] dealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
-            foreach (CartelDealer d in dealers)
-            {
-                NPCEvent_StayInBuilding event1 = null;
-                if (d.Behaviour.ScheduleManager.ActionList != null)
-                {
-                    foreach (NPCAction action in d.Behaviour.ScheduleManager.ActionList)
-                    {
-#if MONO
-                        if (action is NPCEvent_StayInBuilding ev1)
-                            event1 = ev1;
-#else
-                        NPCEvent_StayInBuilding ev1_temp = action.TryCast<NPCEvent_StayInBuilding>();
-                        if (ev1_temp != null)
-                        {
-                            event1 = ev1_temp;
-                        }
-#endif
-                    }
-                }
-                if (event1 != null)
-                {
-                    if (!dealerBuildings.ContainsKey(event1.Building))
-                    {
-                        dealerBuildings.Add(event1.Building, event1.Building.Doors[0]);
-                    }
-                }
-                else
-                {
-                    Log("No dealer NPC event found");
-                }
-
-            }
-        }
+        // track items in cartel dealer inventory that were awarded from stolen items inv
+        public static Dictionary<CartelDealer, List<ItemInstance>> stolenInDealerInv = new();
 
         public static IEnumerator EvaluateDealerState()
         {
             yield return Wait5;
             Log("[DEALER ACTIVITY] Init Dealer state");
 
-            DealerActivity.allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
+            if (DealerActivity.allCartelDealers == null)
+                DealerActivity.allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
             Dealer[] allSceneDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(true);
 
             foreach (Dealer d in allSceneDealers)
@@ -360,6 +323,12 @@ namespace CartelEnforcer
             //Cons:
             // - The resource path is not validated by default, if some logic allows that then it would be better... Also forces user to go through game and kind of mod the game themselves...
 
+            // track the items that get stolen and put in dealer inventory, init lists with new() to not have them null
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
+                if (!stolenInDealerInv.ContainsKey(dealer))
+                    stolenInDealerInv.Add(dealer, new());
+
+            Log("[DEALER ACTIVITY]     Setup inventory tracking stolen items");
             string resourcePath = "";
             switch (dealerConfig.CartelDealerWeapon.ToLower())
             {
@@ -390,6 +359,10 @@ namespace CartelEnforcer
             UnityEngine.Object obj = Resources.Load(resourcePath);
             GameObject gameObject = obj.TryCast<GameObject>();
 #endif
+            if (gameObject == null)
+            {
+                Log($"[DEALER ACTIVITY]     Dealer instantiated weapon is null");
+            }
 
             AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
             // configure weapon stats, at CartelDealerLethality 1 stats are essentially doubled/halved to make it better, at 0 default
@@ -423,16 +396,25 @@ namespace CartelEnforcer
                 if (equippable is AvatarWeapon weapon)
                 {
                     dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
-                    equippable.Equip(dealer.Avatar);
+                    if (dealer.Avatar != null)
+                        equippable.Equip(dealer.Avatar);
+                    else
+                        Log($"[DEALER ACTIVITY]     {dealer.Region} dealer is missing avatar field");
                 }
 #else
                 AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
                 if (weapon != null) 
                 {
                     dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
-                    equippable.Equip(dealer.Avatar);
+                    if (dealer.Avatar != null)
+                        equippable.Equip(dealer.Avatar);
+                    else
+                        Log($"[DEALER ACTIVITY]     {dealer.Region} dealer is missing avatar field");
                 }
 #endif
+
+                Log($"[DEALER ACTIVITY]     Setup {dealer.Region} weapon");
+
                 dealer.OverrideAggression(1f); // because the dealers run away like wtf? this might have been just fleeing beh annd this wont fix it? todo fix it :D
 
                 #region Stay Inside and Deal Signal actions
@@ -478,6 +460,14 @@ namespace CartelEnforcer
                         event1.onEnded += (Il2CppSystem.Action)onStayInsideEnd;
 #endif
                     }
+                    else
+                    {
+                        Log("[DEALER ACTIVITY]    Dealer Action list is null!");
+                    }
+                }
+                else
+                {
+                    Log("[DEALER ACTIVITY]    Failed to find dealer action list!");
                 }
                 #endregion
 
@@ -530,17 +520,14 @@ namespace CartelEnforcer
                     return;
                 }
                 dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)TrySpawnGoonsOnDeath);
-
+                Log($"[DEALER ACTIVITY]     Setup {dealer.Region} health callback");
                 #endregion
-
 
 
             }
             Log("[DEALER ACTIVITY]    Done Configuring Cartel Dealer Event values");
 
             #region Ensure that the dealers have avatar settings loaded
-            // in 0.4.1f12 > testings show that cartel dealers can have null avatar settings on load only, on day change it seems to apply them
-            // but this is needed now to fix that initial unset avatar
             List<CartelDealer> missingAvatar = new();
             Log("[DEALER ACTIVITY] Ensure Cartel Dealers have avatar textures");
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers) 
@@ -692,7 +679,10 @@ namespace CartelEnforcer
                             contract.completedContractsIncremented = false;
 
                             Dealer originalDealer = contract.Dealer;
-                            playerDealerStolen.Add(contract.GUID.ToString(), new Tuple<Dealer, int>(originalDealer, originalXP));
+                            lock(playerDealerStolenLock)
+                            {
+                                playerDealerStolen.Add(contract.GUID.ToString(), new Tuple<Dealer, int>(originalDealer, originalXP));
+                            }
                             d.AddContract(contract);
                             if (!d._attendDealBehaviour.Active)
                                 d.CheckAttendStart();
@@ -759,9 +749,9 @@ namespace CartelEnforcer
                 else
                 {
                     // hAs contract
+                    if (!d._attendDealBehaviour.Active)
+                        d.CheckAttendStart();
                     Log("[DEALER ACTIVITY]    Dealer has pre-existing contract, skip");
-                    if (!d.Behaviour.ScheduleManager.ActionList[0].gameObject.activeSelf)
-                        d.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                     continue;
                 }
 
@@ -782,6 +772,7 @@ namespace CartelEnforcer
             if (d.ActiveContracts.Count > 0) return false;
             if (d.Health.IsDead || d.Health.IsKnockedOut) return false;
             if (!(TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart)) return false;
+            if (d.Behaviour.GetBehaviour("Smoke Break") != null && d.Behaviour.GetBehaviour("Smoke Break").Active) return false;
 
             return true;
         }
@@ -790,15 +781,15 @@ namespace CartelEnforcer
         {
             if (!IsWalkingEnabled(d)) return;
 
+            float chance = UnityEngine.Random.Range(0f, 1f);
             // Pick Random customer delivery location OR Dead Drop location
-            // 50%-50% chance roll
-            if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
+            if (chance > 0.5f) // delivery
             {
                 MapRegionData mapRegionData = Singleton<Map>.instance.Regions[(int)d.Region];
                 DeliveryLocation walkDest = mapRegionData.GetRandomUnscheduledDeliveryLocation();
                 d.Movement.SetDestination(walkDest.CustomerStandPoint.position);
             }
-            else
+            else // deaddrop
             {
 #if MONO
                 List<DeadDrop> regionDrops = DeadDrop.DeadDrops.FindAll((DeadDrop drop) => drop.Region == d.Region);
@@ -810,8 +801,11 @@ namespace CartelEnforcer
                         regionDrops.Add(DeadDrop.DeadDrops[i]);
                 }
 #endif
-                Vector3 dropPos = regionDrops[UnityEngine.Random.Range(0, regionDrops.Count)].transform.position;
-                d.Movement.GetClosestReachablePoint(dropPos, out Vector3 closest);
+                DeadDrop drop = regionDrops[UnityEngine.Random.Range(0, regionDrops.Count)];
+                Vector3 dropPos = drop.transform.position;
+                Vector3 standPos = drop.transform.position + drop.transform.forward * 1.6f + Vector3.down * 1.4f; // Infront and on ground level?
+
+                d.Movement.GetClosestReachablePoint(standPos, out Vector3 closest);
                 if (closest != Vector3.zero)
                 {
                     d.Movement.SetDestination(closest);
@@ -876,6 +870,7 @@ namespace CartelEnforcer
 
                 int lockedCustomerIndex = UnityEngine.Random.Range(0, regionLockedCustomers.Count);
                 Customer selected = null;
+
                 for (int j = 0; j < regionLockedCustomers.Count; j++)
                 {
                     selected = regionLockedCustomers[lockedCustomerIndex];
@@ -920,6 +915,7 @@ namespace CartelEnforcer
                 if (selected == null) yield break;
 
                 // Before running below we want to make sure there is something in the inventory since try generate contract can result in no acceptable items especially in higher standard customers, so based on region, we add change existing quality OR add quality item if empty?
+                // Todo: this could instead/addt check product affinity data ?
                 EQuality requiredQuality = selected.customerData.Standards.GetCorrespondingQuality();
                 List<ProductDefinition> list = new List<ProductDefinition>();
                 bool hasMinItems = false;
@@ -975,12 +971,10 @@ namespace CartelEnforcer
                 if (!hasMinItems)
                 {
                     Log("[LOCKED CUSTOMER DEAL] Cartel dealer doesnt have required product, inserting.");
-#if MONO
-                    ItemDefinition def = ScheduleOne.Registry.GetItem("cocaine");
-#else
-                    ItemDefinition def = Il2CppScheduleOne.Registry.GetItem("cocaine");
-#endif
-                    ItemInstance item = def.GetDefaultInstance(4);
+                    
+                    int productIndex = UnityEngine.Random.Range(0, dealEvent.dealer.RandomProducts.Length);
+                    ProductDefinition def2 = dealEvent.dealer.RandomProducts[productIndex];
+                    ItemInstance item = def2.GetDefaultInstance(4);
 #if MONO
                     if (item is QualityItemInstance inst)
                         inst.Quality = requiredQuality;
@@ -1041,23 +1035,32 @@ namespace CartelEnforcer
                 if (__instance.DealerType == EDealerType.CartelDealer)
                 {
 #if MONO
-                    List<Contract> cartelDealerContracts = __instance.ActiveContracts;
+                    List<Contract> cartelDealerContracts = new(__instance.ActiveContracts);
 #else
-                    Il2CppSystem.Collections.Generic.List<Contract> cartelDealerContracts = __instance.ActiveContracts;
+                    Il2CppSystem.Collections.Generic.List<Contract> cartelDealerContracts = new();
+                    for (int i = 0; i < __instance.ActiveContracts.Count; i++)
+                    {
+                        if (__instance.ActiveContracts[i] != null)
+                            if (!cartelDealerContracts.Contains(__instance.ActiveContracts[i]))
+                                cartelDealerContracts.Add(__instance.ActiveContracts[i]);
+                    }
 #endif
                     foreach (Contract contract in cartelDealerContracts)
                     {
-                        // todo: in future change the Player -> intercept events to also use this logic instead of relying on isDead/Unconscious states?
-                        if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
+                        lock (playerDealerStolenLock)
                         {
-                            // player dealer contract being intercepted by cartel dealer
-                            // OR intercept deals event is active with the contract, it handles it with own mechanic
-                            // dont fail this contract since its duped to player hired dealer?
-                            Log("Dealer Unconscious Fix ");
-                        }
-                        else
-                        {
-                            contract.Fail(true);
+                            // todo: in future change the Player -> intercept events to also use this logic instead of relying on isDead/Unconscious states?
+                            if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
+                            {
+                                // player dealer contract being intercepted by cartel dealer
+                                // OR intercept deals event is active with the contract, it handles it with own mechanic
+                                // dont fail this contract since its duped to player hired dealer?
+                                Log("Dealer Unconscious Fix ");
+                            }
+                            else
+                            {
+                                contract.Fail(true);
+                            }
                         }
                     }
 
@@ -1092,8 +1095,11 @@ namespace CartelEnforcer
                 float distanceToCartelDealer = Vector3.Distance(__instance.NPC.CenterPoint, contract.Dealer.CenterPoint);
                 float distanceToPlayerDealer = Vector3.Distance(__instance.NPC.CenterPoint, originalDealer.CenterPoint);
 
+                // This function is still problematic it seems this can return both false when something happens and is indecisive
+                // only at longer distances, needs outcome logged too to figure out what happens with it
+
                 Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.fullName}");
-                Log($"Handover: {contract.title} {contract.Entries[0].name}");
+                Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}");
                 Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f}");
                 Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f}");
 
@@ -1121,15 +1127,87 @@ namespace CartelEnforcer
                     if (originalDealer.ActiveContracts.Count != 0 && originalDealer.ActiveContracts[0] == contract)
                         originalDealer.ActiveContracts[0].Fail();
 
-                    // TODO: Influence things / relationship things -> in future this will be used to manage the
-                    // Resteal customers feature
+                    if (currentConfig.stealBackCustomers)
+                    {
+                        // cap the lowering to 1.0 (0.0-5.0)
+                        if (__instance.NPC.RelationData.RelationDelta > 1.0f)
+                        {
+                            // Lower by 15% or 0.20 whichever is higher (0.0-5.0 rang)
+                            float relationChange = Mathf.Max(__instance.NPC.RelationData.RelationDelta * 0.85f, 0.20f);
+                            float result = Mathf.Clamp(relationChange, min: 0f, max: 5f);
+
+                            Log($"[STEALBACK] {__instance.NPC.fullName} Relation Down: -{relationChange} now: {result}");
+                            __instance.NPC.RelationData.RelationDelta = result;
+                        }
+                    }
+                    
                 }
 
-                playerDealerStolen.Remove(contract.GUID.ToString());
+                lock(playerDealerStolenLock)
+                {
+                    playerDealerStolen.Remove(contract.GUID.ToString());
+                }
                 consumedGUIDs.Add(contract.GUID.ToString()); // beacuse it seems that it can be double checked later???
 
                 return true; // after all this run original????
             }
+        }
+
+        // Patch the CartelDealers randomize inventory function to allow for saving possibly stolen items back to inventory system before the inventory clears
+        // With this also the dealer inv can be now used to return stolen items
+        [HarmonyPatch(typeof(CartelDealer), "RandomizeInventory")]
+        public static class CartelDealer_RandomizeInventory_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(CartelDealer __instance)
+            {
+                // If allied extensions enabled, cartel truced and dealer recruited, dont randomize inv
+#if MONO
+                if (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced && __instance.IsRecruited)
+                    return false;
+#else
+                if (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced && __instance.IsRecruited)
+                    return false;
+#endif
+
+                if (stolenInDealerInv.TryGetValue(__instance, out List<ItemInstance> items))
+                {
+                    if (items == null || items.Count == 0)
+                    {
+                        // no items that were stolen from player originally
+                    }
+                    else
+                    {
+                        // Else there were items stolen, parse them for the dealer check
+                        // if they still exist??
+                        List<ItemInstance> returnable = new();
+                        for (int i = 0; i < items.Count; i++) 
+                        {
+                            for (int j = 0; j < __instance.Inventory.ItemSlots.Count; j++)
+                            {
+                                // Check if the item was untouched basically, this wont work if the dealer sold or got more of the item in inv...
+                                if (__instance.Inventory.ItemSlots[j].ItemInstance == items[i])
+                                {
+                                    returnable.Add(items[i]);
+                                }
+                            }
+                        }
+
+                        if (returnable.Count > 0)
+                        {
+                            CartelStealsItems(returnable);
+                            // Remove from List iteminstance tracking
+                            stolenInDealerInv[__instance].Clear();
+                        }
+                    }
+
+
+                }
+
+                // Continue to randomize inventory (also clear now in the proceeding function)
+                return true;
+            }
+
         }
 
     }

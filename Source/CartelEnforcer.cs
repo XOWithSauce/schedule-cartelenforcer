@@ -15,6 +15,11 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.DealerActivity;
 using static CartelEnforcer.CartelGathering;
 using static CartelEnforcer.SabotageEvent;
+using static CartelEnforcer.StealBackCustomer;
+using static CartelEnforcer.AlliedExtension;
+using static CartelEnforcer.AlliedCartelDialogue;
+using static CartelEnforcer.CartelInfluenceChangePopup_Show_Patch;
+using static CartelEnforcer.SuppliesModule;
 
 #if MONO
 using ScheduleOne.Property;
@@ -61,22 +66,13 @@ using Il2CppScheduleOne.NPCs.Schedules;
 
 namespace CartelEnforcer
 {
-    /*
-     Todo: swap il2cpp and then test features real quick then changelog etc -> might need the newer assemblies built against...
-    - Future targets;
-    - Quick revive feature for dealers to respawn faster?
-    - Steal Back customers feature for cartel dealers -> Modify customer relationships and then at some threshold set customer back locked?
-        - How to handle re-unlocking and stuff, gotta test
-    - New Quest either the Casino lore or the Thomas Bossfight or something else exciting, aim for early game quest like the car meetup
-     */
-
     public static class BuildInfo
     {
         public const string Name = "Cartel Enforcer";
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.7.4";
+        public const string Version = "1.8.0";
         public const string DownloadLink = null;
     }
 
@@ -88,12 +84,13 @@ namespace CartelEnforcer
         public static List<object> coros = new();
         public static bool registered = false;
         private bool firstTimeLoad = false;
-        private static bool isSaving = false;
+        public static bool isSaving = false;
 
         #region No Suffering for GC anymore because of this code region
         public static WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
         public static WaitForSeconds Wait025 = new WaitForSeconds(0.25f);
         public static WaitForSeconds Wait05 = new WaitForSeconds(0.5f);
+        public static WaitForSeconds Wait1 = new WaitForSeconds(1f);
         public static WaitForSeconds Wait2 = new WaitForSeconds(2f);
         public static WaitForSeconds Wait5 = new WaitForSeconds(5f);
         public static WaitForSeconds Wait10 = new WaitForSeconds(10f);
@@ -104,12 +101,10 @@ namespace CartelEnforcer
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
-
             Instance = this;
             currentConfig = ConfigLoader.Load();
             influenceConfig = ConfigLoader.LoadInfluenceConfig();
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
-
             return;
         }
 
@@ -219,6 +214,36 @@ namespace CartelEnforcer
                         }
                     }
 
+                    // Left CTRL + O Steal back customer
+                    else if (Input.GetKeyDown(KeyCode.O))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            coros.Add(MelonCoroutines.Start(OnInputStealNearestCustomer()));
+                        }
+                    }
+
+                    // Left CTRL + I Start the Allied Intro Quest
+                    else if (Input.GetKeyDown(KeyCode.I))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedIntroQuest()));
+                        }
+                    }
+
+                    // Left CTRL + K Start the Allied Supplies Quest
+                    else if (Input.GetKeyDown(KeyCode.K))
+                    {
+                        if (!debounce)
+                        {
+                            debounce = true;
+                            coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedSupplyQuest()));
+                        }
+                    }
+
                 }
             }
 
@@ -269,11 +294,11 @@ namespace CartelEnforcer
 #endif
             PreparePackagingRefs();
 
+            // This needed by intercept, endgame quests, allied cartel quest & assigned to cartel dealers in phone contact menu
+            coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
+
             if (currentConfig.driveByEnabled)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
-
-            if (currentConfig.realRobberyEnabled)
-                ParseDealerBuildings();
 
             coros.Add(MelonCoroutines.Start(InitializeAmbush()));
 
@@ -282,7 +307,6 @@ namespace CartelEnforcer
 
             if (currentConfig.interceptDeals)
             {
-                coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
                 coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
             }
 
@@ -293,6 +317,11 @@ namespace CartelEnforcer
             {
                 dealerConfig = ConfigLoader.LoadDealerConfig();
                 coros.Add(MelonCoroutines.Start(EvaluateDealerState()));
+            }
+
+            if (currentConfig.alliedExtensions)
+            {
+                coros.Add(MelonCoroutines.Start(SetupAlliedExtension()));
             }
 
             if (currentConfig.cartelGatherings)
@@ -306,6 +335,15 @@ namespace CartelEnforcer
 
             if (currentConfig.businessSabotage)
                 coros.Add(MelonCoroutines.Start(InitializeAndEvaluateSabotage()));
+
+            if (currentConfig.stealBackCustomers)
+            {
+#if MONO
+                NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassTrySteal;
+#else
+                NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassTrySteal;
+#endif
+            }
 
             if (currentConfig.debugMode)
                 MelonCoroutines.Start(MakeUI());
@@ -407,7 +445,7 @@ namespace CartelEnforcer
 
         public static IEnumerator InitializeEndGameQuest()
         {
-            yield return Wait30;
+            yield return Wait10;
             if (!registered) yield break;
 
             RV rv = UnityEngine.Object.FindObjectOfType<RV>();
@@ -514,7 +552,7 @@ namespace CartelEnforcer
                     if (!registered) yield break;
 
                     newGoon.gameObject.SetActive(true);
-                    yield return Wait2;
+                    yield return Wait01;
                     if (!registered) yield break;
 
                     newGoon.Movement.enabled = true;
@@ -579,11 +617,20 @@ namespace CartelEnforcer
             locations.Clear();
             playerDealerStolen.Clear();
             consumedGUIDs.Clear();
-            dealerBuildings.Clear();
+            stolenInDealerInv.Clear();
+            stolenNPCs.Clear();
+            supplyLocations.Clear();
+            carLoot.Clear();
+            barrelLoot.Clear();
 
-            cartelCashAmount = 0f;
-            lootGoblinIndex = -1;
-            
+            // allied extension states and objects reset also
+            foreach (string key in alliedDialogueKeys)
+            {
+                persuasionChances[key] = 0f;
+            }
+
+            allCartelDealers = null;
+
             // Now the created states and any boolean flags for events
             // QUests
             activeQuest = null;
@@ -592,6 +639,16 @@ namespace CartelEnforcer
             manorCompleted = false;
             activeCarMeetupQuest = null;
             carMeetupCompleted = false;
+
+            // allied quests
+            activeTruceIntro = null;
+            activeAlliedSupplies = null;
+            alliedSuppliesActive = false;
+            alliedGuard = null;
+            alliedVanObject = null;
+            guardChoiceIndex = -1;
+
+            // quest npcs
             fixer = null;
             ray = null;
             jeremy = null;
@@ -605,6 +662,7 @@ namespace CartelEnforcer
             inContactDialogue = false;
 
             // Mini quests and events
+            lootGoblinIndex = -1;
             StageDeadDropsObserved = 0;
             StageGatheringsDefeated = 0;
             driveByActive = false;
@@ -614,6 +672,7 @@ namespace CartelEnforcer
             areGoonsGathering = false;
             currentGatheringLocation = null;
             previousGatheringLocation = null;
+
             // sabotage related
             bombDefused = false;
             sabotageEventActive = false;
@@ -626,9 +685,14 @@ namespace CartelEnforcer
             bombSound = null;
             fireHandler = null;
             fireLight = null;
+
             // cartel inv
             jarPackaging = null;
             brickPackaging = null;
+            cartelCashAmount = 0f;
+
+            // temp variable for showing the influence reduction while truced
+            showEnqueued = false;
 
             hoursUntilNextGathering = 3;
             currentDealerActivity = 0f;
@@ -650,9 +714,10 @@ namespace CartelEnforcer
                     isSaving = true;
                     lock (cartelItemLock)
                     {
-
                         ConfigLoader.Save(cartelStolenItems);
                     }
+                    if (currentConfig.alliedExtensions)
+                        ConfigLoader.Save(alliedQuests);
                 }
                 isSaving = false;
                 return true;
@@ -669,9 +734,11 @@ namespace CartelEnforcer
                     isSaving = true;
                     lock (cartelItemLock)
                     {
-
                         ConfigLoader.Save(cartelStolenItems);
                     }
+
+                    if (currentConfig.alliedExtensions)
+                        ConfigLoader.Save(alliedQuests);
                 }
                 isSaving = false;
                 return true;
@@ -690,6 +757,9 @@ namespace CartelEnforcer
                     {
                         ConfigLoader.Save(cartelStolenItems);
                     }
+
+                    if (currentConfig.alliedExtensions)
+                        ConfigLoader.Save(alliedQuests);
                 }
                 isSaving = false;
                 ExitPreTask();

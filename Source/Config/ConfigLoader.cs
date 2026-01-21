@@ -6,7 +6,6 @@ using UnityEngine;
 
 using static CartelEnforcer.CartelInventory;
 
-
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.Levelling;
@@ -18,7 +17,7 @@ using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Persistence;
 #endif
- 
+
 namespace CartelEnforcer
 {
 
@@ -30,9 +29,9 @@ namespace CartelEnforcer
         public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, Enable Debug Log Messages, etc.
 
         // From -1.0 to 0.0 to 1.0,
-        // -1.0= Activity is 10 times less frequent
+        // -1.0= Activity is ~10 times less frequent
         // 0.0 = Activity is at game default frequency 
-        // 1.0 = Activity is 10 times more frequent
+        // 1.0 = Activity is ~10 times more frequent
         public float activityFrequency = 0.0f;
 
         // From -1.0 to 0.0 to 1.0,
@@ -71,8 +70,14 @@ namespace CartelEnforcer
 
         public bool businessSabotage = true;
 
+        public bool stealBackCustomers = true;
+
+        public bool alliedExtensions = true;
+
         public bool endGameQuest = true;
         public float endGameQuestMonologueSpeed = 1f; // clamped to 1 0 at 0 dialogue speed is signifigantly slower, at 1 normal
+        // TODO for the end game quests should get rid of the monologue shit now that the allied extension thing got that dialogue init figured out
+        // its a fuck ton of work
 
     }
 
@@ -107,6 +112,8 @@ namespace CartelEnforcer
         private static string pathDealerConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Dealers", "dealer.json");
         private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
         private static string pathInfluenceConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Influence", "influence.json");
+        private static string pathAlliedConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Allied", "config.json");
+        private static string pathAlliedPersist = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Allied", "QuestData"); // Filename {organization}.json
 
         #region Mod Config 
         public static ModConfig Load()
@@ -121,6 +128,12 @@ namespace CartelEnforcer
                     config.activityFrequency = Mathf.Clamp(config.activityFrequency, -1.0f, 1.0f); // Ensure limits
                     config.activityInfluenceMin = Mathf.Clamp(config.activityInfluenceMin, -1.0f, 1.0f); // Ensure limits
                     config.endGameQuestMonologueSpeed = Mathf.Clamp(config.endGameQuestMonologueSpeed, 0f, 1f);
+
+                    if (config.alliedExtensions && !config.endGameQuest)
+                    {
+                        MelonLogger.Warning("Cartel Enforcer Allied Extensions depend on End Game Quests. Enabling End Game Quest config automatically.");
+                        config.endGameQuest = true;
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -130,6 +143,7 @@ namespace CartelEnforcer
             }
             else
             {
+                MelonLogger.Warning("Missing CartelEnforcer basic mod config, creating directory and template.");
                 config = new ModConfig();
                 Save(config);
             }
@@ -142,6 +156,7 @@ namespace CartelEnforcer
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
                 Directory.CreateDirectory(Path.GetDirectoryName(pathModConfig));
                 File.WriteAllText(pathModConfig, json);
+                MelonLogger.Warning($"    CartelEnforcer basic mod config written to: {pathModConfig}");
             }
             catch (Exception ex)
             {
@@ -165,11 +180,12 @@ namespace CartelEnforcer
                 {
                     config = new ListNewAmbush();
                     config.addedAmbushes = new();
-                    MelonLogger.Warning("Failed to read CartelEnforcer config: " + ex);
+                    MelonLogger.Warning("Failed to read CartelEnforcer User Added Ambush config: " + ex);
                 }
             }
             else
             {
+                MelonLogger.Warning("Missing CartelEnforcer User Added Ambush config, creating directory and template.");
                 config = new ListNewAmbush();
                 config.addedAmbushes = new();
                 Save(config);
@@ -187,6 +203,8 @@ namespace CartelEnforcer
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented, settings);
                 Directory.CreateDirectory(Path.GetDirectoryName(pathAmbushes));
                 File.WriteAllText(pathAmbushes, json);
+                MelonLogger.Warning($"    CartelEnforcer User Added Ambush config written to: {pathAmbushes}");
+
             }
             catch (Exception ex)
             {
@@ -210,11 +228,12 @@ namespace CartelEnforcer
                 catch (Exception ex)
                 {
                     config = new ListNewAmbush();
-                    MelonLogger.Warning("Failed to read default.json config: " + ex);
+                    MelonLogger.Warning("Failed to read Cartel Enforcer Default ambush config: " + ex);
                 }
             }
             else
             {
+                MelonLogger.Warning("Missing CartelEnforcer Default ambush config, creating directory and template.");
                 config = GenerateAmbushState();
             }
             return config;
@@ -254,6 +273,8 @@ namespace CartelEnforcer
 
                 Directory.CreateDirectory(Path.GetDirectoryName(pathDefAmbushes));
                 File.WriteAllText(pathDefAmbushes, json);
+                MelonLogger.Warning($"    CartelEnforcer Default Ambush config written to: {pathDefAmbushes}");
+
             }
             catch (Exception ex)
             {
@@ -514,10 +535,28 @@ namespace CartelEnforcer
             }
             else
             {
+                MelonLogger.Warning("Missing CartelEnforcer Dealer config, creating directory and template.");
                 config = new CartelDealerConfig();
+                Save(config);
             }
             return config;
         }
+
+        public static void Save(CartelDealerConfig dealerConfig)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(dealerConfig, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(pathDealerConfig));
+                File.WriteAllText(pathDealerConfig, json);
+                MelonLogger.Warning($"    CartelEnforcer Dealer config written to: {pathDealerConfig}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Dealer config: " + ex);
+            }
+        }
+
         #endregion
 
         #region Cartel Influence Config
@@ -566,9 +605,26 @@ namespace CartelEnforcer
             }
             else
             {
+                MelonLogger.Warning("Missing CartelEnforcer Influence config, creating directory and template.");
                 config = new InfluenceConfig();
+                Save(config);
             }
             return config;
+        }
+
+        public static void Save(InfluenceConfig influenceConfig)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(influenceConfig, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(pathInfluenceConfig));
+                File.WriteAllText(pathInfluenceConfig, json);
+                MelonLogger.Warning($"    CartelEnforcer Influence config written to: {pathInfluenceConfig}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Influence config: " + ex);
+            }
         }
 
         private static float ClampInfluence(float value, bool clampPositive)
@@ -581,6 +637,121 @@ namespace CartelEnforcer
             {
                 return Mathf.Clamp(value, 0f, 1f);
             }
+        }
+        #endregion
+
+        #region Cartel Allied Extensions Config
+        [Serializable]
+        public class CartelAlliedConfig
+        {
+            public float WestvilleCartelDealerCut = 0.3f;
+            public float DowntownCartelDealerCut = 0.4f;
+            public float DocksCartelDealerCut = 0.5f;
+            public float SuburbiaCartelDealerCut = 0.55f;
+            public float UptownCartelDealerCut = 0.60f;
+            public int PersuadeCooldownMins = 60;
+            public int SupplyQuestCooldownHours = 48;
+        }
+
+        public static CartelAlliedConfig LoadAlliedConfig()
+        {
+            CartelAlliedConfig config = new();
+            if (File.Exists(pathAlliedConfig))
+            {
+                try
+                {
+                    string json = File.ReadAllText(pathAlliedConfig);
+                    config = JsonConvert.DeserializeObject<CartelAlliedConfig>(json);
+                }
+                catch (Exception ex)
+                {
+                    config = new CartelAlliedConfig();
+                    MelonLogger.Warning("Failed to read CartelEnforcer Allied config: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Missing CartelEnforcer Allied config, creating directory and template.");
+                config = new CartelAlliedConfig();
+                Save(config);
+            }
+            return config;
+        }
+
+        public static void Save(CartelAlliedConfig alliedConfig)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(alliedConfig, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(pathAlliedConfig));
+                File.WriteAllText(pathAlliedConfig, json);
+                //MelonLogger.Warning($"    CartelEnforcer Allied config written to: {pathAlliedConfig}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Allied Config Data: " + ex);
+            }
+        }
+
+        #endregion
+
+        #region Cartel Allied Extensions Persistence
+        // So here all the quest related allied stuff
+
+        // this gets serialized as null ?
+        [Serializable]
+        public class CartelAlliedQuests
+        {
+            public bool alliedIntroCompleted = false;
+            public int timesPersuaded = 0;
+            public int hoursUntilNextSupplies = 48;
+        }
+
+        public static CartelAlliedQuests LoadAlliedQuests() 
+        {
+            CartelAlliedQuests config = new();
+            string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
+            string fileName = SanitizeAndFormatName(orgName);
+            if (File.Exists(Path.Combine(pathAlliedPersist, fileName)))
+            {
+                try
+                {
+                    string json = File.ReadAllText(Path.Combine(pathAlliedPersist, fileName));
+                    config = JsonConvert.DeserializeObject<CartelAlliedQuests>(json);
+                }
+                catch (Exception ex)
+                {
+                    config = new CartelAlliedQuests();
+                    MelonLogger.Warning("Failed to read CartelEnforcer Allied Quests config: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Missing CartelEnforcer Allied Quests config, creating directory and template.");
+                config = new CartelAlliedQuests();
+                Save(config);
+            }
+            return config;
+        }
+
+        public static void Save(CartelAlliedQuests alliedQuestsState)
+        {
+            try
+            {
+                string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
+                string fileName = SanitizeAndFormatName(orgName);
+                string saveDestination = Path.Combine(pathAlliedPersist, fileName);
+                string json = JsonConvert.SerializeObject(alliedQuestsState, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
+                File.WriteAllText(saveDestination, json);
+                // MelonLogger.Warning($"    CartelEnforcer Allied Quest data written to: {saveDestination}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Allied Quests Data: " + ex);
+            }
+
+
         }
         #endregion
 

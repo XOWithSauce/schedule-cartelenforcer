@@ -20,7 +20,7 @@ namespace CartelEnforcer
         public List<NewAmbushConfig> addedAmbushes = new List<NewAmbushConfig>();
     }
 
-    // from Ambush/settings.json, defaults to just 2 weps m1911 knife (v0.7.1), paths case sensitive for resource.load?
+    // from Ambush/settings.json, defaults to just 2 weps m1911 knife, paths case sensitive for resource.load?
     [Serializable]
     public class AmbushGeneralSettingsSerialized
     {

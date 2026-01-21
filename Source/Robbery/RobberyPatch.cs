@@ -8,7 +8,6 @@ using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DealerRobbery;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
-using static CartelEnforcer.DealerActivity;
 
 #if MONO
 using ScheduleOne.AvatarFramework.Equipping;
@@ -583,37 +582,53 @@ namespace CartelEnforcer
             float distCalculated = 0f;
             NPCEnterableBuilding building = null;
             StaticDoor door = null;
+            StaticDoor doorTemp = null;
             Vector3 destination = Vector3.zero;
 
-            foreach (KeyValuePair<NPCEnterableBuilding, StaticDoor> kvp in dealerBuildings) 
+            // Find nearest CartelDealer Home building
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
-                Log($"Parsing, is null? {kvp.Key == null} , {kvp.Value == null}");
-                building = kvp.Key;
-                door = kvp.Value;
-                distCalculated = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
-                if (distCalculated < distance)
+                if (dealer.Home != null && dealer.Home.Doors != null && dealer.Home.Doors.Length > 0)
                 {
-                    destination = door.AccessPoint.position;
-                    distance = distCalculated;
+                    doorTemp = dealer.Home.Doors[0];
+                    distCalculated = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
+                    if (distCalculated < distance)
+                    {
+                        door = dealer.Home.Doors[0];
+                        building = dealer.Home;
+                        destination = door.AccessPoint.position;
+                        distance = distCalculated;
+                    }
                 }
             }
             Log("Done parsing");
-            for (int i = 0; i < goon.Behaviour.ScheduleManager.ActionList.Count; i++)
+
+            // Check that within 150f units distance there was a building
+            // otherwise it might unintentionally set the goon stay inside building and door to null
+            if (door == null || building == null)
             {
+                // todo waht?
+            }
+            else
+            {
+                // Assign to the robber Stay inside beh so they automatically treat it as home
+                for (int i = 0; i < goon.Behaviour.ScheduleManager.ActionList.Count; i++)
+                {
 #if MONO
-                if (goon.Behaviour.ScheduleManager.ActionList[i] is NPCEvent_StayInBuilding ev)
-                {
-                    ev.Door = door;
-                    ev.Building = building;
-                }
+                    if (goon.Behaviour.ScheduleManager.ActionList[i] is NPCEvent_StayInBuilding ev)
+                    {
+                        ev.Door = door;
+                        ev.Building = building;
+                    }
 #else
-                NPCEvent_StayInBuilding ev = goon.Behaviour.ScheduleManager.ActionList[i].TryCast<NPCEvent_StayInBuilding>();
-                if (ev != null)
-                {
-                    ev.Door = door;
-                    ev.Building = building;
-                }
+                    NPCEvent_StayInBuilding ev = goon.Behaviour.ScheduleManager.ActionList[i].TryCast<NPCEvent_StayInBuilding>();
+                    if (ev != null)
+                    {
+                        ev.Door = door;
+                        ev.Building = building;
+                    }
 #endif
+                }
             }
 
             Log($"[TRY ROB]    Escaping to: {destination}");

@@ -7,6 +7,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.DealerActivity;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -19,8 +20,8 @@ using ScheduleOne.Messaging;
 using ScheduleOne.NPCs.Schedules;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Quests;
-using ScheduleOne.UI.Phone.Messages;
 using ScheduleOne.Levelling;
+using ScheduleOne.NPCs.CharacterClasses;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
@@ -32,8 +33,8 @@ using Il2CppScheduleOne.Messaging;
 using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Quests;
-using Il2CppScheduleOne.UI.Phone.Messages;
 using Il2CppScheduleOne.Levelling;
+using Il2CppScheduleOne.NPCs.CharacterClasses;
 #endif
 
 namespace CartelEnforcer
@@ -247,6 +248,7 @@ namespace CartelEnforcer
 
                     if (Vector3.Distance(otherDealer.CenterPoint, customer.NPC.CenterPoint) < 80f)
                     {
+                        Log("[INTERCEPT]    Dealer replacement found nearby.");
                         foundReplacement = true;
                         selected = otherDealer;
                         break;
@@ -308,7 +310,7 @@ namespace CartelEnforcer
                     text = "I'll hustle with someone else if you ghost me like this...";
                     break;
             }
-
+            customer.NPC.RelationData.ChangeRelationship(-0.15f, true);
             Log("[INTERCEPT]    Starting Intercept Deal");
             customer.NPC.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, true, -1), true, true);
             interceptingDeal = true;
@@ -339,13 +341,23 @@ namespace CartelEnforcer
 
             contract.CompletionXP = 0;
             contract.BopHUDUI();
+
             for (int i = 0; i < dealer.Inventory.ItemSlots.Count; i++)
             {
                 if (dealer.Inventory.ItemSlots[i].ItemInstance == null)
                 {
                     List<ItemInstance> fromPool = GetFromPool(1);
                     if (fromPool.Count > 0)
+                    {
                         dealer.Inventory.InsertItem(fromPool[0], true);
+                        if (stolenInDealerInv.TryGetValue(dealer, out List<ItemInstance> listedLoot))
+                        {
+                            if (listedLoot == null)
+                                listedLoot = new();
+
+                            listedLoot.AddRange(fromPool);
+                        }
+                    }
                     break;
                 }
             }
@@ -379,7 +391,7 @@ namespace CartelEnforcer
                     Log("[INTERCEPT]    Cartel Succesfully Intercepted Deal");
                     if (changeInfluence)
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptFail);
-                    customer.NPC.RelationData.ChangeRelationship(-0.10f, true);
+                    customer.NPC.RelationData.ChangeRelationship(-0.6f, true);
                 }
                 else if (playerDist < 4f && state == EQuestState.Completed)
                 {
@@ -387,7 +399,7 @@ namespace CartelEnforcer
                     NetworkSingleton<LevelManager>.Instance.AddXP(originalXP);
                     if (changeInfluence)
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptSuccess);
-                    customer.NPC.RelationData.ChangeRelationship(0.10f, true);
+                    customer.NPC.RelationData.ChangeRelationship(0.15f, true);
                 }
                 else if (state == EQuestState.Failed && (dealer.Health.IsDead || dealer.Health.IsKnockedOut))
                 {
@@ -490,55 +502,8 @@ namespace CartelEnforcer
         {
             yield return Wait5;
             if (!registered) yield break;
-
-            RectTransform rt = PlayerSingleton<MessagesApp>.Instance.conversationEntryContainer;
-            if (rt == null)
-            {
-                Log("Conversation entry container is null");
-                yield break;
-            }
-
-            // Now we build a mount everest here because otherwise il2cpp thinks we are dealing with system objects, this is safe code for mono too so we prefer the mount everest over simplified code
-            for (int i = 0; i < rt.childCount; i++)
-            {
-                if (i > rt.childCount) break;
-                Transform msgItem = rt.GetChild(i);
-                if (msgItem != null)
-                {
-                    Transform nameTr = msgItem.Find("Name");
-                    if (nameTr != null && nameTr.gameObject != null)
-                    {
-                        Text text = nameTr.gameObject.GetComponent<Text>();
-                        if (text != null && text.text == "Thomas Benzies")
-                        {
-                            Transform iconMask = msgItem.Find("IconMask");
-                            if (iconMask != null)
-                            {
-                                Transform icon = iconMask.Find("Icon");
-                                if (icon != null && icon.gameObject != null)
-                                {
-                                    benziesLogo = icon.gameObject.GetComponent<Image>().sprite;
-                                    Log("Benzies Logo Assigned");
-                                }
-                            }
-                        }
-                        else
-                            continue;
-                    }
-                    else
-                        Log("NameTr is null");
-                }
-                else
-                    Log("Msg Item is Null");
-            }
-            Log("Fetched Benzies Logo UI Element");
-            // the below code is alternative to the mount everest code above
-            //foreach (Transform tr in rt.childCount)
-            //{
-            //    if (tr.Find("Name").GetComponent<Text>().text != "Thomas Benzies")
-            //        continue;
-            //    benziesLogo = tr.Find("IconMask").Find("Icon").GetComponent<Image>().sprite;
-            //}
+            Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
+            benziesLogo = thomas.GetMessagingIcon();
             yield return null;
         }
 

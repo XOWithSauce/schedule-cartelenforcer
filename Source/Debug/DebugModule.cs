@@ -11,7 +11,8 @@ using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.SabotageEvent;
-
+using static CartelEnforcer.StealBackCustomer;
+using static CartelEnforcer.AlliedExtension;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -67,8 +68,40 @@ namespace CartelEnforcer
             Log("Generating Quest");
             yield return Wait2;
             coros.Add(MelonCoroutines.Start(GenDialogOption()));
-            debounce = false;
             Log("Generating Quest Done");
+            yield return null;
+        }
+
+        public static IEnumerator OnInputGenerateAlliedIntroQuest()
+        {
+            Log("Generating Allied Intro Quest");
+            yield return Wait2;
+            if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null)
+            {
+                coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
+                Log("Generating Quest Done");
+            }
+            debounce = false;
+            yield return null;
+        }
+
+        public static IEnumerator OnInputGenerateAlliedSupplyQuest()
+        {
+            Log("Generating Allied Supply Quest");
+            yield return Wait2;
+            // if the quest is not been activated
+            if (activeAlliedSupplies == null && !alliedSuppliesActive)
+            {
+                Log("  Enable Supply");
+                coros.Add(MelonCoroutines.Start(SetupTruceSuppliesQuest()));
+            }
+            // else quest already exists and can be reactivated
+            else if (activeAlliedSupplies != null && !alliedSuppliesActive)
+            {
+                Log("  Re Enable Supply");
+                activeAlliedSupplies.ResetSelf();
+            }
+            debounce = false;
             yield return null;
         }
 
@@ -246,6 +279,30 @@ namespace CartelEnforcer
             
             sabotageEventActive = true;
             coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
+            yield return null;
+        }
+
+        // test steal back feature
+        public static IEnumerator OnInputStealNearestCustomer()
+        {
+            Customer nearest = null;
+            float distance = 15f;
+            foreach(Customer c in Customer.UnlockedCustomers)
+            {
+                if (Vector3.Distance(Player.Local.CenterPointTransform.position, c.NPC.CenterPoint) < distance)
+                {
+                    nearest = c;
+                    distance = Vector3.Distance(Player.Local.CenterPointTransform.position, c.NPC.CenterPoint);
+                }
+            }
+            if (nearest == null) yield break;
+
+            Log($"[STEALBACK] Stealing {nearest.NPC.fullName}");
+            StealCustomer(nearest.NPC);
+
+            yield return Wait05;
+            debounce = false;
+
             yield return null;
         }
 

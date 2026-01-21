@@ -6,6 +6,7 @@ using MelonLoader;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
+using static CartelEnforcer.StealBackCustomer;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -149,6 +150,10 @@ namespace CartelEnforcer
         public float sabotageGoonKilled = -0.050f;
         public float sabotageBombExploded = 0.200f;
 
+        // Truced interaction
+        public float cartelDealerPersuaded = -0.100f;
+        public float trucedGreetingChallenge = -0.150f; // Player greets all 3 gather goons in short timeframe
+
         // used to be in source
         public float passiveInfluenceGainPerDay = 0.025f;
 
@@ -157,6 +162,8 @@ namespace CartelEnforcer
         public float ambushDefeated = -0.100f;
         public float graffitiInfluenceReduction = -0.050f;
         public float customerUnlockInfluenceChange = -0.075f;
+
+
     }
 
     // Patch the cartel dealer on died to have modifiable influence
@@ -275,42 +282,17 @@ namespace CartelEnforcer
 
             if (!InstanceFinder.IsServer)
                 return false;
+            
+            // If cartel is hostile OR if cartel is truced and allied extensions are enabled -> change influence after graffiti
 #if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile || (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced))
 #else
-            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced))
 #endif
             {
-                return false;
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
             }
-
-            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
             return false;
-        }
-    }
-
-
-    // Change Influence needs 2 function patches for checking if the region is unlocked (0.4.1f13 no restriction for it so it allows changing influence in locked regs)
-    [HarmonyPatch(typeof(CartelInfluence), "ChangeInfluence", new Type[] { typeof(EMapRegion), typeof(float), typeof(float) })]
-    public static class CartelInfluence_ChangeInfluence_ObserverRPC_Patch
-    {
-        public static bool Prefix(CartelInfluence __instance, EMapRegion region, float oldInfluence, float newInfluence)
-        {
-            // because this can change influence of locked regions check region unlock
-            if (!Map.Instance.GetUnlockedRegions().Contains(region))
-                return false;
-            return true;
-        }
-    }
-    [HarmonyPatch(typeof(CartelInfluence), "ChangeInfluence", new Type[] { typeof(EMapRegion), typeof(float) })]
-    public static class CartelInfluence_ChangeInfluence_ServerRPC_Patch
-    {
-        public static bool Prefix(CartelInfluence __instance, EMapRegion region, float amount)
-        {
-            // because this can change influence of locked regions check region unlock
-            if (!Map.Instance.GetUnlockedRegions().Contains(region))
-                return false;
-            return true;
         }
     }
 
@@ -333,10 +315,37 @@ namespace CartelEnforcer
 
             // original function is guaranteed to change influence, prefix overrides that change
 
-            // flip the original influence and apply the mod one
-            float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange;
-            if (change != 0f)
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
+            // Since customers can be unlocked and locked with the steal back customer feature
+            // the influence awarded from re unlocking is half that of config customerUnlockInfluenceChange
+            // note: doesnt persist
+            if (currentConfig.stealBackCustomers) // config value to enable steal back is true
+            {
+                List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
+                StealBackCustomer.StolenNPC stolen = null;
+                for (int i = 0; i < currentStolen.Count; i++)
+                {
+                    if (currentStolen[i].npc == __instance.NPC)
+                    {
+                        stolen = currentStolen[i];
+                        break;
+                    }
+                }
+                if (stolen != null) 
+                {
+
+                    float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange * 0.5f;
+                    if (change != 0f && __instance.NPC.Region != EMapRegion.Northtown)
+                        NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
+                }
+            }
+            else // Unlocked customer for the first time (this session)
+            {
+                // flip the original influence and apply the mod one
+                float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange;
+                if (change != 0f && __instance.NPC.Region != EMapRegion.Northtown)
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
+            }
+            
             return true;
         }
     }

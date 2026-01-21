@@ -13,6 +13,7 @@ using static CartelEnforcer.AmbushOverrides;
 using ScheduleOne.Quests;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
+using ScheduleOne.Dialogue;
 using ScheduleOne.GameTime;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
@@ -26,6 +27,7 @@ using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
@@ -228,20 +230,22 @@ namespace CartelEnforcer
                 }
 
                 combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
+                
 
                 for (int i = 0; i < spawnedGatherGoons.Count; i++)
                 {
                     spawnedGatherGoons[i].Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
                     spawnedGatherGoons[i].Behaviour.ScheduleManager.DisableSchedule();
                     spawnedGatherGoons[i].Movement.FacePoint(location.position);
+
                     spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
+
                     if (DealerActivity.currentDealerActivity < 0f)
                     {
                         // increase hp
                         spawnedGatherGoons[i].Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
                         spawnedGatherGoons[i].Health.Health = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
                     }
-
                 }
                 // Fill random attendant inv slot with stolen item
                 List<ItemInstance> itemsFromPool = GetFromPool(3);
@@ -319,6 +323,7 @@ namespace CartelEnforcer
 
             yield return null;
         }
+
         public static IEnumerator EvaluateCurrentGathering(GatheringLocation location)
         {
             yield return Wait2;
@@ -330,6 +335,36 @@ namespace CartelEnforcer
             int deltaSecondsForAnnoyance = 0;
             int deltaSecondsDecrAnnoyance = 0;
 
+            // When truced track the dialogue greeting times
+            bool truceRewarded = false;
+            List<DialogueController> controllers = new();
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced)
+#endif
+            {
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    DialogueController ctr = goon.DialogueHandler.gameObject.GetComponent<DialogueController>();
+                    if (ctr == null)
+                        Log("[ALLIEDEXT] Failed to find Dialogue Controller for gathering goon");
+                    else if (!controllers.Contains(ctr))
+                        controllers.Add(ctr);
+                }
+                
+            }
+            float GetSumOfLastGreet()
+            {
+                if (controllers.Count == 0) return 0f;
+                float sum = 0f;
+                foreach (DialogueController ctr in controllers)
+                {
+                    sum += (Time.time - ctr.lastGreetingTime);
+                }
+                return sum;
+            }
+
             while (registered)
             {
                 dead = 0;
@@ -340,8 +375,6 @@ namespace CartelEnforcer
                         dead++;
                 }
 
-                // Todo the goons actually stay over the night if player goes to sleep at 1800 when they are gathering
-                // here it needs to check for the current time is smaller than start earliest?
                 if (elapsed > 180 || dead == 3 || TimeManager.Instance.CurrentTime < startEarliest)
                 {
                     break;
@@ -371,7 +404,7 @@ namespace CartelEnforcer
                             if (!registered) yield break;
                             if (startedCombat) continue;
 
-                            if (spawnedGatherGoons[randomIndex].Awareness.VisionCone.IsPlayerVisible(p))
+                            if (spawnedGatherGoons[randomIndex].Awareness.VisionCone.IsPlayerVisible(p) || DealerActivity.currentDealerActivity < -0.75f)
                             {
                                 spawnedGatherGoons[randomIndex].AttackEntity(p.GetComponent<ICombatTargetable>()); // this will trigger all of them
                             }
@@ -390,9 +423,14 @@ namespace CartelEnforcer
                     else
                     {
                         // Based on the dealer activity increase the radius which goons become annoyed at
+                        // Or when truced they greet and calculate the greeting challenge for rewarding influence drop
                         float distanceToGetAnnoyedAt = Mathf.Lerp(9f, 5f, DealerActivity.currentDealerActivity);
                         float maxAnnoyance = Mathf.RoundToInt(Mathf.Lerp(3f, 6f, DealerActivity.currentDealerActivity));
-                        if (distToP < distanceToGetAnnoyedAt && !playerInBuilding)
+#if MONO
+                        if (distToP < distanceToGetAnnoyedAt && !playerInBuilding && NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+#else
+                        if (distToP < distanceToGetAnnoyedAt && !playerInBuilding && NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+#endif
                         {
                             deltaSecondsForAnnoyance += 2;
                             if (deltaSecondsForAnnoyance >= 4)
@@ -423,29 +461,54 @@ namespace CartelEnforcer
                         }
                         else // Not in range decrease annoyance overtime
                         {
-                            deltaSecondsDecrAnnoyance += 2;
-                            if (deltaSecondsDecrAnnoyance >= 8)
+#if MONO
+                            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+#else
+                            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+#endif
                             {
-                                annoyance = Mathf.Clamp(annoyance - 1, 0, 8);
-                                deltaSecondsDecrAnnoyance = 0;
+                                deltaSecondsDecrAnnoyance += 2;
+                                if (deltaSecondsDecrAnnoyance >= 8)
+                                {
+                                    annoyance = Mathf.Clamp(annoyance - 1, 0, 8);
+                                    deltaSecondsDecrAnnoyance = 0;
+                                }
                             }
+                            // while truced check if the player greeted all 3 in short timeframe (with config allied enabled)
+                            else if (currentConfig.alliedExtensions && (!truceRewarded && (EMapRegion)location.region != EMapRegion.Northtown)) 
+                            {
+                                float sum = GetSumOfLastGreet();
+                                if (sum > 0f && sum <= 7f)
+                                {
+                                    Log("[ALLIEDEXT] Greetings challenge completed");
+                                    truceRewarded = true;
+                                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence((EMapRegion)location.region, influenceConfig.trucedGreetingChallenge);
+                                    
+                                    // Check if the allied quest is active, complete the optional greetings quest entry
+                                    if (activeTruceIntro != null && activeTruceIntro.State == EQuestState.Active)
+                                    {
+                                        if (activeTruceIntro.QuestEntry_GreetGoons.State == EQuestState.Active)
+                                        {
+                                            activeTruceIntro.QuestEntry_GreetGoons.SetState(EQuestState.Completed, false);
+                                        }
+
+                                    }
+
+                                }
+                            }
+
+
                             int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
 
                             // Only run the interaction if player is nearby otherwise it just wastes memory??
+                            // Some extra shit just random voicelines to make it feel like they actually talk
+                            // and interact with player
+
                             if (distToP < 40f)
                             {
-                                // Some extra shit just random voicelines to make it feel like they actually talk..
                                 if (UnityEngine.Random.Range(0f, 1f) > 0.8f)
                                 {
-                                    int randomLookAtIndex;
-                                    do
-                                    {
-                                        yield return Wait01;
-                                        if (!registered) yield break;
-
-                                        randomLookAtIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
-
-                                    } while (randomIndex == randomLookAtIndex);
+                                    int randomLookAtIndex = (randomIndex + 1) % spawnedGatherGoons.Count;
                                     if (startedCombat) continue;
 
                                     spawnedGatherGoons[randomIndex].Movement.FacePoint(spawnedGatherGoons[randomLookAtIndex].CenterPoint);
@@ -523,30 +586,10 @@ namespace CartelEnforcer
 
             yield return null;
         }
+
         public static IEnumerator EndGatherEvent(bool defeated, GatheringLocation location)
         {
-            EMapRegion region = EMapRegion.Northtown;
-            switch (location.region)
-            {
-                case 0:
-                    region = EMapRegion.Northtown;
-                    break;
-                case 1:
-                    region = EMapRegion.Westville;
-                    break;
-                case 2:
-                    region = EMapRegion.Downtown;
-                    break;
-                case 3:
-                    region = EMapRegion.Docks;
-                    break;
-                case 4:
-                    region = EMapRegion.Suburbia;
-                    break;
-                case 5:
-                    region = EMapRegion.Uptown;
-                    break;
-            }
+            EMapRegion region = (EMapRegion)location.region;
 
             if (defeated)
             {
@@ -593,19 +636,13 @@ namespace CartelEnforcer
 
             if (endDrinkAction != null)
             {
-                foreach (CartelGoon goon in spawnedGatherGoons)
-                {
-                    goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
-                }
+                spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
                 endDrinkAction = null;
             }
 
             if (endSmokeAction != null)
             {
-                foreach (CartelGoon goon in spawnedGatherGoons)
-                {
-                    goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
-                }
+                spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
                 endSmokeAction = null;
             }
 
@@ -665,6 +702,7 @@ namespace CartelEnforcer
             combatStartedAction = null;
             lootGoblinIndex = -1;
         }
+
 
     }
 

@@ -66,8 +66,8 @@ namespace CartelEnforcer
                 if (currentConfig.activityInfluenceMin == 0.0f)
                 {
                     //per original source code
-                    mult = 0.7f;
-                    result = influence * mult; // this is actually division, only 70% of original influence
+                    mult = 0.8f;
+                    result = influence * mult; // this is actually division, only 80% of original influence
                                                // And then if result is higher than 0..1 ranged rand
                                                // Per original source code Random value 0..1 is smaller than result
                     if (UnityEngine.Random.Range(0f, 1f) < result)
@@ -79,8 +79,8 @@ namespace CartelEnforcer
                 }
                 else if (currentConfig.activityInfluenceMin > 0.0f)
                 {
-                    result = Mathf.Lerp(influence * 0.7f, 1f, currentConfig.activityInfluenceMin);
-                    if (UnityEngine.Random.Range(0f, 1f) > result)
+                    result = Mathf.Lerp(influence * 0.8f, 1f, currentConfig.activityInfluenceMin);
+                    if (UnityEngine.Random.Range(0f, 1f) < result)
                     {
                         region = emapRegion;
                         flag = true;
@@ -95,7 +95,7 @@ namespace CartelEnforcer
                     // meaning that the random range check will always return true
                     mult = Mathf.Lerp(1f, 0f, currentConfig.activityInfluenceMin);
                     result = influence * mult;
-                    if (UnityEngine.Random.Range(0f, 1f) > result)
+                    if (UnityEngine.Random.Range(0f, 1f) < result)
                     {
                         region = emapRegion;
                         flag = true;

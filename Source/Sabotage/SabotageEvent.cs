@@ -562,19 +562,15 @@ namespace CartelEnforcer
                 playerConcussed = true;
                 player.Seizure = true;
                 player.Disoriented = true;
+                // PlayerSingleton PlayerCamera Instance StartCameraShake intensity dur fade out overtime true
             }
 
             List<NPC> npcsFleeing = new();
             foreach (NPC npc in NPCManager.NPCRegistry) 
             {
-                // Officers excluded for flee/panicked? maybe in future custom beh
+                if (!npc.IsSpawned || npc.isInBuilding || npc.IsInVehicle)
+                    continue;
 
-                // Because running process explosion impact on cartel goons breaks for some reason
-#if MONO
-                if (npc is CartelGoon) continue;
-#else
-                if (npc.TryCast<CartelGoon>() != null) continue;
-#endif
                 distance = Vector3.Distance(intBomb.transform.position, npc.CenterPoint);
                 if (distance <= maxExplosionDistance)
                 {
@@ -582,14 +578,22 @@ namespace CartelEnforcer
                     // during same time they bug out the fire for some reason what happens there? couldnt reprod but try again later...
                     Log("NPC Explosion effect: " + npc.fullName);
                     IDamageable damageableNpc = npc.GetComponent<IDamageable>();
-                    ProcessExplosionImpact(npc.CenterPoint, damageableNpc);
-                    if (!npc.Health.IsDead && !npc.Health.IsKnockedOut)
+                    if (damageableNpc == null)
                     {
-                        npc.Behaviour.FleeBehaviour.FleeMode = FleeBehaviour.EFleeMode.Point;
-                        npc.Behaviour.FleeBehaviour.SetPointToFlee(intBomb.transform.position);
-                        npc.Behaviour.FleeBehaviour.Enable_Networked();
-                        npcsFleeing.Add(npc);
+                        MelonLogger.Warning("Explosion recipient does not have IDamageable interface");
                     }
+                    else
+                    {
+                        ProcessExplosionImpact(npc.CenterPoint, damageableNpc);
+                        if (!npc.Health.IsDead && !npc.Health.IsKnockedOut)
+                        {
+                            npc.Behaviour.FleeBehaviour.FleeMode = FleeBehaviour.EFleeMode.Point;
+                            npc.Behaviour.FleeBehaviour.SetPointToFlee(intBomb.transform.position);
+                            npc.Behaviour.FleeBehaviour.Enable_Networked();
+                            npcsFleeing.Add(npc);
+                        }
+                    }
+                    
                     
                 }
                 else if (distance <= maxConcussionDistance)
@@ -617,7 +621,7 @@ namespace CartelEnforcer
             EventEnded(location, influenceConfig.sabotageBombExploded);
             Log("[SABOTAGE] End Event");
 
-            yield return Wait30;
+            yield return Wait10;
             if (!registered) yield break;
             Log("[SABOTAGE] Clear Fleeing");
 
@@ -626,11 +630,13 @@ namespace CartelEnforcer
                 if (npc.Behaviour.FleeBehaviour.Active)
                     npc.Behaviour.FleeBehaviour.Disable_Networked(null);
 
-                if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
+                if (UnityEngine.Random.Range(0f, 1f) > 0.33f)
                     npc.SetPanicked();
             }
             npcsFleeing.Clear();
 
+            yield return Wait10;
+            if (!registered) yield break;
             // scale down fire and setactive false
             float currentScale = 1f;
             float targetScale = 0.05f;
@@ -643,11 +649,12 @@ namespace CartelEnforcer
             while (currentScale >= targetScale)
             {
                 yield return Wait025;
+                if (!registered) yield break;
                 currentScale -= scaleDownStep;
                 reactiveFire.transform.localScale = new Vector3(currentScale, currentScale, currentScale);
 
-                fireLight.maxIntensity = Mathf.SmoothStep(maxIntensity, 0f, 1f - currentScale);
-                fireLight.minIntensity = Mathf.SmoothStep(minIntensity, 0f, 1f - currentScale);
+                fireLight.maxIntensity = Mathf.Clamp(Mathf.SmoothStep(maxIntensity, -2f, 1f - currentScale), 0f, maxIntensity);
+                fireLight.minIntensity = Mathf.Clamp(Mathf.SmoothStep(minIntensity, -2f, 1f - currentScale), 0f, minIntensity);
             }
             reactiveFire.SetActive(false);
             reactiveFire.transform.localScale = new Vector3(1f, 1f, 1f);
@@ -678,6 +685,7 @@ namespace CartelEnforcer
                     );
             Log($"[SABOTAGE] Direct explosion damage: {maxExplosionDmg * ratio}\n  force: {impactForce * ratio}\n  ratio: {ratio}");
             recipient.SendImpact(newImpact);
+            Log("[SABOTAGE] Direct explosion impact processed");
             return;
         }
 
@@ -701,7 +709,6 @@ namespace CartelEnforcer
                     yield return Wait05;
                     if (!registered) yield break;
                     if (!player.Health.IsAlive) break;
-                    if (!fireHandler.inCollision.Contains(coll)) break;
 
                     float dmg = UnityEngine.Random.Range(minFireTickDamage, maxFireTickDamage);
                     dmg *= successiveBurns;
@@ -709,7 +716,7 @@ namespace CartelEnforcer
 
                     player.Health.TakeDamage(dmg, true, true);
                 }
-                if (!fireHandler.inCollision.Contains(coll)) break;
+                if (!fireHandler.inCollision.Contains(player)) break;
             }
 
             if (burningPlayers.Contains(player))
@@ -808,32 +815,33 @@ namespace CartelEnforcer
         public FireCollisionHandler() : base(ClassInjector.DerivedConstructorPointer<FireCollisionHandler>())
             => ClassInjector.DerivedConstructorBody(this);
 #endif
-        public List<Collider> inCollision = new();
+        public List<Player> inCollision = new();
 
         private void OnTriggerEnter(Collider other)
         {
-            if (!inCollision.Contains(other))
-                inCollision.Add(other);
-
-            GameObject otherGo = other.gameObject;
-            int otherLayer = otherGo.layer;
-
-            if (otherLayer != 6) return;
-
-            Player playerComp = otherGo.GetComponentInParent<Player>();
+            if (other.gameObject.layer != 6) return;
+            Player playerComp = other.gameObject.GetComponentInParent<Player>();
             if (playerComp == null)
             {
                 Log("No player component found");
                 return;
             }
-
+            if (!inCollision.Contains(playerComp))
+                inCollision.Add(playerComp);
             coros.Add(MelonCoroutines.Start(SabotageEvent.SetPlayerBurning(playerComp, other)));
         }
 
         private void OnTriggerExit(Collider other)
         {
-            if (inCollision.Contains(other))
-                inCollision.Remove(other);
+            if (other.gameObject.layer != 6) return;
+            Player playerComp = other.gameObject.GetComponentInParent<Player>();
+            if (playerComp == null)
+            {
+                Log("No player component found");
+                return;
+            }
+            if (inCollision.Contains(playerComp))
+                inCollision.Remove(playerComp);
         }
 
         private void OnDisable()

@@ -162,7 +162,7 @@ namespace CartelEnforcer
 
         public override void End()
         {
-            MelonLogger.Msg("Quest_InfiltrateManor: End method called.");
+            Log("Quest_InfiltrateManor: End method called.");
             try
             {
                 if (hudUI != null)
@@ -334,7 +334,7 @@ namespace CartelEnforcer
             Log($"Entries list type: {this.Entries.GetType()}");
             Log("Config Entries");
 
-            investigate.SetEntryTitle("• Investigate the hillside forest near Manor (0/4)");
+            investigate.SetEntryTitle("Investigate the hillside forest near Manor (0/4)");
             investigate.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             investigate.PoILocation.name = "InvestigateEntry_POI";
             investigate.PoILocation.transform.SetParent(investigate.transform);
@@ -365,7 +365,7 @@ namespace CartelEnforcer
             investigateCompleteAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
             investigate.onComplete.AddListener(investigateCompleteAction);
 
-            returnToRay.SetEntryTitle("• Return to Ray and ask for more information");
+            returnToRay.SetEntryTitle("Return to Ray and ask for more information");
             returnToRay.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             returnToRay.PoILocation.name = "ReturnToRayEntry_POI";
             returnToRay.PoILocation.transform.SetParent(returnToRay.transform);
@@ -394,7 +394,7 @@ namespace CartelEnforcer
             returnToRayAction = (UnityEngine.Events.UnityAction)OnReturnToRayComplete;
             returnToRay.onComplete.AddListener(returnToRayAction);
 
-            waitForNight.SetEntryTitle("• Wait for night time");
+            waitForNight.SetEntryTitle("Wait for night time (22:00)");
             waitForNight.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             waitForNight.PoILocation.name = "WaitForNightEntry_POI";
             waitForNight.PoILocation.transform.SetParent(waitForNight.transform);
@@ -423,7 +423,7 @@ namespace CartelEnforcer
             waitForNightAction = (UnityEngine.Events.UnityAction)OnWaitForNightComplete;
             waitForNight.onComplete.AddListener(waitForNightAction);
 
-            breakIn.SetEntryTitle("• Break into Manor through the back door");
+            breakIn.SetEntryTitle("Break into Manor through the back door");
             breakIn.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             breakIn.PoILocation.name = "BreakInEntry_POI";
             breakIn.PoILocation.transform.SetParent(breakIn.transform);
@@ -452,7 +452,7 @@ namespace CartelEnforcer
             breakInAction = (UnityEngine.Events.UnityAction)OnBreakInComplete;
             breakIn.onComplete.AddListener(breakInAction);
 
-            defeatGoons.SetEntryTitle("• Defeat the Manor Goons");
+            defeatGoons.SetEntryTitle("Defeat the Manor Goons");
             defeatGoons.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             defeatGoons.PoILocation.name = "DefeatGoonsEntry_POI";
             defeatGoons.PoILocation.transform.SetParent(defeatGoons.transform);
@@ -483,7 +483,7 @@ namespace CartelEnforcer
             defeatGoonsAction = (UnityEngine.Events.UnityAction)OnDefeatGoonsComplete;
             defeatGoons.onComplete.AddListener(defeatGoonsAction);
 
-            searchResidence.SetEntryTitle("• Investigate the upstairs rooms (0/4)");
+            searchResidence.SetEntryTitle("Investigate the upstairs rooms (0/4)");
             searchResidence.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             searchResidence.PoILocation.name = "SearchResidenceEntry_POI";
             searchResidence.PoILocation.transform.SetParent(searchResidence.transform);
@@ -518,7 +518,7 @@ namespace CartelEnforcer
             searchResidenceAction = (UnityEngine.Events.UnityAction)OnSearchResidenceComplete;
             searchResidence.onComplete.AddListener(searchResidenceAction);
 
-            escapeManor.SetEntryTitle("• Escape the Manor before the Police arrive");
+            escapeManor.SetEntryTitle("Escape the Manor before the Police arrive");
             escapeManor.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             escapeManor.PoILocation.name = "EscapeManorEntry_POI";
             escapeManor.PoILocation.transform.SetParent(escapeManor.transform);
@@ -531,10 +531,11 @@ namespace CartelEnforcer
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
+            instance.onMinutePass.Add(new Action(this.MinPass));
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
+            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
 #endif
-            instance.onMinutePass.Add(new Action(this.MinPass));
 
             StartQuestDetail();
         }
@@ -836,8 +837,7 @@ namespace CartelEnforcer
                 }
                 else
                 {
-                    if (doorOrigRot != null)
-                        doorContainer.transform.localRotation = doorOrigRot;
+                    doorContainer.transform.localRotation = doorOrigRot;
                 }
             }
 
@@ -874,7 +874,7 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                goon.Movement.MoveSpeedMultiplier = 1f;
+                goon.Movement.SpeedController.SpeedMultiplier = 1f; // todo fix
                 goon.Health.MaxHealth = 100f;
                 goon.Health.Health = 100f;
 
@@ -975,7 +975,7 @@ namespace CartelEnforcer
                 Log("Set HP and movespeed");
                 goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
                 goon.Health.Health = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
-                goon.Movement.MoveSpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.3f, 1.5f), 1.75f, questDifficultyScalar - 1f);
+                goon.Movement.SpeedController.SpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.3f, 1.5f), 1.75f, questDifficultyScalar - 1f);
 
                 UnityEngine.Events.UnityAction onGoonDiedAction = null;
                 void onGoonDie()
@@ -1079,13 +1079,13 @@ namespace CartelEnforcer
             }
             if (QuestEntry_InvestigateWoods != null && QuestEntry_InvestigateWoods.State == EQuestState.Active)
             {
-                QuestEntry_InvestigateWoods.SetEntryTitle($"• Investigate the hillside forest near Manor ({forestPosSearched}/4)");
+                QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the hillside forest near Manor ({forestPosSearched}/4)");
 
                 if (forestSearchLocs == null) return;
 
                 if (forestPosSearched == 4)
                 {
-                    QuestEntry_InvestigateWoods.SetEntryTitle($"• Investigate the hillside forest near Manor (4/4)");
+                    QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the hillside forest near Manor (4/4)");
                     QuestEntry_InvestigateWoods.Complete();
                     return;
                 }
@@ -1093,7 +1093,7 @@ namespace CartelEnforcer
                 if (forestPosSearched < forestSearchLocs.Count && Vector3.Distance(Player.Local.CenterPointTransform.position, forestSearchLocs[forestPosSearched]) < 5f)
                 {
                     forestPosSearched++;
-                    QuestEntry_InvestigateWoods.SetEntryTitle($"• Investigate the hillside forest near Manor ({forestPosSearched}/4)");
+                    QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the hillside forest near Manor ({forestPosSearched}/4)");
 
                     if (forestPosSearched < forestSearchLocs.Count)
                     {
@@ -1101,7 +1101,7 @@ namespace CartelEnforcer
                     }
                     else
                     {
-                        QuestEntry_InvestigateWoods.SetEntryTitle($"• Investigate the hillside forest near Manor (4/4)");
+                        QuestEntry_InvestigateWoods.SetEntryTitle($"Investigate the hillside forest near Manor (4/4)");
                         QuestEntry_InvestigateWoods.Complete();
                         return;
                     }
@@ -1161,7 +1161,7 @@ namespace CartelEnforcer
             {
                 try
                 {
-                    QuestEntry_SearchResidence.SetEntryTitle($"• Investigate the upstairs rooms ({roomsVisited}/4)");
+                    QuestEntry_SearchResidence.SetEntryTitle($"Investigate the upstairs rooms ({roomsVisited}/4)");
                 }
                 catch (NullReferenceException) { }
 

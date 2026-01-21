@@ -132,7 +132,7 @@ namespace CartelEnforcer
 
         public override void End()
         {
-            MelonLogger.Msg("Quest_DefeatEnforcer: End method called.");
+            Log("Quest_DefeatEnforcer: End method called.");
             try
             {
                 if (hudUI != null)
@@ -264,7 +264,7 @@ namespace CartelEnforcer
 #endif
             Log("Config Entries");
 
-            investigate.SetEntryTitle("• Intercept Cartel Dead Drops (0/2)\n• Defeat Cartel Gatherings (0/1)");
+            investigate.SetEntryTitle("• Intercept Cartel Dead Drops (0/2)\nOR\n• Defeat Cartel Gatherings (0/1)");
             investigate.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             investigate.PoILocation.name = "InvestigateEntry_POI";
             investigate.PoILocation.transform.SetParent(investigate.transform);
@@ -294,7 +294,7 @@ namespace CartelEnforcer
             investigateAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
             investigate.onComplete.AddListener(investigateAction);
 
-            contact.SetEntryTitle("• Wait for Manny to contact you");
+            contact.SetEntryTitle("Wait for Manny to contact you");
             contact.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             contact.PoILocation.name = "ContactEntry_POI";
             contact.PoILocation.transform.SetParent(contact.transform);
@@ -323,7 +323,7 @@ namespace CartelEnforcer
             contactAction = (UnityEngine.Events.UnityAction)OnContactComplete;
             contact.onComplete.AddListener(contactAction);
 
-            defeat.SetEntryTitle("• Defeat the Cartel Brute");
+            defeat.SetEntryTitle("Defeat the Cartel Brute");
             defeat.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
             defeat.PoILocation.name = "DefeatEntry_POI";
             defeat.PoILocation.transform.SetParent(defeat.transform);
@@ -336,10 +336,11 @@ namespace CartelEnforcer
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
+            instance.onMinutePass.Add(new Action(this.MinPass));
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
+            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
 #endif
-            instance.onMinutePass.Add(new Action(this.MinPass));
             StartQuestDetail();
         }
 
@@ -538,7 +539,7 @@ namespace CartelEnforcer
             MelonCoroutines.Start(GenContactDialog(myNpc, callback));
 
             Log("Send Message");
-            fixer.MSGConversation.SendMessage(new Message("I set up a meeting for you. He is waiting near the church until 4am.", Message.ESenderType.Other, false, -1), true, true);
+            fixer.MSGConversation.SendMessage(new Message("I set up a meeting for you. He is waiting near the church until 4am.", Message.ESenderType.Other, true, -1), true, true);
 
             Log("Set Waypoint");
             QuestEntry_WaitForContact.CreateCompassElement();
@@ -855,9 +856,9 @@ namespace CartelEnforcer
                     QuestEntry_Investigate.PoI.gameObject.SetActive(false);
 
                 if (QuestEntry_Investigate != null && QuestEntry_Investigate.entryUI != null && this.hudUIExists)
-                    QuestEntry_Investigate.SetEntryTitle($"• Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\n• Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
+                    QuestEntry_Investigate.SetEntryTitle($"• Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\n• Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
 
-                if (StageDeadDropsObserved >= 2 && StageGatheringsDefeated >= 1)
+                if (StageDeadDropsObserved >= 2 || StageGatheringsDefeated >= 1)
                 {
                     Log("Completed first stage");
                     QuestEntry_Investigate.Complete();
@@ -882,7 +883,7 @@ namespace CartelEnforcer
                 if (bossGoon != null && !completed)
                 {
                     Log("MinPass QE Defeat Boss");
-                    QuestEntry_DefeatBoss.SetEntryTitle($"• Defeat the Cartel Brute \nHP:{Mathf.RoundToInt(bossGoon.Health.Health)}");
+                    QuestEntry_DefeatBoss.SetEntryTitle($"Defeat the Cartel Brute \nHP:{Mathf.RoundToInt(bossGoon.Health.Health)}");
                     Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
 
                     if (dist < 16f && !bossCombatBegun)
@@ -966,7 +967,7 @@ namespace CartelEnforcer
                             {
                                 QuestEntry_WaitForContact.compassElement.Visible = true;
                                 QuestEntry_WaitForContact.PoI.gameObject.SetActive(true);
-                                QuestEntry_WaitForContact.SetEntryTitle($"• Read Manny's text message.");
+                                QuestEntry_WaitForContact.SetEntryTitle($"Read Manny's text message.");
                             }
                             catch (NullReferenceException ex)
                             {

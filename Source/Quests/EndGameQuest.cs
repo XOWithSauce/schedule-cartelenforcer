@@ -2,19 +2,21 @@
 
 using System.Collections;
 using MelonLoader;
-using UnityEngine;
 using HarmonyLib;
+using UnityEngine;
 using UnityEngine.UI;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.InterceptEvent;
+using static CartelEnforcer.AlliedExtension;
 
 #if MONO
 using ScheduleOne.Law;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Interaction;
 using ScheduleOne.Economy;
 using ScheduleOne.Levelling;
 using ScheduleOne.Money;
@@ -30,11 +32,14 @@ using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.NPCs.Behaviour;
+using ScheduleOne.Persistence;
 using FishNet;
+using FishNet.Object;
 #else
 using Il2CppScheduleOne.Law;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Cartel;
@@ -50,7 +55,10 @@ using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
+using Il2CppScheduleOne.Persistence;
 using Il2CppFishNet;
+using Il2CppFishNet.Object;
+
 #endif
 
 namespace CartelEnforcer
@@ -492,7 +500,6 @@ namespace CartelEnforcer
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnQuestChosenWrapped);
 #endif
             rayChoiceIndex = controller.AddDialogueChoice(choice);
-            //DialogueHandler handler = npc.DialogueHandler.gameObject.GetComponent<DialogueHandler>();
 
             yield return null;
         }
@@ -1096,12 +1103,116 @@ namespace CartelEnforcer
                     }
                 }
             }
-
             
             yield return null;
         }
 
         #endregion
+
+        #region Allied Intro Quest
+        public static Quest_TrucedRecruits activeTruceIntro = null;
+
+        public static IEnumerator SetupTruceIntroQuest()
+        {
+            Log("Generate Truce Intro Quest");
+            GameObject newQuestObject = new GameObject();
+            activeTruceIntro = newQuestObject.AddComponent<Quest_TrucedRecruits>();
+            newQuestObject.SetActive(true);
+            activeTruceIntro.enabled = true;
+            activeTruceIntro.SetupSelf();
+            yield return null;
+        }
+
+        #endregion
+
+        #region Allied Supplies Quest
+        public static Quest_AlliedSupplies activeAlliedSupplies = null;
+        public static bool alliedSuppliesActive = false;
+        public static CartelGoon alliedGuard = null;
+        public static NetworkObject alliedVanObject = null;
+        public static int guardChoiceIndex = -1;
+        public static float cachedWalkSpeed = 0f;
+
+        public static IEnumerator SetupTruceSuppliesQuest()
+        {
+            Log("Generate Truce Supplies Quest");
+            GameObject newQuestObject = new GameObject();
+            activeAlliedSupplies = newQuestObject.AddComponent<Quest_AlliedSupplies>();
+            newQuestObject.SetActive(true);
+            activeAlliedSupplies.enabled = true;
+            activeAlliedSupplies.SetupSelf();
+            yield return null;
+        }
+        public static IEnumerator CleanupTruceSuppliesQuest(SupplyLocation location)
+        {
+            if (location.Type == ESupplyType.Barrel)
+            {
+                Transform currentBarrel;
+                foreach (GameObject go in location.BarrelObjects)
+                {
+                    currentBarrel = go.transform.Find("CE_SUPPLY"); // find the interactable child object
+                    if (currentBarrel == null)
+                    {
+                        continue;
+                    }
+                    else
+                    {
+                        GameObject.Destroy(currentBarrel.gameObject);
+                        InteractableObject intObj = go.GetComponent<InteractableObject>();
+                        if (intObj != null)
+                            UnityEngine.Object.Destroy(intObj);
+                    }
+                }
+            }
+            yield return Wait30;
+            if (!registered) yield break;
+
+            if (location.Type == ESupplyType.Van)
+            {
+                // despawn car needs delay it despawns insta after clear
+                if (alliedVanObject != null)
+                    UnityEngine.Object.Destroy(alliedVanObject.gameObject);
+                alliedVanObject = null;
+            }
+            
+            // despawn goon
+            if (alliedGuard != null)
+            {
+                if (alliedGuard.Health.IsDead)
+                    alliedGuard.Health.Revive();
+
+                alliedGuard.Behaviour.CombatBehaviour.Disable_Networked(null);
+                alliedGuard.Behaviour.ScheduleManager.EnableSchedule();
+                alliedGuard.Despawn();
+                alliedGuard.Movement.WalkSpeed = cachedWalkSpeed;
+                alliedGuard = null;
+            }
+
+            // if Manor, gate is enterable
+            if (location.ID == "SUPPLY_MANOR")
+            {
+                ManorGate[] gate = UnityEngine.Object.FindObjectsOfType<ManorGate>(true);
+                if (gate != null && gate.Length > 1)
+                    gate[1].SetEnterable(false);
+            }
+
+            if (!(SaveManager.Instance.IsSaving || isSaving))
+                alliedQuests.hoursUntilNextSupplies = alliedConfig.SupplyQuestCooldownHours;
+            else
+            {
+#if MONO
+                yield return new WaitUntil(() => !(SaveManager.Instance.IsSaving || isSaving));
+#else
+                yield return new WaitUntil((Il2CppSystem.Func<bool>) !(SaveManager.Instance.IsSaving || isSaving));
+#endif
+                alliedQuests.hoursUntilNextSupplies = alliedConfig.SupplyQuestCooldownHours;
+            }
+            alliedSuppliesActive = false;
+            Log("[ALLIEDEXT] Cleanup of Supply Quest Completed");
+            yield return null;
+        }
+
+#endregion
 
         // Shared UI related code
         #region Quest UI prefabs

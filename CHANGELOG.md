@@ -1,3 +1,52 @@
+
+# Version 1.8.0
+- Added new Steal Back Customer feature that allows Cartel to steal back customers while Hostile
+- Added new Allied Extensions feature that is a bundle of new events and game logic for when Cartel is Truced:
+    - Allied Intro Quest
+    - Allied Supplies Quest
+    - Persuade Cartel Dealers
+    - Hire Cartel Dealers
+    - Influence can be reduced while Truced and influence reductions modifiable from influence.json
+
+
+- Changed Free Time Walking feature to take into account Smoke Break behaviour in the cartel dealers daily routine
+- Changed the default locked customer cartel deals to potentially give into cartel dealers inventory one required item from its own random products list instead of default cocaine item
+- Changed the Config Loader and Config system overall to create the proper CartelEnforcer directory structure and additionally all template .json files if they are missing on load. During the creation everything is logged with MelonLogger.Warning messages indicating filepath and success.
+- Changed the Cartel Gatherings to not be annoyed or hostile during Truce
+- Changed Intercept Event relationship changes to be higher for Cartel Dealer completing it and for Player completing its original deal from -0.1 and 0.1 to -0.6 and 0.15 respectively. This change aims to provide logic for steal back customers feature which depends on relations.
+- Changed the End Game Quest Defeat Enforcer to only require either the 2 dead drops stolen or 1 gathering defeated, instead of requiring both in the first quest entry.
+- Changed the Mini Quest probability for giving out Dead Drop locations to be higher 75% at best relations and 40% at worst, up from 50% and 20%
+- Changed the Mini Quest probability for giving out Gathering locations to be roughly 30% more common, during gatherings
+- Changed the Mini Quest timeout for Dead Drops to be 2 ingame hours instead of 1 ingame hour, if only the Dead Drop region is told by NPC 
+- Changed the Sabotage Event fire to dim faster while it scales down after explosion 
+- Changed the Contracts which are stolen from Players hired Dealers to the Cartel Dealers to decrease relationship with customer only when contract is completed by Cartel Dealer. Decrease is 15% or 0.20 whichever is higher and relationship this way cannot be decreased below 1.0. This is only enabled when steal back customers feature is active.
+
+
+- Simplified the logic which Real Robbery feature uses to find the nearest cartel dealer home to escape to after robbery
+- Simplified the code calls which trigger cartel dealers dealing behaviour
+- Simplified the code in Gathering event for Map region parsing
+- Simplified the code in Gathering event ending for listener removal
+- Simplified the code for fetching the Benzies logo ingame and simultaneously fixing a bug where the icon would be missing if game was loaded before Thomas Benzies contact is unlocked
+
+
+- Fixed a bug where the cartel dealers could unintentionally clear out player stolen items from the Cartel Inventory system
+- Fixed a bug where the cartels stolen cash amount would not reset properly after exiting save
+- Fixed a bug which caused Cartel Dealers to roam in the free time to incorrect locations when traversing to Dead Drops
+- Fixed a bug where during the Intercept event if the cartel dealer dies during intercept it would cause an error
+- Fixed a bug in the mod logic that patches the cartel activities where the influence would not be properly evaluated and also updated the probability threshold for triggering events
+- Fixed a bug where user added ambush locations would cause errors visible in game logs during instantiation
+- Fixed a bug where the cartel gathering would not turn hostile without LOS at low enough cartel dealer activity value
+- Fixed the code logic which mod added quests use to add and remove MinPass listeners
+- Fixed a bug where in the Infiltrate Manor End Game Quests the Manor Goons would not have increased move speed
+- Fixed a bug in the Robbery Goon escape logic, where its own default home building and door would be unintentionally set to null in certain cases
+- Fixed the bug in Sabotage Event that caused fire to deal damage infinitely if player touched it once
+- Removed some of the added bullet points in End Game Quests titles since the game handles them just fine
+- Removed the exclusion for Sabotage Event explosions not dealing damage to Cartel Goons
+- Added safeguard logic to prevent crashes during the hourly evaluation of cartel dealer contracts
+- Patched the default truced Cartel Deal Managers end functions to not make Cartel Hostile if player fails a deal
+- Updated Ambush/default.json content to match latest update generated values for game default ambushes
+
+
 # Version 1.7.4
 - Compiled mod source against game version 0.4.2f9
 - Fixed a bug in the Unexpected Alliances quest where exiting the save would not properly reset the gatherings defeated amount
