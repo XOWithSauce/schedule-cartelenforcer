@@ -318,6 +318,10 @@ namespace CartelEnforcer
 
 
                 Log("[GATHERING] Gathering Spawned at: " + location.position.ToString());
+                if (activeTruceIntro != null && activeTruceIntro.QuestEntry_GreetGoons != null && activeTruceIntro.QuestEntry_GreetGoons.State != EQuestState.Active)
+                {
+                    activeTruceIntro.QuestEntry_GreetGoons.Begin();
+                }
                 coros.Add(MelonCoroutines.Start(EvaluateCurrentGathering(location)));
             }
 

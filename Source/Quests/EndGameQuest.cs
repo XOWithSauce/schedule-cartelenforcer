@@ -58,7 +58,6 @@ using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Persistence;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
-
 #endif
 
 namespace CartelEnforcer
@@ -122,6 +121,7 @@ namespace CartelEnforcer
 
     public static class EndGameQuest
     {
+
         #region End Game Quest Unexpected Alliances
         public static bool completed = false;
         public static int StageDeadDropsObserved = 0;
@@ -1243,7 +1243,6 @@ namespace CartelEnforcer
             rtr1.pivot = new Vector2(0.5f, 0.5f);
             rtr1.sizeDelta = new Vector2(50f, 50f);
 
-            go.AddComponent<CanvasRenderer>();
             go.AddComponent<Image>();
 
             RectTransform rtr2 = IconContainer.AddComponent<RectTransform>();
@@ -1268,12 +1267,14 @@ namespace CartelEnforcer
         {
             GameObject poiPrefabObject = new GameObject($"CartelEnforcer_POI");
             poiPrefabObject.transform.SetParent(parent);
-            poiPrefabObject.SetActive(false);
             POI poi = poiPrefabObject.AddComponent<POI>();
+            poi.enabled = false;
+            poi.UIPrefab = UiPrefab;
             poi.AutoUpdatePosition = true;
             poi.MainText = "Test";
             poi.DefaultMainText = "TestText";
-            poi.UIPrefab = UiPrefab;
+            poi.MainTextVisibility = POI.TextShowMode.Off;
+            poi.enabled = true;
             return poiPrefabObject;
         }
 

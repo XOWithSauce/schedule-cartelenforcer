@@ -47,7 +47,6 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Object;
-using Il2CppScheduleOne.NPCs.Schedules;
 #endif
 
 
@@ -72,7 +71,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.0";
+        public const string Version = "1.8.1";
         public const string DownloadLink = null;
     }
 
@@ -282,7 +281,17 @@ namespace CartelEnforcer
         {
             if (registered) return;
             registered = true;
+            coros.Add(MelonCoroutines.Start(Setup()));
+            return;
+        }
 
+        public static IEnumerator Setup()
+        {
+#if MONO
+            yield return new WaitUntil(() => LoadManager.Instance.IsGameLoaded);
+#else
+            yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => LoadManager.Instance.IsGameLoaded));
+#endif
             currentConfig = ConfigLoader.Load();
             influenceConfig = ConfigLoader.LoadInfluenceConfig();
             cartelStolenItems = ConfigLoader.LoadStolenItems();
@@ -350,7 +359,7 @@ namespace CartelEnforcer
 
             coros.Add(MelonCoroutines.Start(ExtendGoonPool()));
 
-            return;
+            yield break;
         }
 
         public static void ReduceDriveByHours()
@@ -729,18 +738,6 @@ namespace CartelEnforcer
         {
             public static bool Prefix(SaveManager __instance)
             {
-                if (!isSaving)
-                {
-                    isSaving = true;
-                    lock (cartelItemLock)
-                    {
-                        ConfigLoader.Save(cartelStolenItems);
-                    }
-
-                    if (currentConfig.alliedExtensions)
-                        ConfigLoader.Save(alliedQuests);
-                }
-                isSaving = false;
                 return true;
             }
         }
@@ -750,18 +747,6 @@ namespace CartelEnforcer
         {
             public static bool Prefix(LoadManager __instance, SaveInfo autoLoadSave = null, MainMenuPopup.Data mainMenuPopup = null, bool preventLeaveLobby = false)
             {
-                if (!isSaving)
-                {
-                    isSaving = true;
-                    lock (cartelItemLock)
-                    {
-                        ConfigLoader.Save(cartelStolenItems);
-                    }
-
-                    if (currentConfig.alliedExtensions)
-                        ConfigLoader.Save(alliedQuests);
-                }
-                isSaving = false;
                 ExitPreTask();
                 return true;
             }

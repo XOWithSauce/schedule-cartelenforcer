@@ -231,7 +231,9 @@ namespace CartelEnforcer
             }
 
             findCartel.SetEntryTitle("Find the Westville Cartel Dealer");
-            findCartel.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
+            GameObject findPoi = UnityEngine.Object.Instantiate(PoIPrefab);
+            findCartel.PoI = findPoi.GetComponent<POI>();
+            findCartel.PoILocation = findPoi.transform;
             findCartel.PoILocation.name = "FindCartelEntry_POI";
             findCartel.PoILocation.transform.SetParent(findCartel.transform);
             findCartel.PoILocation.transform.position = westvilleDealer.CenterPoint;
@@ -259,7 +261,9 @@ namespace CartelEnforcer
             findCartel.onComplete.AddListener(findCartelAction);
 
             greetGoons.SetEntryTitle("(Optional) Say greetings to all 3 gathering goons");
-            greetGoons.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
+            GameObject greetPoi = UnityEngine.Object.Instantiate(PoIPrefab);
+            greetGoons.PoI = greetPoi.GetComponent<POI>();
+            greetGoons.PoILocation = greetPoi.transform;
             greetGoons.PoILocation.name = "FindCartelEntry_POI";
             greetGoons.PoILocation.transform.SetParent(greetGoons.transform);
             greetGoons.PoILocation.transform.position = Vector3.zero;
@@ -269,7 +273,9 @@ namespace CartelEnforcer
             greetGoons.CompleteParentQuest = false;
 
             persuadeCartel.SetEntryTitle("Try persuading the Westville Cartel Dealer");
-            persuadeCartel.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
+            GameObject persuadePoi = UnityEngine.Object.Instantiate(PoIPrefab);
+            persuadeCartel.PoI = persuadePoi.GetComponent<POI>();
+            persuadeCartel.PoILocation = persuadePoi.transform;
             persuadeCartel.PoILocation.name = "PersuadeCartelEntry_POI";
             persuadeCartel.PoILocation.transform.SetParent(persuadeCartel.transform);
             persuadeCartel.PoILocation.transform.position = westvilleDealer.CenterPoint;
@@ -358,6 +364,15 @@ namespace CartelEnforcer
                 }
             }
 
+            if (QuestEntry_HireCartelDealer != null)
+            {
+                if (QuestEntry_HireCartelDealer.PoI != null && QuestEntry_HireCartelDealer.PoI.gameObject != null)
+                    QuestEntry_HireCartelDealer.PoI.gameObject.SetActive(false);
+
+                if (QuestEntry_HireCartelDealer.compassElement != null)
+                    QuestEntry_HireCartelDealer.compassElement.Visible = false;
+            }
+
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
 
@@ -416,6 +431,10 @@ namespace CartelEnforcer
                     {
                         QuestEntry_GreetGoons.SetPoILocation(currentGatheringLocation.position);
                         QuestEntry_GreetGoons.PoI.gameObject.SetActive(true);
+                    }
+                    else
+                    {
+
                     }
                     if (QuestEntry_GreetGoons.compassElement != null)
                         QuestEntry_GreetGoons.compassElement.Visible = true;

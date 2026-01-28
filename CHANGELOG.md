@@ -1,3 +1,9 @@
+# Version 1.8.1
+- Fixed a bug with the new Allied Supplies quest in IL2CPP backend where during the quest the game could crash due to aggressive garbage collection
+- Fixed a bug where the new Allied Intro quest would not activate the Cartel Gathering greeting challenge entry
+- Simplified the logic for Allied Supplies quest Guard movement and forced dialogue handling
+- Added a flag to the startup function to wait for the game to finish loading before starting to load and initialize the mod when loading into a save
+
 
 # Version 1.8.0
 - Added new Steal Back Customer feature that allows Cartel to steal back customers while Hostile

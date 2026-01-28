@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.UI;
 using MelonLoader;
 
 using static CartelEnforcer.DebugModule;
@@ -23,9 +24,14 @@ using ScheduleOne.Dialogue;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.Persistence;
 using ScheduleOne.GameTime;
+using ScheduleOne.UI;
+using ScheduleOne.UI.Handover;
+using ScheduleOne.NPCs;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
+using FishNet;
+using TMPro;
 #else
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Interaction;
@@ -42,9 +48,14 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.UI.Handover;
+using Il2CppScheduleOne.NPCs;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
+using Il2CppFishNet;
+using Il2CppTMPro;
 #endif
 
 namespace CartelEnforcer
@@ -243,7 +254,7 @@ namespace CartelEnforcer
                     if (gate != null && gate.Length > 1)
                     {
                         // Log("Gates count:" + gate.Length); // there are 2
-                        gate[1].SetEnterable(true); 
+                        gate[1].SetEnterable(true);
                     }
                 }
 
@@ -254,7 +265,7 @@ namespace CartelEnforcer
             if (activeAlliedSupplies != null)
             {
                 Log("[ALLIEDEXT] Goon Spawned");
-                alliedGuard = SpawnGuardGoon(location.GuardPosition, location.GuardRotation);
+                SpawnGuardGoon(location.GuardPosition, location.GuardRotation);
             }
             yield return null;
         }
@@ -317,7 +328,7 @@ namespace CartelEnforcer
                 Log("[ALLIEDEXT] Close trigger");
                 if (activeAlliedSupplies == null) return;
                 if (activeAlliedSupplies.State != EQuestState.Active) return;
-                if (activeAlliedSupplies.QuestEntry_GatherSupplies != null && 
+                if (activeAlliedSupplies.QuestEntry_GatherSupplies != null &&
                     activeAlliedSupplies.QuestEntry_GatherSupplies.State == EQuestState.Active)
                 {
                     Log("[ALLIEDEXT] storage count:" + rewardStorage.ItemCount);
@@ -380,84 +391,212 @@ namespace CartelEnforcer
             return;
         }
 
-        public static CartelGoon SpawnGuardGoon(Vector3 pos, Vector3 rot) 
+        public static void SpawnGuardGoon(Vector3 pos, Vector3 rot)
         {
-          
             // spawn 1 overpowered guard with shotgun if possible
             CartelGoon goonGuard = null;
-            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count > 0)
+            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count == 0) return;
+
+            goonGuard = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(pos);
+            goonGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false); // set stayinside disable
+            goonGuard.Behaviour.ScheduleManager.DisableSchedule();
+            if (goonGuard.isInBuilding) 
             {
-                goonGuard = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(pos);
-                goonGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false); // set stayinside disable
-                goonGuard.Behaviour.ScheduleManager.DisableSchedule();
-                goonGuard.transform.rotation = Quaternion.Euler(rot);
+                Log("Exit Guard Building");
+                goonGuard.ExitBuilding(goonGuard.CurrentBuilding);
+                goonGuard.Movement.Warp(pos);
+            }
+            goonGuard.transform.rotation = Quaternion.Euler(rot);
 
-                // guard has shotgun
+            // guard has shotgun
 #if MONO
-                GameObject shotgunGo = Resources.Load("Avatar/Equippables/PumpShotgun") as GameObject;
+            GameObject shotgunGo = Resources.Load("Avatar/Equippables/PumpShotgun") as GameObject;
 #else
-                UnityEngine.Object shotgunObj = Resources.Load("Avatar/Equippables/PumpShotgun");
-                GameObject shotgunGo = shotgunObj.TryCast<GameObject>();
+            UnityEngine.Object shotgunObj = Resources.Load("Avatar/Equippables/PumpShotgun");
+            GameObject shotgunGo = shotgunObj.TryCast<GameObject>();
 #endif
 
-                AvatarEquippable shotgunEquippable = UnityEngine.Object.Instantiate<GameObject>(shotgunGo, new Vector3(0f, -5f, 0f), Quaternion.identity).GetComponent<AvatarEquippable>();
+            AvatarEquippable shotgunEquippable = UnityEngine.Object.Instantiate<GameObject>(shotgunGo, new Vector3(0f, -5f, 0f), Quaternion.identity).GetComponent<AvatarEquippable>();
 
 #if MONO
-                AvatarWeapon weaponShotgun = shotgunEquippable as AvatarWeapon;
-                AvatarRangedWeapon weaponRangedShotgun = shotgunEquippable as AvatarRangedWeapon;
+            AvatarWeapon weaponShotgun = shotgunEquippable as AvatarWeapon;
+            AvatarRangedWeapon weaponRangedShotgun = shotgunEquippable as AvatarRangedWeapon;
 #else
-                // If while truced the player wants to mess with this cartel guard they will die
-                AvatarWeapon weaponShotgun = shotgunEquippable.TryCast<AvatarWeapon>();
-                AvatarRangedWeapon weaponRangedShotgun = shotgunEquippable.TryCast<AvatarRangedWeapon>();
+            // If while truced the player wants to mess with this cartel guard they will die
+            AvatarWeapon weaponShotgun = shotgunEquippable.TryCast<AvatarWeapon>();
+            AvatarRangedWeapon weaponRangedShotgun = shotgunEquippable.TryCast<AvatarRangedWeapon>();
 #endif
-                if (weaponShotgun != null)
+            if (weaponShotgun != null)
+            {
+                goonGuard.Behaviour.CombatBehaviour.DefaultWeapon = weaponShotgun;
+            }
+            if (weaponRangedShotgun != null)
+            {
+                weaponRangedShotgun.MaxFireRate = 0.6f;
+                weaponRangedShotgun.RepositionAfterHit = true;
+                weaponRangedShotgun.CanShootWhileMoving = true;
+                weaponRangedShotgun.EquipTime = 0.1f;
+                weaponRangedShotgun.HitChance_MinRange = 99f;
+                weaponRangedShotgun.HitChance_MaxRange = 80f;
+                weaponRangedShotgun.Damage = 98f;
+                weaponRangedShotgun.CooldownDuration = 0.8f;
+                weaponRangedShotgun.MaxUseRange = 36f;
+                weaponRangedShotgun.MinUseRange = 0.1f;
+            }
+            goonGuard.Behaviour.CombatBehaviour.DefaultWeapon.Equip(goonGuard.Avatar);
+
+            goonGuard.Health.MaxHealth = 500f;
+            goonGuard.Health.Health = 500f;
+            goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.38f));
+
+            // create dialogue choice
+            DialogueController controller = goonGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
+            DialogueController.DialogueChoice choice = new();
+            string text = "Relax buddy, the boss sent me.";
+            choice.ChoiceText = $"{text}";
+            choice.Enabled = true;
+
+            void ReplyChosen()
+            {
+                activeAlliedSupplies.interrogatingPlayer = false;
+                controller.npc.PlayVO(EVOLineType.Acknowledge);
+                controller.handler.WorldspaceRend.ShowText("Go ahead and grab the supplies", 6f);
+                controller.handler.ContinueSubmitted();
+
+                if (guardChoiceIndex != -1)
                 {
-                    weaponShotgun.MinUseRange = 0.1f;
-                    weaponShotgun.MaxUseRange = 16f;
-                    goonGuard.Behaviour.CombatBehaviour.DefaultWeapon = weaponShotgun;
+                    var oldChoices = controller.Choices;
+                    oldChoices.RemoveAt(guardChoiceIndex);
+                    controller.Choices = oldChoices;
+                    guardChoiceIndex = -1;
                 }
-                if (weaponRangedShotgun != null)
+            }
+            choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)ReplyChosen);
+            guardChoiceIndex = controller.AddDialogueChoice(choice);
+
+            alliedGuard = goonGuard;
+
+            coros.Add(MelonCoroutines.Start(HandleGuardGoon()));
+        }
+
+        public static IEnumerator HandleGuardGoon()
+        {
+            coros.Add(MelonCoroutines.Start(CheckInterrogate()));
+
+            for (; ; )
+            {
+                yield return Wait1;
+                if (!registered) yield break;
+
+                if (activeAlliedSupplies == null || activeAlliedSupplies.State != EQuestState.Active)
+                    break;
+
+                if (alliedGuard == null || alliedGuard.Health.IsDead || alliedGuard.Health.IsKnockedOut || alliedGuard.Behaviour.activeBehaviour == alliedGuard.Behaviour.CombatBehaviour)
+                    break;
+
+                Log("Guard in building " + alliedGuard.isInBuilding);
+                Log("Guard ragdolled " + alliedGuard.Avatar.Ragdolled);
+                Log("Guard CanMove " + alliedGuard.Movement.CanMove());
+                Log("Hasdest " + alliedGuard.Movement.HasDestination);
+                Log("ISMoving " + alliedGuard.Movement.IsMoving);
+
+                float distFromGuardPos = Vector3.Distance(alliedGuard.CenterPoint, activeAlliedSupplies.location.GuardPosition);
+                if (distFromGuardPos > 30f || (activeAlliedSupplies.playerNoticed && activeAlliedSupplies.playerInterrogated && distFromGuardPos > 2f))
                 {
-                    weaponRangedShotgun.MaxFireRate = 0.6f;
-                    weaponRangedShotgun.RepositionAfterHit = true;
-                    weaponRangedShotgun.CanShootWhileMoving = true;
-                    weaponRangedShotgun.EquipTime = 0.1f;
-                    weaponRangedShotgun.HitChance_MinRange = 99f;
-                    weaponRangedShotgun.HitChance_MaxRange = 80f;
-                    weaponRangedShotgun.Damage = 88f;
-                }
-                goonGuard.Behaviour.CombatBehaviour.DefaultWeapon.Equip(goonGuard.Avatar);
+                    if (alliedGuard.Movement.HasDestination && Vector3.Distance(alliedGuard.Movement.CurrentDestination, activeAlliedSupplies.location.GuardPosition) < 2f) continue;
+                    else
+                        alliedGuard.Movement.EndSetDestination(NPCMovement.WalkResult.Interrupted);
 
-                goonGuard.Movement.WalkSpeed = 4.20f;
-                goonGuard.Health.MaxHealth = 500f;
-                goonGuard.Health.Health = 500f;
-
-                // create dialogue choice
-                DialogueController controller = goonGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
-                DialogueController.DialogueChoice choice = new();
-                string text = "Relax buddy, the boss sent me.";
-                choice.ChoiceText = $"{text}";
-                choice.Enabled = true;
-
-                void ReplyChosen()
-                {
-                    controller.npc.PlayVO(EVOLineType.Acknowledge);
-                    controller.handler.WorldspaceRend.ShowText("Go ahead and grab the supplies", 6f);
-                    controller.handler.ContinueSubmitted();
-
-                    if (guardChoiceIndex != -1)
+                    void OnGuardArrivedToPos(NPCMovement.WalkResult result)
                     {
-                        var oldChoices = controller.Choices;
-                        oldChoices.RemoveAt(guardChoiceIndex);
-                        controller.Choices = oldChoices;
-                        guardChoiceIndex = -1;
+                        if (result == NPCMovement.WalkResult.Success)
+                        {
+                            // Calculate forward position from guard pos facing guard rot and then face point
+                            Vector3 fwdFromPos = activeAlliedSupplies.location.GuardPosition + (Quaternion.Euler(activeAlliedSupplies.location.GuardRotation) * Vector3.forward * 1.5f);
+                            alliedGuard.Movement.FacePoint(fwdFromPos);
+                            alliedGuard.Movement.PauseMovement();
+                        }
+                    }
+#if MONO
+                    Action<NPCMovement.WalkResult> walkCallback = (Action<NPCMovement.WalkResult>)OnGuardArrivedToPos;
+#else
+                    Il2CppSystem.Action<NPCMovement.WalkResult> walkCallback = (Il2CppSystem.Action<NPCMovement.WalkResult>)OnGuardArrivedToPos;
+#endif
+                    alliedGuard.Movement.SetDestination(activeAlliedSupplies.location.GuardPosition, walkCallback, interruptExistingCallback: true);
+                    if (alliedGuard.Movement.IsPaused)
+                        alliedGuard.Movement.ResumeMovement();
+                    continue;
+                }
+
+                float distFromPlayer = Vector3.Distance(alliedGuard.CenterPoint, Player.Local.CenterPointTransform.position);
+                if (distFromPlayer > 40f) continue;
+
+                if (!activeAlliedSupplies.playerNoticed && !activeAlliedSupplies.playerInterrogated)
+                {
+                    Log("Look For Player");
+                    if (Player.Local.IsPointVisibleToPlayer(alliedGuard.CenterPointTransform.position))
+                    {
+                        alliedGuard.Movement.FacePoint(Player.Local.CenterPointTransform.position, lerpTime: 0.9f);
+                    }
+
+                    if (alliedGuard.Awareness.VisionCone.IsPlayerVisible(Player.Local))
+                    {
+                        activeAlliedSupplies.playerNoticed = true;
                     }
                 }
-                choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)ReplyChosen);
-                guardChoiceIndex = controller.AddDialogueChoice(choice);
-            }
 
-            return goonGuard;
+                if (activeAlliedSupplies.playerNoticed && !activeAlliedSupplies.playerInterrogated)
+                {
+                    // if not traversing to player
+                    if (alliedGuard.Movement.HasDestination || alliedGuard.Movement.IsMoving) continue;
+                    Log("Traverse");
+                    alliedGuard.Movement.SetDestination(Player.Local.CenterPointTransform);
+                    if (alliedGuard.Movement.IsPaused)
+                        alliedGuard.Movement.ResumeMovement();
+                }
+            }
+        }
+
+        private static bool CanStartInterrogate()
+        {
+            return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0 && !alliedGuard.DialogueHandler.IsDialogueInProgress;
+        }
+
+        public static IEnumerator CheckInterrogate()
+        {
+            for (; ; )
+            {
+                yield return Wait05;
+                if (!registered) yield break;
+                if (activeAlliedSupplies == null || activeAlliedSupplies.State != EQuestState.Active)
+                    yield break;
+                if (alliedGuard == null || alliedGuard.Health.IsDead || alliedGuard.Health.IsKnockedOut || alliedGuard.Behaviour.activeBehaviour == alliedGuard.Behaviour.CombatBehaviour)
+                    yield break;
+                if (activeAlliedSupplies.playerInterrogated || activeAlliedSupplies.interrogatingPlayer) yield break;
+                if (Vector3.Distance(Player.Local.CenterPointTransform.position, alliedGuard.CenterPoint) > 3f) continue;
+
+                Log("Interrogate");
+                // start dialogue when possible
+#if MONO
+                yield return new WaitUntil(CanStartInterrogate);
+#else
+                yield return new WaitUntil((Il2CppSystem.Func<bool>)CanStartInterrogate);
+#endif
+                if (Vector3.Distance(Player.Local.CenterPointTransform.position, alliedGuard.CenterPoint) > 3f) continue;
+
+                Log("Interrogate Start");
+                activeAlliedSupplies.playerInterrogated = true;
+                if (alliedGuard.DialogueHandler != null)
+                {
+                    activeAlliedSupplies.interrogatingPlayer = true;
+                    alliedGuard.Movement.EndSetDestination(NPCMovement.WalkResult.Success);
+                    DialogueController controller = alliedGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
+                    if (controller != null)
+                        controller.StartGenericDialogue(false);
+                    Log("Player interrogated");
+                }
+                yield break;
+            }
         }
 
         public static void OnHourPassEvaluateSupply()
@@ -495,8 +634,134 @@ namespace CartelEnforcer
 
             return;
         }
-    }
 
+#if IL2CPP
+        public static void UpdateQuestHUD()
+        {
+            // because calling base.MinPass in il2cpp crashes instantly
+            //activeAlliedSupplies.UpdateHUDUI();
+            if (activeAlliedSupplies.hudUI != null && !activeAlliedSupplies.hudUI.WasCollected && activeAlliedSupplies.hudUI.Pointer != IntPtr.Zero)
+            {
+                TextMeshProUGUI textComp = activeAlliedSupplies.hudUI.MainLabel;
+                if (textComp != null && !textComp.WasCollected && textComp.Pointer != IntPtr.Zero)
+                {
+                    textComp.text = activeAlliedSupplies.title + activeAlliedSupplies.Subtitle;
+
+                    textComp.ForceMeshUpdate();
+                }
+                else
+                    Log("Text component from Hud UI was garbage collected");
+
+
+                VerticalLayoutGroup group = activeAlliedSupplies.hudUI.hudUILayout;
+                if (group != null && !group.WasCollected && group.Pointer != IntPtr.Zero)
+                {
+                    group.CalculateLayoutInputVertical();
+                    group.SetLayoutVertical();
+                    if (activeAlliedSupplies.groupRt == null)
+                        activeAlliedSupplies.groupRt = group.GetComponent<RectTransform>();
+                    LayoutRebuilder.ForceRebuildLayoutImmediate(activeAlliedSupplies.groupRt);
+                    group.enabled = false;
+                    group.enabled = true;
+                }
+                else
+                    Log("Layout Group component from Hud UI was garbage collected");
+            }
+            else
+            {
+                Log("Hud UI was garbage collected");
+            }
+        }
+#endif
+
+        public static void MinPassSupply()
+        {
+            if (!registered || Singleton<SaveManager>.Instance.IsSaving || activeAlliedSupplies == null || activeAlliedSupplies.State != EQuestState.Active) return;
+            if (!InstanceFinder.IsServer)
+            {
+                Log("Not server instance");
+                return;
+            }
+
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+#endif
+            {
+                activeAlliedSupplies.Fail();
+            }
+
+            activeAlliedSupplies.Subtitle = $"\n<color=#757575>{activeAlliedSupplies.GetExpiryText()} until supplies vanish</color>";
+
+#if MONO
+            activeAlliedSupplies.MinPass();
+#else
+            UpdateQuestHUD();
+            activeAlliedSupplies.CheckExpiry();
+            if (activeAlliedSupplies.State != EQuestState.Active) return;
+#endif
+
+            if (activeAlliedSupplies.QuestEntry_LocateSupplies != null && activeAlliedSupplies.QuestEntry_LocateSupplies.State == EQuestState.Active)
+            {
+                if (Vector3.Distance(
+                    a: Player.Local.CenterPointTransform.position,
+                    b: activeAlliedSupplies.location.Type == ESupplyType.Van ? activeAlliedSupplies.location.CarPosition : activeAlliedSupplies.location.BarrelObjects[0].transform.position
+                ) < 14f)
+                {
+                    activeAlliedSupplies.QuestEntry_LocateSupplies.SetState(EQuestState.Completed, false);
+                    return;
+                }
+            }
+
+            if (activeAlliedSupplies.QuestEntry_GatherSupplies != null && activeAlliedSupplies.QuestEntry_GatherSupplies.State == EQuestState.Active)
+            {
+                // If barrel update barrel poi and compass pos
+                bool suppliesClaimed = false;
+                // Check unclaimed barrels, update poi
+                if (activeAlliedSupplies.location.Type == ESupplyType.Barrel)
+                {
+                    Vector3 nextBarrel = Vector3.zero;
+                    Transform currentBarrel;
+                    int consumedBarrels = 0;
+                    foreach (GameObject go in activeAlliedSupplies.location.BarrelObjects)
+                    {
+                        currentBarrel = go.transform.Find("CE_SUPPLY"); // find the interactable child object
+                        if (currentBarrel == null)
+                        {
+                            consumedBarrels++;
+                            continue;
+                        }
+                        else
+                        {
+                            nextBarrel = currentBarrel.position;
+                        }
+                    }
+
+                    if (consumedBarrels == activeAlliedSupplies.location.BarrelObjects.Count)
+                    {
+                        suppliesClaimed = true;
+                    }
+                    else if (nextBarrel != Vector3.zero)
+                    {
+                        if (activeAlliedSupplies.QuestEntry_GatherSupplies.PoI != null && activeAlliedSupplies.QuestEntry_GatherSupplies.PoI.gameObject != null)
+                        {
+                            activeAlliedSupplies.QuestEntry_GatherSupplies.SetPoILocation(nextBarrel);
+                        }
+                    }
+                }
+
+                if (suppliesClaimed)
+                {
+                    activeAlliedSupplies.Complete(false);
+                    return;
+                }
+            }
+            return;
+
+        }
+        
+    }
     public enum ESupplyType
     {
         Barrel, Van
