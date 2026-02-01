@@ -7,6 +7,11 @@ assignees: ''
 
 ---
 
+**Game version**
+Example: 0.4.2f9
+**Mod version**
+Example: 1.8.0
+
 **Describe the bug**
 A clear and concise description of what the bug is, where it triggered or what happened.
 
