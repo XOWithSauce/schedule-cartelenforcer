@@ -1,21 +1,31 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
-	
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+
+	<PropertyGroup>
+		<DefineConstants>$(DefineConstants);IL2CPP</DefineConstants>
+		<Configurations>Debug;Release;Debug_Beta;Release_Beta</Configurations>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$(Configuration.Contains('Beta'))">
+		<DefineConstants>$(DefineConstants);BETA</DefineConstants>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="$(Configuration.Contains('Debug'))">
 		<DebugSymbols>true</DebugSymbols>
 		<DebugType>portable</DebugType>
 		<Optimize>false</Optimize>
-		<DefineConstants>DEBUG;TRACE;IL2CPP</DefineConstants>
+		<DefineConstants>$(DefineConstants);DEBUG;TRACE</DefineConstants>
 	</PropertyGroup>
+
+	<PropertyGroup Condition="$(Configuration.Contains('Release'))">
+		<DebugType>none</DebugType>
+		<Optimize>true</Optimize>
+		<DefineConstants>$(DefineConstants);TRACE</DefineConstants>
+	</PropertyGroup>
+	
 	<Target Name="PostBuild" AfterTargets="Build">
 		<Copy SourceFiles="$(TargetDir)$(TargetFileName)" DestinationFolder="C:\Program Files (x86)\Steam\steamapps\common\Schedule I\Mods\" OverwriteReadOnlyFiles="true" />
 	</Target>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-		<DebugType>none</DebugType>
-		<Optimize>true</Optimize>
-		<DefineConstants>TRACE;IL2CPP</DefineConstants>
-	</PropertyGroup>
 	
 	<PropertyGroup>
 		<ImplicitUsings>enable</ImplicitUsings>
@@ -24,8 +34,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.8.1.0</FileVersion>
-		<Version>1.8.1</Version>
+		<FileVersion>1.8.2.0</FileVersion>
+		<Version>1.8.2</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -36,7 +46,7 @@
 		<RepositoryType>git</RepositoryType>
 		<NeutralLanguage>en-US</NeutralLanguage>
 
-		<AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<OutputType>Library</OutputType>
 
 		<TreatWarningsAsErrors>false</TreatWarningsAsErrors>
@@ -105,6 +115,9 @@
 		</Reference>
 		<Reference Include="UnityEngine.AudioModule">
 			<HintPath>libs-il2cpp\UnityEngine.AudioModule.dll</HintPath>
+		</Reference>
+		<Reference Include="UnityEngine.ParticleSystemModule">
+			<HintPath>libs-il2cpp\UnityEngine.ParticleSystemModule.dll</HintPath>
 		</Reference>
 		<Reference Include="Newtonsoft.Json">
 			<HintPath>libs-il2cpp\Newtonsoft.Json.dll</HintPath>

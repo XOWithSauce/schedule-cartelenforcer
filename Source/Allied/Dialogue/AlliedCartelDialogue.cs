@@ -3,7 +3,6 @@ using static CartelEnforcer.CartelPersuade;
 
 namespace CartelEnforcer
 {
-
     public static class AlliedCartelDialogue
     {
 

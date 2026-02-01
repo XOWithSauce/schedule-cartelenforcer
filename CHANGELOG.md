@@ -1,3 +1,38 @@
+# Version 1.8.2
+- Infiltrate Manor quest has been refactored and now generates interior decoration
+- Infiltrate Manor quest can now spawn a forest goon while searching the forest after talking to Ray
+- Infiltrate Manor quest now only spawns 3 goons inside of manor instead of 4
+- Infiltrate Manor quest loot table has changed to put less cash inside the safe but have more chance of spawning gold bars
+- Infiltrate Manor quest spawned goons now get more cash in their inventory
+- Infiltrate Manor quest now has custom animation for entering and leaving the manor through the backdoor
+- Infiltrate Manor quest manor goons now use m1911 as their primary weapon instead of knives and are significantly more lethal to compensate for the higher rewards
+- Infiltrate Manor can now spawn an exceedingly rare room that spawns roughly once in a thousand playthroughs
+- Changed the Infiltrate manor quest to clear up the interactable object that says "<Message>" in the front door
+- Changed Unexpected Alliances and Infiltrate Manor quest spawned goons weapons to deal 0 damage whenever the debug mode is enabled
+- Lowered the Rank requirement of Unexpected Alliances and Infiltrate Manor quests to be Bagman instead of Enforcer
+- Added to the Steal Back Customers feature new text message templates which customers send to the player shortly after being stolen to express their dissatisfaction of the service.
+- Changed the Steal Back Customers feature to run less often and adjusted the influence scaling to make it more balanced
+- Changed the Steal Back Customers feature to only steal 1 customer per Region max when it runs
+- Changed the Steal back customers feature to prefer the recently unlocked customers even more
+- Changed the Steal Back customers feature to have 50% chance of not stealing the customer if their region is Westville
+- Adjusted the probability of any give customer getting stolen to make it slightly less likely with certain addiction and customer relation statuses
+- Changed the Hire Cartel Dealers feature in the Allied Extensions to require Molly to be hired before hiring the Westville Cartel Dealer
+- Added into the CartelEnforcer/Allied/config.json new values for SigningFee for each cartel dealer to allow changing the sign fee. Additionally increased the singing fee for each from what it was hardcoded in the previous update.
+- Added to the frequency changing logic the new spray graffiti cartel event to allow the activityFrequency config value to change its frequency
+- Changed the Real Robbery logic to take out less cash total from dealer, capped by the available inventory space of the robber after stealing any product.
+- Changed most of the cartel dealer contract handling events to magically spawn into their inventory any required product packaged in jars of any stolen contract. This change aims to fix a bug where the Cartel Dealer would succesfully complete any given contract faster than the player or their hired dealer and then the customer would reject the deal because there are no sufficient items in the cartel dealers inventory. This change also prefers to fill out items from the stolen items, before spawning additional items.
+- Changed the default Cartel dealer deals with Locked customers to make the items that get spawned for Cartel Dealer match the highest product type affinity to increase the likelihood of customer accepting the contract.
+- Changed the Intercept Deals feature to evaluate success based on the completion of contract from the customers perspective instead of distance relative to cartel dealer or player. This fixes a bug where the cartel dealer could be closer than the player while player completes the contract, thus making the intercept deal be completed by the cartel dealer.
+- Changed the Allied Dialogue logic to use game default Dealer dialogues after persuasion is complete instead of custom dialogue. This also fixes a bug in the Allied extension module that would cause an error.
+- Changed Steal Back customer feature to evaluate after sleeping ends, instead of when the day passes at 00:00 OR when the sleep ends
+- Changed the frequency at which End Game quest creation and enablement is evaluated from every 60 seconds down to 30 seconds. This change aims to provide more consistent enablement of the Car Meetup quest dialogue when Cranky Frank is standing at the northern waterfront.
+- Added to the mod source code optional build configurations Debug_Beta and Release_Beta for both MONO and IL2CPP solution configurations. The mod can be built to support beta game version 0.4.3 and above using this configuration, but the mod will only be updated and released for default versions or alternate (currently 0.4.2f9).
+- Fixed a bug in the robbery feature where in the il2cpp version it was using improper "as" casting
+- Fixed a bug that would cause the game default quest to blow up manor to not start properly when Allied Extensions was enabled and cartel was hostile
+- Fixed a bug in the Persuasion mechanic where succesful persuasion could cause the random text deciding switch case to go out of limits
+- Removed code that would change Cash stack size in certain scenarios
+- Updated the Github [BUILD.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/BUILD.md) and [CONTRIBUTING.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/CONTRIBUTING.md) files and added Issues, Feature Request and Feature Change Request templates
+
 # Version 1.8.1
 - Fixed a bug with the new Allied Supplies quest in IL2CPP backend where during the quest the game could crash due to aggressive garbage collection
 - Fixed a bug where the new Allied Intro quest would not activate the Cartel Gathering greeting challenge entry

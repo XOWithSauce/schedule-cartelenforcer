@@ -23,9 +23,8 @@ namespace CartelEnforcer
     public class CartelRegActivityHours
     {
         public int region; // Identifier integer maps out to region, but -1 is global
-        public int cartelActivityClass = 0; // This will hold the DeadDropSteal (0) class, CartelCustomerDeal (1) or RobDealer (2)
+        public int cartelActivityClass = 0; // This will hold the DeadDropSteal (0) class, CartelCustomerDeal (1) or RobDealer (2) or SprayGraffiti (3)
         public int hoursUntilEnable = 0; // ingame hours (60sec)
-
     }
 
     public class HrPassParameterMap
@@ -126,7 +125,6 @@ namespace CartelEnforcer
                     activityHrs.region = (int)act.Region;
 
                     int hours = 0;
-
 #if MONO
                     // Now determine class
                     if (inRegAct is StealDeadDrop)
@@ -149,10 +147,15 @@ namespace CartelEnforcer
                             cartelCustomerDeal.onActivated = (Action)Delegate.Combine(cartelCustomerDeal.onActivated, new Action(OnCustomerDealActive));
                         }
                     }
-                    else // else its RobDealer class
+                    else if (inRegAct is RobDealer)
                     {
                         activityHrs.cartelActivityClass = 2;
                         hours = GetActivityHours(currentConfig.cartelRobberyFrequency);
+                    }
+                    else // its spray graffiti
+                    {
+                        activityHrs.cartelActivityClass = 3;
+                        hours = GetActivityHours(currentConfig.cartelGraffitiFrequency);
                     }
 #else
                     if (inRegAct.TryCast<StealDeadDrop>() != null)
@@ -181,6 +184,11 @@ namespace CartelEnforcer
                     {
                         activityHrs.cartelActivityClass = 2;
                         hours = GetActivityHours(currentConfig.cartelRobberyFrequency);
+                    }
+                    else if (inRegAct.TryCast<RobDealer>() != null)
+                    {
+                        activityHrs.cartelActivityClass = 3;
+                        hours = GetActivityHours(currentConfig.cartelGraffitiFrequency);
                     }
                     else
                     {

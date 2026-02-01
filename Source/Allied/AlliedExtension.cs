@@ -13,14 +13,13 @@ using static CartelEnforcer.CartelPersuade;
 using static CartelEnforcer.SuppliesModule;
 
 #if MONO
+using ScheduleOne.NPCs;
 using ScheduleOne.Quests;
 using ScheduleOne.Economy;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Dialogue;
 using ScheduleOne.Map;
-using ScheduleOne.Money;
-using ScheduleOne.VoiceOver;
 using ScheduleOne.GameTime;
 using ScheduleOne.UI;
 using ScheduleOne.UI.Handover;
@@ -28,14 +27,13 @@ using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI.Phone.ContactsApp;
 using ScheduleOne.Persistence;
 #else
+using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.Map;
-using Il2CppScheduleOne.Money;
-using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Handover;
@@ -86,7 +84,6 @@ namespace CartelEnforcer
                         return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0;
                     }
 #if MONO
-                    // Does mono need anything before waituntil?
                     yield return new WaitUntil(CanStart);
 #else
                     yield return new WaitUntil((Il2CppSystem.Func<bool>)CanStart);
@@ -111,7 +108,7 @@ namespace CartelEnforcer
                     if (d.IsRecruited)
                     {
                         d.IsRecruited = false;
-
+                        d.Inventory.ClearInventoryEachNight = true;
                         if (d.AssignedCustomers.Count == 0)
                             continue;
 
@@ -195,6 +192,16 @@ namespace CartelEnforcer
                 yield break;
             }
 
+            // List the Cartel Dealers by region so that connections can be generated at runtime
+            // And Westville must have molly as its connection
+            NPC molly = null;
+            foreach (Dealer d in Dealer.AllPlayerDealers)
+                if (d.ID == "molly_presley")
+                    molly = d;
+            if (molly == null)
+                Log("[ALLIEDEXT]     Warning molly is null");
+
+            Dictionary<EMapRegion, CartelDealer> dealersByRegion = new();
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced)
 #else
@@ -211,26 +218,37 @@ namespace CartelEnforcer
                     {
                         case EMapRegion.Westville:
                             d.Cut = alliedConfig.WestvilleCartelDealerCut;
+                            d.SigningFee = alliedConfig.WestvilleCartelSigningFee;
+                            dealersByRegion.Add(EMapRegion.Westville, d);
                             break;
 
                         case EMapRegion.Downtown:
                             d.Cut = alliedConfig.DowntownCartelDealerCut;
+                            d.SigningFee = alliedConfig.DowntownCartelSigningFee;
+                            dealersByRegion.Add(EMapRegion.Downtown, d);
                             break;
 
                         case EMapRegion.Docks:
                             d.Cut = alliedConfig.DocksCartelDealerCut;
+                            d.SigningFee = alliedConfig.DocksCartelSigningFee;
+                            dealersByRegion.Add(EMapRegion.Docks, d);
                             break;
 
                         case EMapRegion.Suburbia:
                             d.Cut = alliedConfig.SuburbiaCartelDealerCut;
+                            d.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
+                            dealersByRegion.Add(EMapRegion.Suburbia, d);
                             break;
 
                         case EMapRegion.Uptown:
                             d.Cut = alliedConfig.UptownCartelDealerCut;
+                            d.SigningFee = alliedConfig.UptownCartelSigningFee;
+                            dealersByRegion.Add(EMapRegion.Uptown, d);
                             break;
 
                         default:
-                            d.Cut = 30f;
+                            d.Cut = 99f;
+                            d.SigningFee = 9999f;
                             break;
                     }
 
@@ -244,16 +262,10 @@ namespace CartelEnforcer
 
                     if (d.IsRecruited)
                     {
+                        d.Inventory.ClearInventoryEachNight = false;
                         // Already has default dialogue options
                         Log($"[ALLIEDEXT]     - {d.Region} already recruited");
                         continue;
-                    }
-                    else if (!d.IsRecruited && d.HasBeenRecommended)
-                    {
-                        // Doesnt have dialogue options to recruit, manage inv or take money
-                        // And player has succesfully persuaded the cartel dealer
-                        Log($"[ALLIEDEXT]     + {d.Region} add base");
-                        AddBaseDialogue(d);
                     }
                     else if (!d.IsRecruited && !d.HasBeenRecommended)
                     {
@@ -262,330 +274,38 @@ namespace CartelEnforcer
                     }
                 }
 
+                // Assign the connections for each dealer
+                foreach (var kvp in dealersByRegion)
+                {
+                    // Westville must have maybe molly unlocked
+                    if (kvp.Key == EMapRegion.Westville)
+                    {
+                        dealersByRegion[kvp.Key].RelationData.Connections.Add(molly);
+                    }
+                    else // must have previous dealer unlocked
+                    {
+                        EMapRegion prev = (EMapRegion)((int)kvp.Key - 1);
+                        dealersByRegion[kvp.Key].RelationData.Connections.Add(dealersByRegion[prev]);
+                    }
+
+                    // Now that the connections are assigned for this cartel dealer
+                    // setup default recruit option if it is required
+                    if (!kvp.Value.IsRecruited && kvp.Value.HasBeenRecommended)
+                    {
+                        kvp.Value.SetUpDialogue();
+                    }
+                }
+
                 // If the allied intro quest not yet completed and cartel truced and first dealer not yet recruited
                 if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null && !westvilleRecruited)
                 {
                     coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
                 }
-
             }
-
 
             Log("[ALLIEDEXT] Finished setup");
             yield return null;
         }
-
-        public static IEnumerator EvaluateAlliedState()
-        {
-            if (!currentConfig.alliedExtensions)
-                yield break;
-
-            while (registered)
-            {
-#if MONO
-                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
-#else
-                if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
-#endif
-                {
-                    yield return Wait60;
-                    continue;
-                }
-
-
-
-            }
-            yield return null;
-        }
-
-        #region Base dialogues
-        // These only need to be added whenever the cartel dealer is NOT recruited
-        // The data persists and uses the default dialogue options after the first recruit which works fine.
-        // But again on state change needs to have iteration back to unrecruit them
-
-#if IL2CPP
-        public delegate bool ManagedChoiceValid(out string invalidReason);
-#endif
-
-        public static void AddBaseDialogue(CartelDealer d)
-        {
-
-            DialogueController controller = d.DialogueHandler.gameObject.GetComponent<DialogueController>();
-
-            #region Recruit Cartel Dealer Dialogue
-            DialogueController.DialogueChoice choiceRecruit = new();
-            // Recruit payment amount
-            float paid = GetCartelRecruitPayment(d.Region);
-            choiceRecruit.ChoiceText = $"Help me distribute my product (<color=#FF3008>-${paid}</color>)";
-            choiceRecruit.Enabled = true;
-
-            bool CanRecruitCartel(out string reason)
-            {
-                reason = "";
-
-                // Check if its already recruited
-                if (d.IsRecruited)
-                {
-                    reason = "Cartel Dealer is already recruited.";
-                    return false;
-                }
-
-                // If the dealers region is not unlocked
-                if (Singleton<Map>.Instance.GetUnlockedRegions().Count <= (int)d.Region)
-                {
-                    reason = "Region is not unlocked yet.";
-                    return false;
-                }
-
-                // If the cartel dealer in previous region has been recruited or also if its westville then pass that bc no previous
-                if (d.Region != EMapRegion.Westville)
-                {
-                    int prev = (int)d.Region - 1;
-                    // Get the previous region dealer and check if it is not recruited then return false
-                    if (!NetworkSingleton<Cartel>.Instance.Activities.GetRegionalActivities((EMapRegion)prev).CartelDealer.IsRecruited)
-                    {
-                        reason = $"Recruit {(EMapRegion)prev} Cartel Dealer first!";
-                        return false;
-                    }
-                }
-
-
-                if (!IsTrucedDialogueEnabled())
-                {
-                    reason = "Cartel is not Truced.";
-                    return false;
-                }
-
-                // Check that atleast half of the respective regions customers are unlocked
-#if MONO
-                List<Customer> unlocked = new(Customer.UnlockedCustomers);
-#else
-                List<Customer> unlocked = new();
-                foreach (Customer c in Customer.UnlockedCustomers)
-                {
-                    if (!unlocked.Contains(c))
-                        unlocked.Add(c);
-                }
-#endif
-                int unlockedInRegion = 0;
-                int totalInRegion = 0;
-                foreach (Customer c in unlocked)
-                {
-                    if (c.NPC.Region == d.Region)
-                    {
-                        totalInRegion++;
-                        
-                        if (c.NPC.RelationData.Unlocked)
-                            unlockedInRegion++;
-                    }
-                }
-
-                if (totalInRegion == 0 || unlockedInRegion == 0 || unlockedInRegion / totalInRegion < 0.5f)
-                {
-                    int required = Mathf.RoundToInt((float)totalInRegion * 0.5f) - unlockedInRegion;
-                    reason = $"Unlock {required} more {d.Region} customers.";
-                    return false;
-                }
-
-                return true;
-            }
-#if MONO
-            // public delegate bool IsChoiceValid(out string reason)
-            choiceRecruit.isValidCheck = new DialogueController.DialogueChoice.IsChoiceValid(CanRecruitCartel);
-#else
-            // param1 Il2CppSystem.Object @Obj
-            // param2 IntPtr method
-            // if this is not possible the entire dialogue logic needs to be rewritten specifically for il2cpp
-            // TODO: Test this in il2cpp
-            ManagedChoiceValid managedCanRecruit = new ManagedChoiceValid(CanRecruitCartel);
-            choiceRecruit.isValidCheck = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<DialogueController.DialogueChoice.IsChoiceValid>(managedCanRecruit);
-#endif
-
-
-#if MONO
-            choiceRecruit.onChoosen.AddListener(() => { OnRecruitSelected(controller, paid, d); });
-#else
-            void OnRecruitOptionSelectedWrapped()
-            {
-                OnRecruitSelected(controller, paid);
-            }
-            choiceRecruit.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnRecruitOptionSelectedWrapped);
-#endif
-            controller.AddDialogueChoice(choiceRecruit);
-#endregion
-
-            #region Open Cartel Dealer Inventory option
-            DialogueController.DialogueChoice choiceInventory = new();
-            choiceInventory.ChoiceText = "Open Inventory";
-            choiceInventory.Enabled = true;
-
-            bool CanOpenCartelInventory(out string reason)
-            {
-                reason = "";
-                // Check if its not recruited
-                if (!d.IsRecruited)
-                {
-                    reason = "Cartel Dealer is not recruited.";
-                    return false;
-                }
-
-                if (!IsTrucedDialogueEnabled())
-                {
-                    reason = "Cartel is not Truced.";
-                    return false;
-                }
-
-                return true;
-            }
-
-#if MONO
-            choiceInventory.isValidCheck = new DialogueController.DialogueChoice.IsChoiceValid(CanOpenCartelInventory);
-#else
-            // param1 Il2CppSystem.Object @Obj
-            // param2 IntPtr method
-            // if this is not possible the entire dialogue logic needs to be rewritten specifically for il2cpp
-            // TODO: Test this in il2cpp
-            ManagedChoiceValid managedOpenInv = new ManagedChoiceValid(CanOpenCartelInventory);
-            choiceInventory.isValidCheck = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<DialogueController.DialogueChoice.IsChoiceValid>(managedOpenInv);
-#endif
-
-
-#if MONO
-            choiceInventory.onChoosen.AddListener(() => { OnInventorySelected(controller, d); });
-#else
-            void OnInventoryOptionSelectedWrapped()
-            {
-                OnInventorySelected(controller);
-            }
-            choiceInventory.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnInventoryOptionSelectedWrapped);
-#endif
-            controller.AddDialogueChoice(choiceInventory);
-
-#endregion
-
-            #region Take Cut from Cartel Dealer Dialogue
-            DialogueController.DialogueChoice choicePayment = new();
-            choicePayment.ChoiceText = "I'm here to collect my cut.";
-            choicePayment.Enabled = true;
-
-            bool CanTakeCartelDealerPayment(out string reason)
-            {
-                reason = "";
-                // Check if its not recruited
-                if (!d.IsRecruited)
-                {
-                    reason = "Cartel Dealer is not recruited.";
-                    return false;
-                }
-                if (d.Cash == 0f)
-                {
-                    reason = "Cartel Dealer does not have cash.";
-                    return false;
-                }
-
-                if (!IsTrucedDialogueEnabled())
-                {
-                    reason = "Cartel is not Truced.";
-                    return false;
-                }
-
-                return true;
-            }
-
-#if MONO
-            choicePayment.isValidCheck = new DialogueController.DialogueChoice.IsChoiceValid(CanTakeCartelDealerPayment);
-#else
-            // param1 Il2CppSystem.Object @Obj
-            // param2 IntPtr method
-            // if this is not possible the entire dialogue logic needs to be rewritten specifically for il2cpp
-            // TODO: Test this in il2cpp
-            ManagedChoiceValid managedTakeMoney = new ManagedChoiceValid(CanTakeCartelDealerPayment);
-            choicePayment.isValidCheck = Il2CppInterop.Runtime.DelegateSupport.ConvertDelegate<DialogueController.DialogueChoice.IsChoiceValid>(managedTakeMoney);
-#endif
-
-#if MONO
-            choicePayment.onChoosen.AddListener(() => { OnTakeMoneySelected(controller, d); });
-#else
-            void OnTakeMoneyOptionSelectedWrapped()
-            {
-                OnTakeMoneySelected(controller);
-            }
-            choicePayment.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnTakeMoneyOptionSelectedWrapped);
-#endif
-            controller.AddDialogueChoice(choicePayment);
-
-#endregion
-
-            return;
-        }
-
-        public static float GetCartelRecruitPayment(EMapRegion region)
-        {
-            float paid;
-            switch (region)
-            {
-                case EMapRegion.Westville:
-                    paid = 3000f;
-                    break;
-
-                case EMapRegion.Downtown:
-                    paid = 7000f;
-                    break;
-
-                case EMapRegion.Docks:
-                    paid = 12000f;
-                    break;
-
-                case EMapRegion.Suburbia:
-                    paid = 16000f;
-                    break;
-
-                case EMapRegion.Uptown:
-                    paid = 24000f;
-                    break;
-
-                default:
-                    paid = 1000f;
-                    break;
-            }
-            return paid;
-        }
-
-        // recruit Callback
-        public static void OnRecruitSelected(DialogueController controller, float paid, CartelDealer d = null)
-        {
-            controller.handler.ContinueSubmitted();
-
-            bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= paid;
-            if (hasCash)
-            {
-                // if truced and influence in region not at 0
-                float regionInfluence = NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(d.Region).Influence;
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(d.Region, -regionInfluence);
-                d.PlayVO(EVOLineType.Thanks, true);
-                d.IsRecruited = true;
-                NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
-            }
-            else
-            {
-                controller.npc.Avatar.EmotionManager.AddEmotionOverride("Annoyed", "product_rejected", 6f, 1);
-                controller.npc.PlayVO(EVOLineType.Annoyed, true);
-            }
-        }
-
-        public static void OnInventorySelected(DialogueController controller, CartelDealer d = null)
-        {
-            d.TradeItems();
-        }
-
-        public static void OnTakeMoneySelected(DialogueController controller, CartelDealer d = null)
-        {
-            d.CollectCash();
-            d.PlayVO(EVOLineType.Acknowledge, true);
-            controller.handler.ContinueSubmitted();
-        }
-
-#endregion
 
         public static bool IsTrucedDialogueEnabled()
         {
@@ -595,8 +315,6 @@ namespace CartelEnforcer
             return (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced || currentConfig.debugMode);
 #endif
         }
-
-
     }
     
     // Patch the Cartel Deal Manager while Truced to avoid changing the cartel status to hostile upon expiry
@@ -806,11 +524,11 @@ namespace CartelEnforcer
             // If Allied Extensions are not enabled in mod, dont patch
             if (!currentConfig.alliedExtensions) return true;
 
-            // else flip the check for cartel status in original condition block for begin
+            // else add check to be OR hostile/truce
 #if MONO
-            if (__instance.State == EQuestState.Inactive && Singleton<Map>.Instance.GetRegionData(EMapRegion.Uptown).IsUnlocked && NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced)
+            if (__instance.State == EQuestState.Inactive && Singleton<Map>.Instance.GetRegionData(EMapRegion.Uptown).IsUnlocked && (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced || NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile))
 #else
-            if (__instance.State == EQuestState.Inactive && Singleton<Map>.Instance.GetRegionData(EMapRegion.Uptown).IsUnlocked && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced)
+            if (__instance.State == EQuestState.Inactive && Singleton<Map>.Instance.GetRegionData(EMapRegion.Uptown).IsUnlocked && (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced || NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile))
 #endif
             {
                 // When returning true after this function the original source runs and wont begin the quest, but

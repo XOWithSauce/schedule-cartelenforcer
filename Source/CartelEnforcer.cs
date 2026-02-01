@@ -20,6 +20,7 @@ using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.AlliedCartelDialogue;
 using static CartelEnforcer.CartelInfluenceChangePopup_Show_Patch;
 using static CartelEnforcer.SuppliesModule;
+using static CartelEnforcer.RandomManorGenerator;
 
 #if MONO
 using ScheduleOne.Property;
@@ -71,7 +72,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.1";
+        public const string Version = "1.8.2";
         public const string DownloadLink = null;
     }
 
@@ -124,7 +125,7 @@ namespace CartelEnforcer
                 if (Input.GetKey(KeyCode.LeftControl))
                 {
                     // SEE Debug #region in code for InputFunctions
-                    // Left CTRL + R to Start Rob Dealer Function to nearest dealer
+                    // Left CTRL + R to Start Rob Dealer Function to nearest
                     if (Input.GetKey(KeyCode.R))
                     {
                         if (!debounce)
@@ -348,9 +349,9 @@ namespace CartelEnforcer
             if (currentConfig.stealBackCustomers)
             {
 #if MONO
-                NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassTrySteal;
+                NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnDayPassTrySteal;
 #else
-                NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassTrySteal;
+                NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnDayPassTrySteal;
 #endif
             }
 
@@ -457,19 +458,7 @@ namespace CartelEnforcer
             yield return Wait10;
             if (!registered) yield break;
 
-            RV rv = UnityEngine.Object.FindObjectOfType<RV>();
-            Transform target = rv.transform.Find("RV/rv/Small Safe");
-
-            if (target == null)
-            {
-                Log("No RV target to copy safe prefab from");
-            }
-            else
-            {
-                GameObject prefab = UnityEngine.Object.Instantiate(target.gameObject, null);
-                prefab.SetActive(false);
-                safePrefab = prefab;
-            }
+            coros.Add(MelonCoroutines.Start(InitManorItemRef()));
 
             Log("[END GAME QUEST] Evaluating End Game Quest Creation");
             bool hasGeneratedQuest = false;
@@ -506,7 +495,7 @@ namespace CartelEnforcer
                     coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
                 }
 
-                yield return Wait60;
+                yield return Wait30;
                 if (!registered) yield break;
             }
 
@@ -530,7 +519,6 @@ namespace CartelEnforcer
                     break;
                 }
             }
-
 
             Log("Swapping array count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
 
@@ -566,7 +554,11 @@ namespace CartelEnforcer
 
                     newGoon.Movement.enabled = true;
                     newGoon.gameObject.SetActive(true);
+#if BETA
+                    newGoon.Despawn_Client(null);
+#else
                     newGoon.Despawn_Client();
+#endif
                     newGoons[i] = newGoon;
                     goonPool.unspawnedGoons.Add(newGoon);
                 }
@@ -588,9 +580,11 @@ namespace CartelEnforcer
                 goon.IsGoonSpawned = true;
                 yield return Wait05;
                 if (!registered) yield break;
-
+#if BETA
+                goon.Despawn_Client(null);
+#else
                 goon.Despawn_Client();
-
+#endif
             }
             Log("Array swapped now count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
             yield return null;
@@ -648,6 +642,8 @@ namespace CartelEnforcer
             manorCompleted = false;
             activeCarMeetupQuest = null;
             carMeetupCompleted = false;
+
+            RandomManorGenerator.ResetManorItemRef();
 
             // allied quests
             activeTruceIntro = null;

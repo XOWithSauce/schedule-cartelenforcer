@@ -415,7 +415,7 @@ namespace CartelEnforcer
 
                 Log($"[DEALER ACTIVITY]     Setup {dealer.Region} weapon");
 
-                dealer.OverrideAggression(1f); // because the dealers run away like wtf? this might have been just fleeing beh annd this wont fix it? todo fix it :D
+                dealer.OverrideAggression(1f); 
 
                 #region Stay Inside and Deal Signal actions
                 NPCEvent_StayInBuilding event1 = null;
@@ -606,10 +606,12 @@ namespace CartelEnforcer
                 }
                 // We have ActiveContracts List atleast one element, get one
                 contract = playerDealer.ActiveContracts[UnityEngine.Random.Range(0, playerDealer.ActiveContracts.Count)];
-                if (!contractGuids.Contains(contract.GUID.ToString()) && // Not used by Intercept Event
+                string guid = contract.GUID.ToString();
+                if (!contractGuids.Keys.Contains(guid) && // Not used by Intercept Event
                     !validContracts.ContainsValue(contract) && // Not already in the list
-                    !consumedGUIDs.Contains(contract.GUID.ToString()) && // Not already consumed
-                    !playerDealerStolen.ContainsKey(contract.GUID.ToString())) // Not already assigned to be stolen by other cartel dealers
+                    !consumedGUIDs.Contains(guid) && // Not already consumed
+                    !playerDealerStolen.ContainsKey(guid) && // Not already assigned to be stolen by other cartel dealers
+                    contract.GetMinsUntilExpiry() > 120) // More than 2h left
                 {
                     EMapRegion reg = Map.Instance.GetRegionFromPosition(contract.DeliveryLocation.CustomerStandPoint.position);
                     if (!validContracts.ContainsKey(reg))
@@ -620,13 +622,7 @@ namespace CartelEnforcer
             // Store valid contracts from customers
             List<Customer> cList = new();
             for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
-            {
-                //Log("Add Customer");
-                yield return Wait01;
-                if (!registered) yield break;
-
                 cList.Add(Customer.UnlockedCustomers[i]);
-            }
 
             List<Customer> validCustomers = new();
             Log("[DEALER ACTIVITY] Parse customers");
@@ -656,7 +652,6 @@ namespace CartelEnforcer
                 if (interceptor != null && interceptor == d) continue;
                 if (d.Health.IsDead || d.Health.IsKnockedOut) continue;
                 if (d.ActiveContracts == null) continue;
-                Log("[DEALER ACTIVITY]    Conditions met");
                 if (d.ActiveContracts.Count == 0)
                 {
                     Log("[DEALER ACTIVITY]    Cartel dealer has 0 active contracts.");
@@ -673,7 +668,7 @@ namespace CartelEnforcer
 
                         if (contract != null && !playerDealerStolen.ContainsKey(contract.GUID.ToString()) && !consumedGUIDs.Contains(contract.GUID.ToString()))
                         {
-                            actionTaken = true;
+                            
                             int originalXP = contract.CompletionXP;
                             contract.CompletionXP = 0;
                             contract.completedContractsIncremented = false;
@@ -686,6 +681,7 @@ namespace CartelEnforcer
                             d.AddContract(contract);
                             if (!d._attendDealBehaviour.Active)
                                 d.CheckAttendStart();
+                            actionTaken = true;
                             Log($"[DEALER ACTIVITY]     Stolen Contract");
                         }
                         else
@@ -717,7 +713,6 @@ namespace CartelEnforcer
                             if (!registered) yield break;
 
                             c.offeredContractInfo = contractInfo;
-
                             Log("[DEALER ACTIVITY]   Taking pending offer to dealer");
                             EDealWindow window = d.GetDealWindow();
                             contract = c.ContractAccepted(window, false, d);
@@ -728,7 +723,12 @@ namespace CartelEnforcer
                                 d.AddContract(contract);
                                 if (!d._attendDealBehaviour.Active)
                                     d.CheckAttendStart();
+
                                 actionTaken = true;
+                            }
+                            else
+                            {
+                                Log("[DEALER ACTIVITY]   Error: Contract was null when assinging to dealer");
                             }
                         }
                         validCustomers.Remove(c);
@@ -744,6 +744,13 @@ namespace CartelEnforcer
                             // and is outside meaning just afk standing
                             WalkToInterestPoint(d);
                         }
+                    }
+                    // contract was awarded either from players pending messages or the player dealers contracts
+                    // Fill into inventory the required contract
+                    else
+                    {
+                        if (contract != null && d != null)
+                            FulfillContractItems(contract, d);
                     }
                 }
                 else
@@ -761,7 +768,7 @@ namespace CartelEnforcer
             validCustomers.Clear();
             validContracts.Clear();
 
-            yield return null;
+            yield break;
         }
 
         public static bool IsWalkingEnabled(CartelDealer d)
@@ -848,17 +855,16 @@ namespace CartelEnforcer
 
             if (started)
             {
-                List<Customer> regionLockedCustomers = new();
-                // Make list traverse safe for modification
-                int i = 0;
-                do
+#if MONO
+                List<Customer> regionLockedCustomers = Customer.LockedCustomers.FindAll(customer => customer.NPC.Region == dealEvent.Region);
+#else
+                var regionLockedCustomers = new Il2CppSystem.Collections.Generic.List<Customer>();
+                foreach (Customer customer in Customer.LockedCustomers)
                 {
-                    yield return Wait025;
-                    if (i >= Customer.LockedCustomers.Count) break;
-                    if (Customer.LockedCustomers[i].NPC.Region == dealEvent.Region && !regionLockedCustomers.Contains(Customer.LockedCustomers[i]))
-                        regionLockedCustomers.Add(Customer.LockedCustomers[i]);
-                    i++;
-                } while (i < Customer.LockedCustomers.Count && registered);
+                    if (customer.NPC.Region == dealEvent.Region)
+                        regionLockedCustomers.Add(customer);
+                }
+#endif
 
                 if (regionLockedCustomers.Count == 0)
                 {
@@ -912,12 +918,24 @@ namespace CartelEnforcer
                         }
                     }
                 }
-                if (selected == null) yield break;
+                if (selected == null)
+                {
+                    dealEvent.Deactivate();
+                    yield break;
+                }
 
                 // Before running below we want to make sure there is something in the inventory since try generate contract can result in no acceptable items especially in higher standard customers, so based on region, we add change existing quality OR add quality item if empty?
-                // Todo: this could instead/addt check product affinity data ?
                 EQuality requiredQuality = selected.customerData.Standards.GetCorrespondingQuality();
-                List<ProductDefinition> list = new List<ProductDefinition>();
+
+#if MONO
+                List<ProductTypeAffinity> defaultAffinity = new(selected.CustomerData.DefaultAffinityData.ProductAffinities);
+#else
+                List<ProductTypeAffinity> defaultAffinity = new();
+                foreach (ProductTypeAffinity aff in selected.CustomerData.DefaultAffinityData.ProductAffinities)
+                    defaultAffinity.Add(aff);
+#endif
+                defaultAffinity = [.. defaultAffinity.OrderByDescending(x => x.Affinity)];
+
                 bool hasMinItems = false;
 
 #if IL2CPP
@@ -972,9 +990,23 @@ namespace CartelEnforcer
                 {
                     Log("[LOCKED CUSTOMER DEAL] Cartel dealer doesnt have required product, inserting.");
                     
-                    int productIndex = UnityEngine.Random.Range(0, dealEvent.dealer.RandomProducts.Length);
-                    ProductDefinition def2 = dealEvent.dealer.RandomProducts[productIndex];
-                    ItemInstance item = def2.GetDefaultInstance(4);
+                    // Find best affinity product for this customer from dealer random products
+                    List<ProductDefinition> allDefs = dealEvent.dealer.RandomProducts.ToList();
+                    ProductDefinition preferredDefinition = null;
+                    float currentAffinity = 0f;
+                    foreach (ProductDefinition tempDef in allDefs)
+                    {
+                        ProductTypeAffinity tempAff = defaultAffinity.First(x => x.DrugType == tempDef.DrugType);
+                        if (tempAff != null && tempAff.Affinity > currentAffinity)
+                        {
+                            preferredDefinition = tempDef;
+                            currentAffinity = tempAff.Affinity;
+                        }
+                    }
+                    if (preferredDefinition == null)
+                        preferredDefinition = dealEvent.dealer.RandomProducts[0];
+
+                    ItemInstance item = preferredDefinition.GetDefaultInstance(10);
 #if MONO
                     if (item is QualityItemInstance inst)
                         inst.Quality = requiredQuality;
@@ -1084,10 +1116,19 @@ namespace CartelEnforcer
             {
                 if (handoverByPlayer) return true;
                 if (contract.Dealer == null) return true;
-                if (!playerDealerStolen.ContainsKey(contract.GUID.ToString())) return true;
+                CheckPlayerDealerStolen(__instance, contract, outcome);
+                // Process Intercept contract
+                CheckIntercept(__instance, contract, outcome, handoverByPlayer);
+                return true; // after all this run original????
+            }
+
+            public static void CheckPlayerDealerStolen(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome)
+            {
+                // Check PlayerDealer Stolen
+                if (!playerDealerStolen.ContainsKey(contract.GUID.ToString())) return;
 
                 playerDealerStolen.TryGetValue(contract.GUID.ToString(), out Tuple<Dealer, int> stored);
-                if (stored == null) return true;
+                if (stored == null) return;
                 Dealer originalDealer = stored.Item1;
                 int originalXP = stored.Item2;
                 // after this contract is guaranteed to be the stolen contracts thing this mod implements
@@ -1140,17 +1181,31 @@ namespace CartelEnforcer
                             __instance.NPC.RelationData.RelationDelta = result;
                         }
                     }
-                    
+                }
+                else
+                {
+                    Log($"[STOLEN HANDOVER CUSTOMER] {__instance.NPC.fullName} RESULT UNDECIDED");
                 }
 
-                lock(playerDealerStolenLock)
+                lock (playerDealerStolenLock)
                 {
                     playerDealerStolen.Remove(contract.GUID.ToString());
                 }
                 consumedGUIDs.Add(contract.GUID.ToString()); // beacuse it seems that it can be double checked later???
-
-                return true; // after all this run original????
             }
+
+            public static void CheckIntercept(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome, bool handoverByPlayer)
+            {
+                if (!currentConfig.interceptDeals) return;
+                string guid = contract.GUID.ToString();
+                if (!contractGuids.ContainsKey(guid)) return;
+                // mark as complete
+                if (handoverByPlayer)
+                    contractGuids[guid].CompletedByPlayer = true;
+                else
+                    contractGuids[guid].CompletedByCartel = true;
+            }
+
         }
 
         // Patch the CartelDealers randomize inventory function to allow for saving possibly stolen items back to inventory system before the inventory clears

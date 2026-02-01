@@ -109,6 +109,7 @@ You can customize the basic mod settings through the **config.json** file.
     "deadDropStealFrequency": 1.0,
     "cartelCustomerDealFrequency": 1.0,
     "cartelRobberyFrequency": 1.0,
+    "cartelGraffitiFrequency": 1.0,
     "driveByFrequency":  0.7,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
@@ -149,6 +150,10 @@ You can customize the basic mod settings through the **config.json** file.
     - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days.
 - **`cartelRobberyFrequency`**: Adjusts the frequency of Cartel Robbery events.
+    - `1.0`: Can happen as often as every 1 in-game hour.
+    - `0.0`: Can happen at most once every 2 in-game days.
+    - `-1.0`: Can happen at most once every 4 in-game days
+- **`cartelGraffitiFrequency`**: Adjusts the frequency of Cartel Goons spraying Graffiti
     - `1.0`: Can happen as often as every 1 in-game hour.
     - `0.0`: Can happen at most once every 2 in-game days.
     - `-1.0`: Can happen at most once every 4 in-game days
@@ -417,7 +422,7 @@ The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). Th
 - **Quest Prerequirements:**
     1. Cartel must be Hostile
     2. Player must have Suburbia region unlocked
-    3. Player must be atleast Enforcer rank
+    3. Player must be atleast Bagman rank
 
 - Upon paying the $5000 Bribe to Manny, you get a custom active quest:
     - First you must intercept cartel dead drops twice
@@ -450,7 +455,7 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 - **Quest Prerequirements:**
     1. Cartel must be Hostile
     2. Player must have Suburbia region unlocked
-    3. Player must be atleast Enforcer rank
+    3. Player must be atleast Bagman rank
 
 - Upon paying the $2500 Bribe to Ray, you get a custom active quest:
     - First you must investigate the forest near Manor
@@ -472,10 +477,10 @@ The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 whe
 | M1911 Magazine | **100%** | 1 | This item is a guaranteed drop. |
 | M1911 Pistol | **33.4%** | 1 | |
 | Cocaine | **10%** | 12-20 |  |
-| Gold Bar | **5%** | 1-3 | This drop prevents cash from spawning. |
-| Cash | High Chance | $800-$4000 | Will spawn if a gold bar does not. The amount is rounded to the nearest $100. |
-| Silver Watch | **20%** | 1 |  |
-| Silver Chain | **20%** | 1 |  |
+| Gold Bar | **70%** | 3-7 | This drop prevents cash from spawning. |
+| Cash | **30%** | $1000 | Will spawn if a gold bar does not.  |
+| Silver Watch | **60%** | 1 |  |
+| Silver Chain | **60%** | 1 |  |
 | Stolen Cartel Item | **80%** | 1 | Only spawns if the `cartelStolenItems` pool has items. |
 
 ---
@@ -678,7 +683,7 @@ Note: Due to the way which the mod handles some of the influence changes, someti
 ### Modifying Allied Settings
 
 1. Open `Mods/CartelEnforcer/Allied/config.json`.
-2. Each Cartel Dealers "Cut" is defined in this file
+2. Each Cartel Dealers "Cut" and "Signing Fee" is defined in this file
 3. Additionally the Persuade Cooldown (in-game) minutes and Supply Quest Cooldown (in-game) Hours are defined in this file
 
 
@@ -687,10 +692,15 @@ Note: Due to the way which the mod handles some of the influence changes, someti
 ```json
 {
   "WestvilleCartelDealerCut": 0.3,
+  "WestvilleCartelSigningFee": 6000.0,
   "DowntownCartelDealerCut": 0.4,
+  "DowntownCartelSigningFee": 12000.0,
   "DocksCartelDealerCut": 0.5,
+  "DocksCartelSigningFee": 18000.0,
   "SuburbiaCartelDealerCut": 0.55,
-  "UptownCartelDealerCut": 0.60,
+  "SuburbiaCartelSigningFee": 24000.0,
+  "UptownCartelDealerCut": 0.6,
+  "UptownCartelSigningFee": 36000.0,
   "PersuadeCooldownMins": 60,
   "SupplyQuestCooldownHours": 48
 }
@@ -698,6 +708,7 @@ Note: Due to the way which the mod handles some of the influence changes, someti
 
 - **(Region)CartelDealerCut**: Amount of money the cartel dealer takes from each deal (percentage)
     - A number in range of 0.0 to 1.0 (0.0 = Dealer takes no cut, 1.0 = Dealer takes all of the money from deals)
+- **(Region)CartelSigningFee**: Amount of money the cartel dealer needs to be paid to start working for the player
 - **PersuadeCooldownMins**: Minutes in-game that the player must wait until they can attempt to persuade a Cartel Dealer again
     - Note: Must be an Integer without decimal point.
 - **SupplyQuestCooldownHours**: Hours in-game that the player must wait until the Supply Quest can trigger again

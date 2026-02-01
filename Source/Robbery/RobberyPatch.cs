@@ -212,14 +212,10 @@ namespace CartelEnforcer
             }
             return false;
         }
-
     }
 
     public static class DealerRobbery
     {
-        // Cache this to allow temporary changes to the cash stack size during robbery for robber inventory
-        public static int cachedCashStackLimit = 0;
-
         public static IEnumerator RobberyCombatCoroutine(Dealer dealer)
         {
             yield return Wait2;
@@ -268,6 +264,7 @@ namespace CartelEnforcer
                 Log("[TRY ROB]    Failed to spawn goon. Robbery failed.");
                 yield break;
             }
+
             Log("[TRY ROB]    Send Message");
             string text = "";
             switch (UnityEngine.Random.Range(0, 5))
@@ -301,7 +298,12 @@ namespace CartelEnforcer
                 // these stats need to be applied because melee vs ranged combat is busted
                 if (goon.Behaviour.CombatBehaviour.currentWeapon != null)
                 {
+#if MONO
                     if (goon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+#else
+                    AvatarRangedWeapon wep = goon.Behaviour.CombatBehaviour.currentWeapon.TryCast<AvatarRangedWeapon>();
+                    if (wep != null)
+#endif
                     {
                         wep.AimTime_Max = 0.33f;
                         wep.AimTime_Min = 0.1f;
@@ -313,7 +315,23 @@ namespace CartelEnforcer
             }
             else if (AmbushOverrides.MeleeWeapons != null && AmbushOverrides.MeleeWeapons.Length > 0)
             {
+
                 goon.Behaviour.CombatBehaviour.DefaultWeapon = AmbushOverrides.MeleeWeapons[UnityEngine.Random.Range(0, AmbushOverrides.MeleeWeapons.Length)];
+                // Also here the melee wep needs a little buff
+#if MONO
+                if (goon.Behaviour.CombatBehaviour.DefaultWeapon is AvatarMeleeWeapon wep)
+#else
+                AvatarMeleeWeapon wep = goon.Behaviour.CombatBehaviour.DefaultWeapon.TryCast<AvatarMeleeWeapon>();
+                if (wep != null)
+#endif
+                {
+                    wep.AttackRadius = 2.8f;
+                    wep.AttackRange = 3.5f;
+                    wep.MaxUseRange = 3.5f;
+                    wep.MinUseRange = 0.01f;
+                    wep.CooldownDuration = 1.2f;
+                    wep.Damage = 44f;
+                }
             }
             Log("[TRY ROB]    Warp to spawn");
             goon.Movement.Warp(spawnPos);
@@ -358,8 +376,8 @@ namespace CartelEnforcer
             {
                 // Dealer is dead Partial rob first start with getting goon to the body
                 Log("[TRY ROB]    Dealer was defeated! Initiating partial robbery.");
+                goon.Inventory.Clear();
                 goon.Behaviour.ScheduleManager.DisableSchedule();
-                goon.Behaviour.activeBehaviour = null;
                 goon.Behaviour.ScheduleManager.ActionList[0].End();
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
 
@@ -417,11 +435,15 @@ namespace CartelEnforcer
 
                     if (dealer.Inventory.ItemSlots[i].ItemInstance != null)
                     {
-                        takenSlots++;
                         int qtyRobbed = Mathf.Max(1, Mathf.RoundToInt(dealer.Inventory.ItemSlots[i].ItemInstance.Quantity * 0.6f));
                         temp = dealer.Inventory.ItemSlots[i].ItemInstance.GetCopy(qtyRobbed);
-                        dealer.Inventory.ItemSlots[i].ChangeQuantity(-qtyRobbed, false); // is this networked
-                        goon.Inventory.InsertItem(temp, true);
+                        if (goon.Inventory.CanItemFit(temp))
+                        {
+                            dealer.Inventory.ItemSlots[i].ChangeQuantity(-qtyRobbed, false);
+                            goon.Inventory.InsertItem(temp, true);
+                            takenSlots++;
+                        }
+
                     }
                 }
 
@@ -440,56 +462,17 @@ namespace CartelEnforcer
                 if (takenSlots < availableSlots && dealer.Cash > 1f)
                 {
                     // Also take cash if there is still available space
-                    Func<string, ItemDefinition> GetItem;
-#if MONO
-                    GetItem = ScheduleOne.Registry.GetItem;
-#else
-                    GetItem = Il2CppScheduleOne.Registry.GetItem;
-#endif
-                    int qtyCashLoss = Mathf.RoundToInt(dealer.Cash * UnityEngine.Random.Range(0.6f, 0.95f));
+
+                    int stillAvailable = availableSlots - takenSlots;
+                    float qtyCashLoss = Mathf.Clamp(Mathf.Round(dealer.Cash * UnityEngine.Random.Range(0.6f, 0.95f)), min: 1f, max: 1000f*stillAvailable);
                     dealer.ChangeCash(-(float)qtyCashLoss);
-
-                    ItemDefinition defCash = GetItem("cash");
-                    if (qtyCashLoss > 2000)
-                    {
-                        // because the definition changes qty stack limit permanently we cache previous to reset it on event end
-                        cachedCashStackLimit = defCash.StackLimit;
-                        defCash.StackLimit = qtyCashLoss;
-
-                    }
-                    ItemInstance cashInstance = defCash.GetDefaultInstance(1);
-#if MONO
-                    if (cashInstance is CashInstance inst)
-                    {
-                        inst.Balance = qtyCashLoss;
-                    }
-#else
-                    CashInstance tempInst = cashInstance.TryCast<CashInstance>();
-                    if (tempInst != null)
-                    {
-                        tempInst.Balance = qtyCashLoss;
-                    }
-#endif
-
-                    // Now insert cash stack
-                    for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
-                    {
-                        yield return Wait025;
-                        if (!registered) yield break;
-                        if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
-                        {
-                            coros.Add(MelonCoroutines.Start(EndBodyLootPrematurely(goon)));
-                            yield break;
-                        }
-
-                        if (goon.Inventory.ItemSlots[i].ItemInstance == null)
-                        {
-                            Log($"[TRY ROB]    Inserting ${qtyCashLoss} to Slot {i}");
-                            goon.Inventory.ItemSlots[i].InsertItem(cashInstance);
-                            break;
-                        }
-                    }
+                    goon.Inventory.AddCash(qtyCashLoss);
+                    goon.SetAnimationTrigger("GrabItem");
                 }
+                // Just incase
+                dealer.Inventory.InventoryContentsChanged();
+                goon.Inventory.InventoryContentsChanged();
+
                 Log("[TRY ROB    Finished Body Intercept]");
                 goon.Avatar.Animation.SetCrouched(false);
                 coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence)));
@@ -548,29 +531,13 @@ namespace CartelEnforcer
             Log("[TRY ROB]    Despawned Goon");
 
             goon.Despawn();
-            goon.Behaviour.CombatBehaviour.Disable_Networked(null);
             goon.Health.MaxHealth = 100f;
             goon.Health.Health = 100f;
             goon.Health.Revive();
+            goon.Behaviour.CombatBehaviour.Disable_Networked(null);
             goon.Behaviour.ScheduleManager.EnableSchedule();
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.ActionList[0].Resume();
-
-            // Reset cash definition stack size if necessary
-            if (cachedCashStackLimit != 0)
-            {
-                // because the definition changes qty stack limit permanently we cache previous to reset it on event end
-                Func<string, ItemDefinition> GetItem;
-#if MONO
-                GetItem = ScheduleOne.Registry.GetItem;
-#else
-                GetItem = Il2CppScheduleOne.Registry.GetItem;
-#endif
-                ItemDefinition defCash = GetItem("cash");
-                defCash.StackLimit = cachedCashStackLimit;
-                cachedCashStackLimit = 0;
-            }
-
             yield return null;
         }
         public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence)
@@ -585,20 +552,35 @@ namespace CartelEnforcer
             StaticDoor doorTemp = null;
             Vector3 destination = Vector3.zero;
 
-            // Find nearest CartelDealer Home building
+            // Find nearest CartelDealer Home building Sometimes code hangs here no clue why
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
+                Log("Check dealer " + dealer.name);
                 if (dealer.Home != null && dealer.Home.Doors != null && dealer.Home.Doors.Length > 0)
                 {
                     doorTemp = dealer.Home.Doors[0];
-                    distCalculated = Vector3.Distance(door.AccessPoint.position, goon.CenterPointTransform.position);
+                    if (doorTemp == null)
+                    {
+                        Log("Temp door is null");
+                        continue;
+                    }
+                    if (doorTemp.AccessPoint == null)
+                    {
+                        Log("Door accesspoint is null");
+                        continue;
+                    }
+                    distCalculated = Vector3.Distance(doorTemp.AccessPoint.position, goon.CenterPointTransform.position);
                     if (distCalculated < distance)
                     {
-                        door = dealer.Home.Doors[0];
+                        door = doorTemp;
                         building = dealer.Home;
                         destination = door.AccessPoint.position;
                         distance = distCalculated;
                     }
+                }
+                else
+                {
+                    Log("Dealer does not have a valid home");
                 }
             }
             Log("Done parsing");
@@ -608,6 +590,7 @@ namespace CartelEnforcer
             if (door == null || building == null)
             {
                 // todo waht?
+                Log($"Door {door == null} or building {building == null} is null");
             }
             else
             {
@@ -683,121 +666,79 @@ namespace CartelEnforcer
             {
                 // The goon successfully escaped.
                 Log("[TRY ROB]    Goon Escaped to Cartel Dealer!");
-                if (changeInfluence)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeSuccess);
-
-
-                // Parse inventory after escape
-                List<ItemInstance> list = new List<ItemInstance>();
-
-#if IL2CPP
-                CashInstance temp = null;
-#endif
-                for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
-                {
-#if MONO
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
-                    {
-                        Log($"[TRY ROB]    Stolen {inst.Balance} cash");
-                        cartelCashAmount += inst.Balance;
-                        continue;
-                    }
-#else
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
-                    {
-                        temp = goon.Inventory.ItemSlots[i].ItemInstance.TryCast<CashInstance>();
-                        if (temp != null)
-                            cartelCashAmount += temp.Balance;
-                        temp = null;
-                        continue;
-                    }
-#endif
-                    // Not cash Instance, can still be product etc.
-
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
-                    {
-                        int qty = Mathf.Min(goon.Inventory.ItemSlots[i].ItemInstance.Quantity, 20);
-                        list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
-                    }
-                }
-#if MONO
-                if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
-#else
-                void Callback()
-                {
-                    if (goon != null)
-                        goon.Inventory.Clear();
-                }
-                if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
-#endif
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
-
+                EscapeEndSuccess(changeInfluence, region, goon);
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
             {
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeDead);
-                // The goon was defeated (dead or knocked out).
+                // The goon was defeated (dead or knocked out) despawn with 1min timeout
                 coros.Add(MelonCoroutines.Start(DespawnSoon(goon)));
             }
             else if (elapsedNav >= 60f && goon.IsGoonSpawned)
             {
                 // The escape attempt timed out.
                 Log("[TRY ROB]    Despawned escaping goon due to timeout");
+                EscapeEndSuccess(changeInfluence, region, goon);
+            }
+            Log("[TRY ROB] End");
+            yield return null;
+        }
 
-                // Parse inventory after escape
-                List<ItemInstance> list = new List<ItemInstance>();
-
+        public static void EscapeEndSuccess(bool changeInfluence, EMapRegion region, CartelGoon goon)
+        {
+            if (changeInfluence)
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.robberyGoonEscapeSuccess);
+            // Parse inventory after escape
+            List<ItemInstance> list = new List<ItemInstance>();
 #if IL2CPP
-                CashInstance temp = null;
+            CashInstance temp = null;
 #endif
-                for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
-                {
+            for (int i = 0; i < goon.Inventory.ItemSlots.Count; i++)
+            {
 #if MONO
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
-                    {
-                        Log($"[TRY ROB]    Stolen {inst.Balance} cash");
-                        cartelCashAmount += inst.Balance;
-                        continue;
-                    }
+                if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
+                {
+                    Log($"[TRY ROB]    Stolen {inst.Balance} cash");
+                    cartelCashAmount += inst.Balance;
+                    continue;
+                }
 #else
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                if (goon.Inventory.ItemSlots[i].ItemInstance != null)
+                {
+                    temp = goon.Inventory.ItemSlots[i].ItemInstance.TryCast<CashInstance>();
+                    if (temp != null) 
                     {
-                        temp = goon.Inventory.ItemSlots[i].ItemInstance.TryCast<CashInstance>();
-                        if (temp != null)
-                            cartelCashAmount += temp.Balance;
+                        cartelCashAmount += temp.Balance;
                         temp = null;
                         continue;
                     }
-#endif
-                    // Not cash Instance, can still be product etc.
-
-                    if (goon.Inventory.ItemSlots[i].ItemInstance != null)
-                    {
-                        int qty = Mathf.Min(goon.Inventory.ItemSlots[i].ItemInstance.Quantity, 20);
-                        list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
-                    }
+                    temp = null;
                 }
-#if MONO
-                if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
-#else
-                void Callback()
+#endif
+                // Not cash Instance, can still be product etc.
+
+                if (goon.Inventory.ItemSlots[i].ItemInstance != null)
                 {
-                    if (goon != null)
-                        goon.Inventory.Clear();
+                    int qty = Mathf.Min(goon.Inventory.ItemSlots[i].ItemInstance.Quantity, 20);
+                    list.Add(goon.Inventory.ItemSlots[i].ItemInstance.GetCopy(qty));
                 }
-                if (list.Count > 0)
-                    coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
-#endif
-
-                coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
-
-                Log("[TRY ROB] End");
             }
-            yield return null;
+            // Empty inventory
+#if MONO
+            if (list.Count > 0)
+                coros.Add(MelonCoroutines.Start(CartelStealsItems(list, () => { goon.Inventory.Clear(); })));
+#else
+            void Callback()
+            {
+                if (goon != null)
+                    goon.Inventory.Clear();
+            }
+            if (list.Count > 0)
+                coros.Add(MelonCoroutines.Start(CartelStealsItems(list, Callback)));
+#endif
+            // Despawn insta
+            coros.Add(MelonCoroutines.Start(DespawnSoon(goon, true)));
         }
 
         // After combat goon gets adrenaline rush, getting little health regen instantly and increasing speed for 15sec ...

@@ -140,12 +140,20 @@ namespace CartelEnforcer
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
+
+#if BETA
+                var action = (Action)OnMinPass;
+#else
+                var action = (Action)MinPass;
+#endif
+
+
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
-                instance.onMinutePass.Remove((Action)this.MinPass);
+                instance.onMinutePass.Remove(action);
 #else
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
-                instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
+                instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
                 Log("Quest_DefeatEnforcer: Base End method finished successfully.");
             }
@@ -334,17 +342,24 @@ namespace CartelEnforcer
             defeat.CompleteParentQuest = false;
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+
+#if BETA
+            var action = (Action)OnMinPass;
+#else
+            var action = (Action)MinPass;
+#endif
+
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
-            instance.onMinutePass.Add(new Action(this.MinPass));
+            instance.onMinutePass.Add(action);
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
-            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
+            instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
             StartQuestDetail();
         }
 
-        private void StartQuestDetail() // todo fixme this dumb
+        private void StartQuestDetail()
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
@@ -723,6 +738,8 @@ namespace CartelEnforcer
                     wep.AimTime_Max = 1.2f;
                     wep.RepositionAfterHit = true;
                     wep.CanShootWhileMoving = true;
+                    if (currentConfig.debugMode)
+                        wep.Damage = 0f;
                 }
 #else
                 AvatarRangedWeapon wep = null;
@@ -750,6 +767,8 @@ namespace CartelEnforcer
                     wep.AimTime_Max = 1.2f;
                     wep.RepositionAfterHit = true;
                     wep.CanShootWhileMoving = true;
+                    if (currentConfig.debugMode)
+                        wep.Damage = 0f;
                 }
 #endif
             }
@@ -836,12 +855,20 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        public override void MinPass()
-        {
-            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return; 
-#if MONO
-            base.MinPass(); // Is this necessary in mono or does cause recursion??
 
+#if BETA
+        public override void OnMinPass()
+#else
+        public override void MinPass()
+#endif
+        {
+            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return;
+#if MONO
+#if BETA
+            base.OnMinPass();
+#else
+            base.MinPass();
+#endif
 #endif
             if (!InstanceFinder.IsServer)
             {

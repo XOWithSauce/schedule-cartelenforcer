@@ -177,15 +177,19 @@ namespace CartelEnforcer
                     actInt = 0;
                 else if (inRegAct is CartelCustomerDeal)
                     actInt = 1;
-                else // else its RobDealer class
+                else if (inRegAct is RobDealer)
                     actInt = 2;
+                else // spray graffiti
+                    actInt = 3;
 #else
                 if (inRegAct.TryCast<StealDeadDrop>() != null)
                     actInt = 0;
                 else if (inRegAct.TryCast<CartelCustomerDeal>() != null)
                     actInt = 1;
-                else // else its RobDealer class
+                else if (inRegAct.TryCast<RobDealer>() != null)
                     actInt = 2;
+                else // spray graffiti
+                    actInt = 3;
 #endif
 
                 for (int i = 0; i < foundMatch.Count; i++)
@@ -236,6 +240,10 @@ namespace CartelEnforcer
                     {
                         regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelRobberyFrequency);
                     }
+                    else if (selected.Value[1] == 3)// Spray graffiti
+                    {
+                        regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelGraffitiFrequency);
+                    }
 
                     // Finally break
                     break;
@@ -248,7 +256,7 @@ namespace CartelEnforcer
 
             Log("[REGACT] Finished TryStartRegionalActivity");
             enabledActivities.Clear();
-            return false; // Just block running the original function with shuffle as described in comments
+            return false; 
         }
     }
 }

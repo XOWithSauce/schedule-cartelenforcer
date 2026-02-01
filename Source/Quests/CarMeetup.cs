@@ -75,6 +75,16 @@ namespace CartelEnforcer
 
         private float questDifficultyScalar = 1f;
 
+        private readonly List<Vector3> pileBasePos = new()
+        {
+            new Vector3(-14.6f, -4.77f, 168.2f),
+            new Vector3(-14.6f, -4.77f, 168.6f),
+            new Vector3(-14.4f, -4.77f, 168.2f),
+            new Vector3(-14.4f, -4.77f, 168.6f),
+            new Vector3(-14.8f, -4.77f, 168.7f),
+            new Vector3(-15.3f, -4.77f, 168.6f),
+        };
+
         private GameObject brickBase = null;
         private List<GameObject> spawnedDecor = new();
 
@@ -152,12 +162,18 @@ namespace CartelEnforcer
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
+
+#if BETA
+                var action = (Action)OnMinPass;
+#else
+                var action = (Action)MinPass;
+#endif
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
-                instance.onMinutePass.Remove((Action)this.MinPass);
+                instance.onMinutePass.Remove(action);
 #else
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
-                instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
+                instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
                 investigationActive = false;
                 playerSightedActive = false;
@@ -362,17 +378,26 @@ namespace CartelEnforcer
             escape.CompleteParentQuest = false;
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+
+
+#if BETA
+            var action = (Action)OnMinPass;
+#else
+            var action = (Action)MinPass;
+#endif
+
+
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
-            instance.onMinutePass.Add(new Action(this.MinPass));
+            instance.onMinutePass.Add(action);
 #else
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
-            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
+            instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
             StartQuestDetail();
         }
 
-        private void StartQuestDetail() // todo fixme this dumb
+        private void StartQuestDetail()
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
@@ -607,7 +632,12 @@ namespace CartelEnforcer
             if (!registered) yield break;
 
             boxSuv2.GetComponent<Rigidbody>().isKinematic = true;
+#if BETA
+            boxSuv2.GetComponent<VehicleLights>().HeadlightsOn = true;
+#else
             boxSuv2.GetComponent<VehicleLights>().headLightsOn = true;
+
+#endif
             spawnedDecor.Add(boxSuv2.gameObject);
 
             Log("Spawn pallet");
@@ -626,16 +656,6 @@ namespace CartelEnforcer
             spawnedDecor.Add(pallet.gameObject);
 
             // spawn bricks into tr pallet
-
-            List<Vector3> pileBasePos = new()
-            {
-                new Vector3(-14.6f, -4.77f, 168.2f),
-                new Vector3(-14.6f, -4.77f, 168.6f),
-                new Vector3(-14.4f, -4.77f, 168.2f),
-                new Vector3(-14.4f, -4.77f, 168.6f),
-                new Vector3(-14.8f, -4.77f, 168.7f),
-                new Vector3(-15.3f, -4.77f, 168.6f),
-            };
 
             foreach (Vector3 basePos in pileBasePos)
             {
@@ -671,6 +691,7 @@ namespace CartelEnforcer
                     if (target.Behaviour.CombatBehaviour.Active)
                         target.Behaviour.CombatBehaviour.Disable_Networked(null);
 
+                    yield return Wait05;
                     currentIter++;
                 } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4 || currentIter == maxIter);
             }
@@ -912,12 +933,20 @@ namespace CartelEnforcer
             yield return null;
         }
 
+#if BETA
+        public override void OnMinPass()
+#else
         public override void MinPass()
+#endif
         {
             if (!registered || SaveManager.Instance.IsSaving || carMeetupCompleted || this.State != EQuestState.Active) return;
 
 #if MONO
-            base.MinPass(); // Is this necessary in mono or does cause recursion??
+#if BETA
+            base.OnMinPass();
+#else
+            base.MinPass();
+#endif
 #endif
             if (!InstanceFinder.IsServer)
             {

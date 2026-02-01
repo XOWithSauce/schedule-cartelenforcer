@@ -106,11 +106,19 @@ namespace CartelEnforcer
                     hudUI.Complete();
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+
+#if BETA
+                var action = (Action)OnMinPass;
+#else
+                var action = (Action)MinPass;
+#endif
+
+
                 if (instance == null) return;
 #if MONO
-                instance.onMinutePass.Remove((Action)this.MinPass);
+                instance.onMinutePass.Remove(action);
 #else
-                instance.onMinutePass.Remove((Il2CppSystem.Action)this.MinPass);
+                instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
                 Log("Quest_TrucedRecruits: Base End method finished successfully.");
             }
@@ -313,15 +321,22 @@ namespace CartelEnforcer
             hireCartel.CompleteParentQuest = false;
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-#if MONO
-            instance.onMinutePass.Add(new Action(this.MinPass));
+
+#if BETA
+            var action = OnMinPass;
 #else
-            instance.onMinutePass += (Il2CppSystem.Action)this.MinPass;
+            var action = MinPass;
+#endif
+
+#if MONO
+            instance.onMinutePass.Add(new Action(action));
+#else
+            instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
             StartQuestDetail();
         }
 
-        private void StartQuestDetail() // todo fixme this dumb
+        private void StartQuestDetail()
         {
             if (this.IconPrefab == null)
                 this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
@@ -379,7 +394,11 @@ namespace CartelEnforcer
             return;
         }
 
+#if BETA
+        public override void OnMinPass()
+#else
         public override void MinPass()
+#endif
         {
             if (!registered || SaveManager.Instance.IsSaving || alliedQuests.alliedIntroCompleted || this.State != EQuestState.Active) return;
 
@@ -398,7 +417,11 @@ namespace CartelEnforcer
             }
 
 #if MONO
-            base.MinPass(); // Is this necessary in mono or does cause recursion??
+#if BETA
+            base.OnMinPass();
+#else
+            base.MinPass();
+#endif
 #endif
             if (westvilleDealer == null) return;
 

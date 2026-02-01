@@ -4,6 +4,8 @@ using UnityEngine;
 using static CartelEnforcer.DebugModule;
 
 #if MONO
+using ScheduleOne.Quests;
+using ScheduleOne.Cartel;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Product;
 using ScheduleOne.Product.Packaging;
@@ -12,6 +14,8 @@ using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
 #else
+using Il2CppScheduleOne.Quests;
+using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Product.Packaging;
@@ -342,5 +346,231 @@ namespace CartelEnforcer
             }
             return fromPool;
         }
+
+        // From stolen items return amount of ordered by exact match higher or equal quality autopackaged in jars
+        public static List<ItemInstance> GetFromPool(string id, EQuality quality, int qty, out int returnedQty)
+        {
+            if (cartelStolenItems.Count == 0)
+            {
+                returnedQty = 0;
+                return new();
+            }
+
+            List<ItemInstance> fromPool = new();
+
+#if IL2CPP
+            QualityItemInstance qtInst;
+#endif
+            lock (cartelItemLock)
+            {
+#if MONO
+                ItemDefinition def = ScheduleOne.Registry.GetItem(id);
+#else
+                ItemDefinition def = Il2CppScheduleOne.Registry.GetItem(id);
+#endif
+                // So find first which meets quality >= required quality
+                QualityItemInstance inst = cartelStolenItems.First(item => item.ID == id &&  item.Quality >= quality);
+                if (inst == null || inst.Quantity <= 5)
+                {
+                    returnedQty = 0;
+                    return fromPool;
+                }
+                int listIndex = cartelStolenItems.IndexOf(inst);
+                // Quotient from division by known packaging quantities jars 
+                // Max slot qty of 20 with mathfmin
+                int jarQuotient = Mathf.FloorToInt((float)inst.Quantity / (float)jarQuantity);
+                int jarReqQuotient = Mathf.CeilToInt((float)qty / (float)jarQuantity);
+                PackagingDefinition packagingDef = CartelInventory.jarPackaging;
+
+                int slotsNeeded = 0;
+                int quotientLeft = 0;
+                if (jarReqQuotient > jarQuotient)
+                {
+                    returnedQty = jarQuotient * jarQuantity;
+                    quotientLeft = jarQuotient;
+                    slotsNeeded = Mathf.CeilToInt((float)jarQuotient / 20);
+                }
+                else
+                {
+                    returnedQty = jarReqQuotient * jarQuantity;
+                    quotientLeft = jarReqQuotient;
+                    slotsNeeded = Mathf.CeilToInt((float)jarReqQuotient / 20);
+                }
+
+                for (int i = 0; i < slotsNeeded; i++)
+                {
+                    ItemInstance item = null;
+                    // use jarquotient
+                    if (quotientLeft > 20)
+                    {
+                        item = def.GetDefaultInstance(20);
+                        quotientLeft -= 20;
+                    }
+                    else
+                    {
+                        item = def.GetDefaultInstance(quotientLeft);
+                    }
+
+                    // Apply packaging
+                    if (packagingDef != null)
+                    {
+#if MONO
+                        if (item is ProductItemInstance product)
+                        {
+                            product.SetPackaging(packagingDef);
+                        }
+#else
+                        ProductItemInstance temp = item.TryCast<ProductItemInstance>();
+                        if (temp != null)
+                        {
+                            temp.SetPackaging(packagingDef);
+                        }
+#endif
+                    }
+
+                    // Change quality
+#if MONO
+                    if (item is QualityItemInstance qtInst)
+                        qtInst.Quality = quality;
+#else
+                    qtInst = item.TryCast<QualityItemInstance>();
+                    if (qtInst != null)
+                        qtInst.Quality = quality;
+#endif
+                    fromPool.Add(item);
+                }
+
+                if (returnedQty >= inst.Quantity)
+                    cartelStolenItems.Remove(inst);
+                else
+                    cartelStolenItems[listIndex].Quantity -= returnedQty;
+            }
+            return fromPool;
+        }
+
+        public static List<ItemInstance> MakeItem(string id, EQuality quality, int qty)
+        {
+            List<ItemInstance> fromPool = new();
+
+#if IL2CPP
+            QualityItemInstance qtInst;
+#endif
+#if MONO
+            ItemDefinition def = ScheduleOne.Registry.GetItem(id);
+#else
+            ItemDefinition def = Il2CppScheduleOne.Registry.GetItem(id);
+#endif
+            int jarReqQuotient = Mathf.CeilToInt((float)qty / (float)jarQuantity);
+            PackagingDefinition packagingDef = CartelInventory.jarPackaging;
+
+            int slotsNeeded = 0;
+            int quotientLeft = jarReqQuotient;
+            slotsNeeded = Mathf.CeilToInt((float)jarReqQuotient / 20);
+
+            for (int i = 0; i < slotsNeeded; i++)
+            {
+                ItemInstance item = null;
+                if (quotientLeft > 20)
+                {
+                    item = def.GetDefaultInstance(20);
+                    quotientLeft -= 20;
+                }
+                else
+                {
+                    item = def.GetDefaultInstance(quotientLeft);
+                }
+
+                // Apply packaging
+                if (packagingDef != null)
+                {
+#if MONO
+                    if (item is ProductItemInstance product)
+                    {
+                        product.SetPackaging(packagingDef);
+                    }
+#else
+                    ProductItemInstance temp = item.TryCast<ProductItemInstance>();
+                    if (temp != null)
+                    {
+                        temp.SetPackaging(packagingDef);
+                    }
+#endif
+                }
+
+                // Change quality
+#if MONO
+                if (item is QualityItemInstance qtInst)
+                    qtInst.Quality = quality;
+#else
+                qtInst = item.TryCast<QualityItemInstance>();
+                if (qtInst != null)
+                    qtInst.Quality = quality;
+#endif
+                fromPool.Add(item);
+            }
+            return fromPool;
+        }
+
+        public static bool ExistsInInventory(string id, EQuality quality, out int qty)
+        {
+            // Exists first of equal or higher quality ret quantity
+            bool exists = false;
+            lock (cartelItemLock)
+            {
+                exists = cartelStolenItems.Any(item => item.ID == id && item.Quality >= quality);
+                if (exists)
+                    qty = cartelStolenItems.First(item => item.ID == id && item.Quality >= quality).Quantity;
+                else
+                    qty = 0;
+            }
+            return exists;
+        }
+
+        public static void FulfillContractItems(Contract contract, CartelDealer dealer)
+        {
+            // todo logic from intercept, then reuse in intercept + dealer activity
+            List<ItemInstance> fromPool = new();
+            foreach (ProductList.Entry entry in contract.ProductList.entries)
+            {
+                bool entrySatisfied = false;
+                Log($"Intercept entry: {entry.ProductID} - {entry.Quality} - {entry.Quantity}");
+                int inventoryRemainder = -1;
+                if (ExistsInInventory(entry.ProductID, entry.Quality, out int qty))
+                {
+                    Log("Item exists in inventory");
+                    fromPool.AddRange(GetFromPool(entry.ProductID, entry.Quality, entry.Quantity, out int returned));
+                    if (returned < entry.Quantity)
+                        inventoryRemainder = entry.Quantity - returned;
+                    else
+                        entrySatisfied = true;
+                    Log("Added dealer items from stolen inventory");
+                }
+
+                if (!entrySatisfied || inventoryRemainder > 0)
+                {
+                    Log("Entry not satisfied");
+                    // magic generate items from thin air
+                    if (inventoryRemainder > 0)
+                        fromPool.AddRange(MakeItem(entry.ProductID, entry.Quality, inventoryRemainder));
+                    else
+                        fromPool.AddRange(MakeItem(entry.ProductID, entry.Quality, entry.Quantity));
+                    Log("Added dealer items with magic");
+                }
+            }
+            Log("Insert from pool");
+            // From pool now contains the item instances needed to make the deal
+            // These might include player stolen items but wont be tracked for accidental clear
+            // since they can be considered as already spent items due to being reserved for the deal
+            for (int i = 0; i < fromPool.Count; i++)
+            {
+                if (fromPool[i] != null && dealer.Inventory.CanItemFit(fromPool[i]))
+                {
+                    dealer.Inventory.InsertItem(fromPool[i], true);
+                }
+            }
+        }
+
+
     }
+
 }

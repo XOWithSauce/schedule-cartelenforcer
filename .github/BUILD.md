@@ -19,7 +19,7 @@ git clone https://github.com/XOWithSauce/schedule-cartelenforcer.git
 ### Project Structure
 
 - Mono and IL2Cpp folders have following files:
-    1. **.csproj**: The main project file for the mod. Has the Build configurations MONO or IL2CPP + Debug/Release.
+    1. **.csproj**: The main project file for the mod. Has the Build configurations MONO or IL2CPP + Debug/Release + Beta for each
     2. **.sln**: Preset Solution file with IL2CPP or MONO configuration ready.
 
 - Source folder contains the shared source code between the 2 build types. In source code build differences are marked with conditional `#if MONO` expressions.
@@ -47,3 +47,4 @@ For testing and development, use the Debug configuration. This build will includ
 
 For the final release, you must switch to the Release configuration. The Release build is optimized for performance and will automatically strip out all calls to DebugModule.Log.
 
+If you want to build Beta compatible version you must make a new configuration with Release_Beta or Debug_Beta and set it as active configuration. This will cause the mod to revert to using any code regions marked with `#if BETA ... #endif`

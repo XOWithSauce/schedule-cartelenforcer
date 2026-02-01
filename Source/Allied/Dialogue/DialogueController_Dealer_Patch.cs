@@ -34,6 +34,7 @@ namespace CartelEnforcer
 {
     // Patch the Dialogue Controller for cartel dealers Check Choice and Choice Callback for custom dialogues
     // Show reasoning for disabled choice opt patch here
+
     [HarmonyPatch(typeof(DialogueController_Dealer), "CheckChoice")]
     public static class DialogueController_Dealer_CheckChoice_Patch
     {
@@ -104,21 +105,20 @@ namespace CartelEnforcer
 
             // Close the dialogue container
             __instance.handler.EndDialogue();
-            yield return Wait05;
+            yield return Wait01;
             if (!registered) yield break;
 
             // Get rid of the override container
             __instance.ClearOverrideContainer();
-            // Add the base options (recruit, manage inv, take money)
-#if MONO
-            AlliedExtension.AddBaseDialogue(__instance.Dealer as CartelDealer);
-#else
-            CartelDealer temp = __instance.Dealer.TryCast<CartelDealer>();
-            if (temp != null)
+
+            // Add the base dialogue options
+            __instance.Dealer.SetUpDialogue();
+
+            void DisableInventoryClear()
             {
-                AlliedExtension.AddBaseDialogue(temp);
+                coros.Add(MelonCoroutines.Start(DisableInventoryClearDelayed(__instance.Dealer)));
             }
-#endif
+            __instance.Dealer.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)DisableInventoryClear);
 
             if (choiceLabel == "THREATEN_CARTEL")
             {
@@ -129,36 +129,43 @@ namespace CartelEnforcer
             {
                 __instance.npc.PlayVO(EVOLineType.Think, false);
             }
-            yield return Wait1;
+            yield return Wait05;
             if (!registered) yield break;
 
-            float paid = AlliedExtension.GetCartelRecruitPayment(__instance.Dealer.Region);
-            switch (UnityEngine.Random.Range(0, 5))
+            switch (UnityEngine.Random.Range(0, 4))
             {
                 case 0:
-                    __instance.handler.WorldspaceRend.ShowText($"Pay me ${paid} and I'll work for you.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Pay me ${__instance.Dealer.SigningFee} and I'll work for you.", 10f);
                     break;
 
                 case 1:
-                    __instance.handler.WorldspaceRend.ShowText($"Come back with ${paid}. Then we can talk.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Come back with ${__instance.Dealer.SigningFee}. Then we can talk.", 10f);
                     break;
 
                 case 2:
-                    __instance.handler.WorldspaceRend.ShowText($"My price is ${paid}. Take it or leave it!", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"My price is ${__instance.Dealer.SigningFee}. Take it or leave it!", 10f);
                     break;
 
                 case 3:
-                    __instance.handler.WorldspaceRend.ShowText($"Fine! For ${paid} cash I'm in.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Fine! For ${__instance.Dealer.SigningFee} cash I'm in.", 10f);
                     break;
             }
-
             yield return null;
+        }
+
+        public static IEnumerator DisableInventoryClearDelayed(Dealer d)
+        {
+            // Check after dialogue choice was choosen if its now recruited
+            // just incase
+            yield return Wait2;
+            if (d.IsRecruited)
+                d.Inventory.ClearInventoryEachNight = false;
+            yield break;
         }
 
         [HarmonyPrefix]
         public static bool Prefix(DialogueController_Dealer __instance, string choiceLabel)
         {
-            Log("[ALLIEDEXT] Choice Callback Prefix for label: " + choiceLabel);
             // If the dealer is not cartel dealer dont patch
             if (__instance.Dealer.DealerType == EDealerType.PlayerDealer) return true;
             // If the allied extensions features not enabled dont patch this method

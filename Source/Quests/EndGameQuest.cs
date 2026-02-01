@@ -172,9 +172,8 @@ namespace CartelEnforcer
             if (numUnlocked < 1)
                 return false;
 
-            if ((int)NetworkSingleton<LevelManager>.Instance.Rank < 5) // If not atleast enforcer rank
+            if ((int)NetworkSingleton<LevelManager>.Instance.Rank < (int)ERank.Bagman) // If not atleast Bagman rank
                 return false; 
-
 
             return true;
         }
@@ -469,8 +468,7 @@ namespace CartelEnforcer
         public static Quest_InfiltrateManor activeManorQuest = null;
         public static bool manorCompleted = false;
         public static int rayChoiceIndex = 0;
-        public static Vector3 standPos = new(70.96f, 1.46f, 16.03f);
-        public static GameObject safePrefab = null;
+        public static readonly Vector3 standPos = new(70.96f, 1.46f, 16.03f);
         public static List<CartelGoon> manorGoons = new();
         public static List<string> manorGoonGuids = new();
 
@@ -727,6 +725,7 @@ namespace CartelEnforcer
 
             yield return null;
         }
+        
         public static IEnumerator QuestManorReward()
         {
             yield return Wait025;
@@ -1131,7 +1130,6 @@ namespace CartelEnforcer
         public static CartelGoon alliedGuard = null;
         public static NetworkObject alliedVanObject = null;
         public static int guardChoiceIndex = -1;
-        public static float cachedWalkSpeed = 0f;
 
         public static IEnumerator SetupTruceSuppliesQuest()
         {
@@ -1183,8 +1181,8 @@ namespace CartelEnforcer
 
                 alliedGuard.Behaviour.CombatBehaviour.Disable_Networked(null);
                 alliedGuard.Behaviour.ScheduleManager.EnableSchedule();
+                alliedGuard.Movement.SpeedController.RemoveSpeedControl("combat");
                 alliedGuard.Despawn();
-                alliedGuard.Movement.WalkSpeed = cachedWalkSpeed;
                 alliedGuard = null;
             }
 

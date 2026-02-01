@@ -51,6 +51,7 @@ namespace CartelEnforcer
         public float deadDropStealFrequency = 1.0f;
         public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
         public float cartelRobberyFrequency = 1.0f;
+        public float cartelGraffitiFrequency = 1.0f;
         // For drive by its different, random range cooldown is defined by the range -1 -> 1
         public float driveByFrequency = 0.7f;
 
@@ -645,10 +646,20 @@ namespace CartelEnforcer
         public class CartelAlliedConfig
         {
             public float WestvilleCartelDealerCut = 0.3f;
+            public float WestvilleCartelSigningFee = 6000f;
+
             public float DowntownCartelDealerCut = 0.4f;
+            public float DowntownCartelSigningFee = 12000f;
+
             public float DocksCartelDealerCut = 0.5f;
+            public float DocksCartelSigningFee = 18000f;
+
             public float SuburbiaCartelDealerCut = 0.55f;
+            public float SuburbiaCartelSigningFee = 24000f;
+
             public float UptownCartelDealerCut = 0.60f;
+            public float UptownCartelSigningFee = 36000f;
+
             public int PersuadeCooldownMins = 60;
             public int SupplyQuestCooldownHours = 48;
         }

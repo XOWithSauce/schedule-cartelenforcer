@@ -8,11 +8,24 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
 using static CartelEnforcer.StealBackCustomer;
 
+#if BETA
+#if MONO
+using WorldSpraySurface = ScheduleOne.Graffiti.WorldSpraySurface;
+#else
+using WorldSpraySurface = Il2CppScheduleOne.Graffiti.WorldSpraySurface;
+#endif
+#else
+#if MONO
+using WorldSpraySurface = ScheduleOne.Graffiti.SpraySurfaceInteraction;
+#else
+using WorldSpraySurface = Il2CppScheduleOne.Graffiti.SpraySurfaceInteraction;
+#endif
+#endif
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
-using ScheduleOne.Graffiti;
 using ScheduleOne.Levelling;
 using ScheduleOne.Map;
 using ScheduleOne.NPCs.Relation;
@@ -22,7 +35,6 @@ using FishNet;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
-using Il2CppScheduleOne.Graffiti;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.NPCs.Relation;
@@ -272,11 +284,12 @@ namespace CartelEnforcer
 
     }
 
+
     // Patch graffiti influence reward function as blocking, so its basically same as in source but bound to config with influence
-    [HarmonyPatch(typeof(SpraySurfaceInteraction), "Reward")]
-    public static class SpraySurfaceInteraction_Reward_Patch
+    [HarmonyPatch(typeof(WorldSpraySurface), "Reward")]
+    public static class WorldSpraySurface_Reward_Patch
     {
-        public static bool Prefix(SpraySurfaceInteraction __instance)
+        public static bool Prefix(WorldSpraySurface __instance)
         {
             NetworkSingleton<LevelManager>.Instance.AddXP(50);
 
@@ -290,7 +303,11 @@ namespace CartelEnforcer
             if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced))
 #endif
             {
+#if BETA
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Region, influenceConfig.graffitiInfluenceReduction);
+#else
                 NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
+#endif
             }
             return false;
         }
