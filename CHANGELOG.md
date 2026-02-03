@@ -1,3 +1,9 @@
+# Version 1.8.3
+
+- Ensured that the mod works in latest 0.4.3f3 default and alternate
+- Fixed a bug where using melee weapons in IL2CPP for Cartel Dealers could cause an error
+- Removed from mod source any non beta conditional blocks since they are now the latest source
+
 # Version 1.8.2
 - Infiltrate Manor quest has been refactored and now generates interior decoration
 - Infiltrate Manor quest can now spawn a forest goon while searching the forest after talking to Ray

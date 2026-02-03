@@ -525,11 +525,7 @@ namespace CartelEnforcer
 
             // for some reason, sometimes it doesnt keep tracking the hrs until expiry sometimes does, try reprod
 
-#if BETA
             var action = contract.OnMinPass;
-#else
-            var action = contract.MinPass;
-#endif
 
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onMinutePass += new Action(action);

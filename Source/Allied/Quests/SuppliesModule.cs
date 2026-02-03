@@ -696,11 +696,7 @@ namespace CartelEnforcer
 
 
 #if MONO
-#if BETA
             activeAlliedSupplies.OnMinPass();
-#else
-            activeAlliedSupplies.MinPass();
-#endif
 #else
             UpdateQuestHUD();
             activeAlliedSupplies.CheckExpiry();

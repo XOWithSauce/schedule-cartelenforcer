@@ -10,6 +10,7 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.CartelGathering;
 
+
 #if MONO
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Map;
@@ -107,12 +108,7 @@ namespace CartelEnforcer
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-#if BETA
                 var action = (Action)OnMinPass;
-#else
-                var action = (Action)MinPass;
-#endif
-
 
                 if (instance == null) return;
 #if MONO
@@ -322,11 +318,7 @@ namespace CartelEnforcer
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-#if BETA
             var action = OnMinPass;
-#else
-            var action = MinPass;
-#endif
 
 #if MONO
             instance.onMinutePass.Add(new Action(action));
@@ -394,11 +386,7 @@ namespace CartelEnforcer
             return;
         }
 
-#if BETA
         public override void OnMinPass()
-#else
-        public override void MinPass()
-#endif
         {
             if (!registered || SaveManager.Instance.IsSaving || alliedQuests.alliedIntroCompleted || this.State != EQuestState.Active) return;
 
@@ -417,11 +405,7 @@ namespace CartelEnforcer
             }
 
 #if MONO
-#if BETA
             base.OnMinPass();
-#else
-            base.MinPass();
-#endif
 #endif
             if (westvilleDealer == null) return;
 

@@ -163,11 +163,7 @@ namespace CartelEnforcer
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
 
-#if BETA
                 var action = (Action)OnMinPass;
-#else
-                var action = (Action)MinPass;
-#endif
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
                 instance.onMinutePass.Remove(action);
@@ -380,12 +376,7 @@ namespace CartelEnforcer
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
 
-#if BETA
             var action = (Action)OnMinPass;
-#else
-            var action = (Action)MinPass;
-#endif
-
 
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
@@ -632,12 +623,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
 
             boxSuv2.GetComponent<Rigidbody>().isKinematic = true;
-#if BETA
             boxSuv2.GetComponent<VehicleLights>().HeadlightsOn = true;
-#else
-            boxSuv2.GetComponent<VehicleLights>().headLightsOn = true;
-
-#endif
             spawnedDecor.Add(boxSuv2.gameObject);
 
             Log("Spawn pallet");
@@ -933,20 +919,12 @@ namespace CartelEnforcer
             yield return null;
         }
 
-#if BETA
         public override void OnMinPass()
-#else
-        public override void MinPass()
-#endif
         {
             if (!registered || SaveManager.Instance.IsSaving || carMeetupCompleted || this.State != EQuestState.Active) return;
 
 #if MONO
-#if BETA
             base.OnMinPass();
-#else
-            base.MinPass();
-#endif
 #endif
             if (!InstanceFinder.IsServer)
             {

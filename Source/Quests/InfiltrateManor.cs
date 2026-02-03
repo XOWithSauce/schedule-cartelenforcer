@@ -146,11 +146,7 @@ namespace CartelEnforcer
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
 
-#if BETA
                 var action = (Action)OnMinPass;
-#else
-                var action = (Action)MinPass;
-#endif
 
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
@@ -504,11 +500,7 @@ namespace CartelEnforcer
             escapeManor.CompleteParentQuest = false;
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-#if BETA
             var action = (Action)OnMinPass;
-#else
-            var action = (Action)MinPass;
-#endif
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
             instance.onMinutePass.Add(action);
@@ -809,19 +801,11 @@ namespace CartelEnforcer
             yield break;
         }
 
-#if BETA
         public override void OnMinPass()
-#else
-        public override void MinPass()
-#endif
         {
             if (!registered || SaveManager.Instance.IsSaving || manorCompleted || this.State != EQuestState.Active) return;
 #if MONO
-#if BETA
             base.OnMinPass();
-#else
-            base.MinPass();
-#endif
 #endif
             if (!InstanceFinder.IsServer)
             {

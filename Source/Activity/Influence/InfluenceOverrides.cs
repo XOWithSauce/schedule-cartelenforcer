@@ -8,21 +8,8 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
 using static CartelEnforcer.StealBackCustomer;
 
-#if BETA
 #if MONO
-using WorldSpraySurface = ScheduleOne.Graffiti.WorldSpraySurface;
-#else
-using WorldSpraySurface = Il2CppScheduleOne.Graffiti.WorldSpraySurface;
-#endif
-#else
-#if MONO
-using WorldSpraySurface = ScheduleOne.Graffiti.SpraySurfaceInteraction;
-#else
-using WorldSpraySurface = Il2CppScheduleOne.Graffiti.SpraySurfaceInteraction;
-#endif
-#endif
-
-#if MONO
+using ScheduleOne.Graffiti;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
@@ -32,6 +19,7 @@ using ScheduleOne.NPCs.Relation;
 using ScheduleOne.PlayerScripts;
 using FishNet;
 #else
+using Il2CppScheduleOne.Graffiti;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
@@ -303,11 +291,7 @@ namespace CartelEnforcer
             if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile || (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced))
 #endif
             {
-#if BETA
                 NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Region, influenceConfig.graffitiInfluenceReduction);
-#else
-                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.SpraySurface.Region, influenceConfig.graffitiInfluenceReduction);
-#endif
             }
             return false;
         }

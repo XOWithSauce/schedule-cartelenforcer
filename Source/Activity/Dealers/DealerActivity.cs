@@ -366,7 +366,14 @@ namespace CartelEnforcer
 
             AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
             // configure weapon stats, at CartelDealerLethality 1 stats are essentially doubled/halved to make it better, at 0 default
-            if (equippable is AvatarRangedWeapon rangedWep && dealerConfig.CartelDealerLethality > 0f)
+#if MONO
+            AvatarRangedWeapon rangedWep = equippable as AvatarRangedWeapon;
+            AvatarMeleeWeapon meleeWep = equippable as AvatarMeleeWeapon;
+#else
+            AvatarRangedWeapon rangedWep = equippable.TryCast<AvatarRangedWeapon>();
+            AvatarMeleeWeapon meleeWep = equippable.TryCast<AvatarMeleeWeapon>();
+#endif
+            if (rangedWep != null && dealerConfig.CartelDealerLethality > 0f)
             {
                 rangedWep.Damage = Mathf.Lerp(rangedWep.Damage, rangedWep.Damage * 2f, dealerConfig.CartelDealerLethality);
                 rangedWep.AimTime_Max = Mathf.Lerp(rangedWep.AimTime_Max, rangedWep.AimTime_Max * 0.5f, dealerConfig.CartelDealerLethality);
@@ -378,7 +385,7 @@ namespace CartelEnforcer
                 rangedWep.MaxFireRate = Mathf.Lerp(rangedWep.MaxFireRate, rangedWep.MaxFireRate * 0.5f, dealerConfig.CartelDealerLethality);
                 rangedWep.ReloadTime = Mathf.Lerp(rangedWep.ReloadTime, rangedWep.ReloadTime * 0.5f, dealerConfig.CartelDealerLethality);
             }
-            else if (equippable is AvatarMeleeWeapon meleeWep && dealerConfig.CartelDealerLethality > 0f)
+            else if (meleeWep != null && dealerConfig.CartelDealerLethality > 0f)
             {
                 meleeWep.Damage = Mathf.Lerp(meleeWep.Damage, meleeWep.Damage * 2f, dealerConfig.CartelDealerLethality);
                 meleeWep.CooldownDuration = Mathf.Lerp(meleeWep.CooldownDuration, meleeWep.CooldownDuration * 0.5f, dealerConfig.CartelDealerLethality);

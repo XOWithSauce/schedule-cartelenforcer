@@ -72,7 +72,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.2";
+        public const string Version = "1.8.3";
         public const string DownloadLink = null;
     }
 
@@ -554,11 +554,7 @@ namespace CartelEnforcer
 
                     newGoon.Movement.enabled = true;
                     newGoon.gameObject.SetActive(true);
-#if BETA
                     newGoon.Despawn_Client(null);
-#else
-                    newGoon.Despawn_Client();
-#endif
                     newGoons[i] = newGoon;
                     goonPool.unspawnedGoons.Add(newGoon);
                 }
@@ -580,11 +576,7 @@ namespace CartelEnforcer
                 goon.IsGoonSpawned = true;
                 yield return Wait05;
                 if (!registered) yield break;
-#if BETA
                 goon.Despawn_Client(null);
-#else
-                goon.Despawn_Client();
-#endif
             }
             Log("Array swapped now count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
             yield return null;
