@@ -7,6 +7,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.DealerActivity;
 
 #if MONO
@@ -64,33 +65,26 @@ namespace CartelEnforcer
         public static bool interceptingDeal = false;
         public static CartelDealer interceptor = null;
 
+        public static int hoursUntilInterceptEvent = 4;
+
+        public static void HourPassInterceptCooldown()
+        {
+            if (!registered || !currentConfig.interceptDeals || isSaving) return;
+            hoursUntilInterceptEvent = Mathf.Clamp(hoursUntilInterceptEvent - 1, 0, int.MaxValue);
+        }
+
         public static IEnumerator EvaluateCartelIntercepts()
         {
             yield return Wait5;
             InterceptEvent.allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
-            Log("Starting Cartel Intercepts Evaluation");
-            float frequency = 120f;
-            if (currentConfig.activityFrequency > 0.0f)
-                frequency = Mathf.Lerp(frequency, 60f, currentConfig.activityFrequency);
-            else if (currentConfig.activityFrequency < 0.0f)
-                frequency = Mathf.Lerp(frequency, 240f, -currentConfig.activityFrequency);
-
-            WaitForSeconds WaitRandom1 = new WaitForSeconds(UnityEngine.Random.Range(frequency, frequency * 1.5f));
-            WaitForSeconds WaitRandom2 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 1.3f, frequency * 2f));
-            WaitForSeconds WaitRandom3 = new WaitForSeconds(UnityEngine.Random.Range(frequency * 2f, frequency * 3f));
 
             while (registered)
             {
-                switch (UnityEngine.Random.Range(1, 4))
-                {
-                    case 1:
-                        yield return WaitRandom1; break;
-                    case 2:
-                        yield return WaitRandom2; break;
-                    case 3:
-                        yield return WaitRandom3; break;
-                }
+                yield return Wait60;
+
                 if (!registered) yield break;
+                if (!currentConfig.interceptDeals) continue;
+                if (hoursUntilInterceptEvent > 0) continue;
 
                 // from 4pm to 4am only
                 if (!(TimeManager.Instance.CurrentTime >= 1620 || TimeManager.Instance.CurrentTime <= 420))
@@ -108,6 +102,16 @@ namespace CartelEnforcer
 
                 if (!interceptingDeal)
                 {
+                    int hours = GetActivityHours("InterceptDeals");
+                    if (hours != 0)
+                    {
+                        hoursUntilInterceptEvent = hours;
+                    }
+                    else
+                    {
+                        // User wants to use default value for cooldown
+                        hoursUntilInterceptEvent = UnityEngine.Random.Range(2, 8);
+                    }
                     coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
                 }
 
@@ -116,9 +120,11 @@ namespace CartelEnforcer
 
         public static IEnumerator StartInterceptDeal()
         {
-            Log("[INTERCEPT] Started Checking Intercept Deal Validity");
+            Log("Started Checking Intercept Deal Validity");
             List<string> occupied = new();
             int occupiedDealersCount = 0;
+            float influenceRequirement = GetByID("InterceptDeals").InfluenceRequirement;
+
             foreach (CartelDealer d in InterceptEvent.allCartelDealers)
             {
                 bool hasActive = false;
@@ -159,17 +165,16 @@ namespace CartelEnforcer
                         validContracts.Add(contract);
                 }
             }
-            Log("[INTERCEPT]    Check Contracts done");
 
             if (validContracts.Count == 0)
             {
-                Log("[INTERCEPT]    No Valid Contracts Amount");
+                Log("No Valid Contracts Amount");
                 yield break; // No Valid Contracts this time
             }
 
             Customer customer = null;
             Contract randomContract = null;
-            Log("[INTERCEPT]     Take contract ");
+            Log("Take contract");
             do
             {
                 yield return Wait01;
@@ -181,7 +186,7 @@ namespace CartelEnforcer
 
                 if (randomContract == null || (randomContract != null && randomContract.State == EQuestState.Completed))
                 {
-                    Log("[INTERCEPT]    Contract got completed before intercept initialized");
+                    Log("Contract got completed before intercept initialized");
                     validContracts.RemoveAt(randomIndex);
                     randomContract = null;
                     continue;
@@ -190,7 +195,7 @@ namespace CartelEnforcer
                 customer = randomContract.Customer.GetComponent<Customer>();
                 if (customer.NPC.Health.IsDead || customer.NPC.Health.IsKnockedOut)
                 {
-                    Log("[INTERCEPT]    Contract NPC is dead or knocked out");
+                    Log("Contract NPC is dead or knocked out");
                     validContracts.RemoveAt(randomIndex);
                     randomContract = null;
                     continue;
@@ -198,27 +203,25 @@ namespace CartelEnforcer
 
                 if (Player.GetClosestPlayer(customer.NPC.CenterPoint, out float distance) != null && distance < 40f)
                 {
-                    Log("[INTERCEPT]    Contract NPC is too close to player");
+                    Log("Contract NPC is too close to player");
                     validContracts.RemoveAt(randomIndex);
                     randomContract = null;
                     continue;
                 }
 
                 // Else current iteration picked contract is valid and associated customer is alive
-                Log("[INTERCEPT]    Contract Selected succesfully");
+                Log("Contract Selected succesfully");
                 break;
 
             } while (registered && validContracts.Count != 0);
 
             if (customer == null || randomContract == null)
             {
-                Log("[INTERCEPT] Something went wrong in intercept");
+                Log("Something went wrong in intercept");
                 yield break;
             }
 
             CartelDealer selected = null;
-
-            Log("[INTERCEPT]    Dealer Parsing started");
 
             // Todo: fix this logic for dealer selection
             // Originally the idea was to select region based dealer
@@ -228,6 +231,16 @@ namespace CartelEnforcer
             // is there a good compromise for this 
 
             EMapRegion region = Singleton<Map>.Instance.GetRegionFromPosition(customer.NPC.CenterPoint);
+
+            // if influence req. is used, check if its met
+            if (influenceRequirement >= 0f)
+            {
+                if (NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(region).Influence < influenceRequirement)
+                {
+                    Log("Influence requirement not met for intercept deals event");
+                    yield break;
+                }
+            }
 
             if (region == EMapRegion.Northtown)
             {
@@ -242,7 +255,7 @@ namespace CartelEnforcer
             if ((selected.ActiveContracts != null && selected.ActiveContracts.Count >= 1) || (selected.Health.IsDead || selected.Health.IsKnockedOut))
             {
                 // How to manage the state between cartel dealer intercepting player dealer contracts, player pending and also intercepting active? This causes the more frequent kind to be always preferred leading to the intercept deals rarely happening. Config for dealer.json needs to be tweaked
-                Log("[INTERCEPT]    Dealer has active contracts or is dead or is occupied, check if any nearby.");
+                Log("Dealer has active contracts or is dead or is occupied, check if any nearby.");
                 bool foundReplacement = false;
                 // Alternatively we check if any of the dealers would be nearby (80 units max), this way even higher values for the dealer config chance will still allow the intercept event to work
                 foreach (CartelDealer otherDealer in allCartelDealers)
@@ -255,16 +268,18 @@ namespace CartelEnforcer
 
                     if (Vector3.Distance(otherDealer.CenterPoint, customer.NPC.CenterPoint) < 80f)
                     {
-                        Log("[INTERCEPT]    Dealer replacement found nearby.");
+                        Log("Dealer replacement found nearby.");
                         foundReplacement = true;
                         selected = otherDealer;
                         break;
                     }
                 }
-                if (!foundReplacement) yield break;
+                if (!foundReplacement)
+                {
+                    Log("No replacement dealer found for intercept event");
+                    yield break;
+                }
             }
-
-            Log("[INTERCEPT]    Dealer Parsing completed");
 
             string cGuid = randomContract.GUID.ToString();
             if (!contractGuids.Keys.Contains(cGuid))
@@ -299,7 +314,6 @@ namespace CartelEnforcer
                     break;
             }
             customer.NPC.RelationData.ChangeRelationship(-0.15f, true);
-            Log("[INTERCEPT]    Starting Intercept Deal");
             customer.NPC.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, true, -1), true, true);
             interceptingDeal = true;
             interceptor = selected;
@@ -312,7 +326,7 @@ namespace CartelEnforcer
         {
             yield return Wait30; // Cartel dealer is kinda fast so have to wait a bit
             if (!registered) yield break;
-            Log("Begin");
+            Log("Begin intercept traverse");
             bool changeInfluence = ShouldChangeInfluence(region);
 
             // If player managed to complete it within that timeframe
@@ -431,7 +445,7 @@ namespace CartelEnforcer
             dealer.HomeEvent.End();
             dealer.HomeEvent.HasStarted = false;
             dealer.HomeEvent.enabled = false;
-            Log("[INTERCEPT] Dealer Check attend start");
+            Log("Dealer Check attend start");
             dealer.CheckAttendStart();
 
             // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
@@ -454,7 +468,7 @@ namespace CartelEnforcer
 
             if (contractGuids[cGuid].CompletedByPlayer)
             {
-                Log("[INTERCEPT]    Player Stopped Cartel Intercept");
+                Log("Player Stopped Cartel Intercept");
                 NetworkSingleton<LevelManager>.Instance.AddXP(originalXP);
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptSuccess);
@@ -462,7 +476,7 @@ namespace CartelEnforcer
             }
             else if (contractGuids[cGuid].CompletedByCartel)
             {
-                Log("[INTERCEPT]    Cartel Intercepted");
+                Log("Cartel Intercepted");
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.interceptFail);
                 customer.NPC.RelationData.ChangeRelationship(-0.6f, true);
@@ -519,7 +533,7 @@ namespace CartelEnforcer
 
             // Reset the entry ui since it gets removed after the reassingment
             if (contract.Entries.Count == 0)
-                Log("[INTERCEPT] Contract missing entries for reassignment");
+                Log("Contract missing entries for reassignment");
             else
                 contract.Entries[0].CreateEntryUI();
 
@@ -546,32 +560,26 @@ namespace CartelEnforcer
 
         public static IEnumerator QuestUIEffect(Contract contract)
         {
-            Log("[INTERCEPT]    Quest UI Effect");
-
             // Ugly code here but we need to actually check each transform for null
             if (contract.hudUI == null || contract.hudUI.MainLabel == null || contract.hudUI.MainLabel.transform == null)
             {
-                Log("[INTERCEPT] foundItem got nulled, break");
                 yield break;
             }
 
             Transform iconContainer = contract.hudUI.MainLabel.transform.Find("IconContainer");
             if (iconContainer == null)
             {
-                Log("[INTERCEPT] iconContainer got nulled, break");
                 yield break;
             }
             Transform contractIcon = iconContainer.Find("ContractIcon(Clone)");
             if (contractIcon == null)
             {
-                Log("[INTERCEPT] contractIcon got nulled, break");
                 yield break;
             }
 
             Transform backgroundTr = contractIcon.Find("Background");
             if (backgroundTr == null)
             {
-                Log("[INTERCEPT] backgroundTr got nulled, break");
                 yield break;
             }
             Image background = backgroundTr.GetComponent<Image>();
@@ -582,7 +590,6 @@ namespace CartelEnforcer
             Transform fillImgTr = contractIcon.Find("Fill");
             if (fillImgTr == null)
             {
-                Log("[INTERCEPT] backgroundTr got nulled, break");
                 yield break;
             }
             Image fillImg = fillImgTr.GetComponent<Image>();
@@ -602,7 +609,6 @@ namespace CartelEnforcer
                 background.color = questIconBack;
             if (fillImg)
                 fillImg.overrideSprite = handshake;
-            Log("[INTERCEPT] Reset QuestUI");
             yield return null;
         }
         public static IEnumerator LerpQuestColor(Image background)

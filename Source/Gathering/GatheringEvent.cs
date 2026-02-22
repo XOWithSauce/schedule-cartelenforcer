@@ -6,6 +6,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.InfluenceOverrides;
+using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.AmbushOverrides;
 
@@ -111,14 +112,17 @@ namespace CartelEnforcer
         public static UnityEngine.Events.UnityAction endDrinkAction = null;
         public static void OnHourPassTryGather()
         {
+            if (!currentConfig.cartelGatherings) return;
             coros.Add(MelonCoroutines.Start(TryStartGathering()));
         }
         public static IEnumerator TryStartGathering()
         {
-            if (areGoonsGathering) yield break;
+            if (areGoonsGathering || isSaving) yield break;
+            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 3) yield break;
 
-            Log("[GATHERING] Try start gathering");
-            hoursUntilNextGathering = Mathf.Clamp(hoursUntilNextGathering - 1, 0, 18);
+            Log("Try start gathering");
+
+            hoursUntilNextGathering = Mathf.Clamp(hoursUntilNextGathering - 1, 0, int.MaxValue);
             if (hoursUntilNextGathering > 0) yield break;
 
             if (DealerActivity.currentDealerActivity >= 0f)
@@ -133,199 +137,193 @@ namespace CartelEnforcer
             }
 
             Log("Gather time window: " + startEarliest + " - " + startLatest);
-            if (TimeManager.Instance.CurrentTime >= startEarliest && TimeManager.Instance.CurrentTime <= startLatest)
+            if (!TimeManager.Instance.IsCurrentTimeWithinRange(startEarliest, startLatest)) yield break;
+
+            float influenceReg = GetByID("Gathering").InfluenceRequirement;
+
+            List<GatheringLocation> candidates = new();
+            List<GatheringLocation> regLocs = null;
+            
+            // Here only give out candidates for regions where influence requirement is met if used
+            foreach (EMapRegion reg in Singleton<Map>.Instance.GetUnlockedRegions())
             {
+                if (influenceReg >= 0f)
+                {
+                    if (NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(reg).Influence < influenceReg)
+                    {
+                        Log($"Region {reg} does not meet influence requirement for gathering candidate");
+                        continue; // not enough influence check next region
+                    }
+                }
+
+                gatheringLocationsByRegion.TryGetValue((int)reg, out regLocs);
+                if (regLocs != null)
+                {
+                    foreach (GatheringLocation loc in regLocs)
+                    {
+                        if (previousGatheringLocation != null && loc != previousGatheringLocation && !candidates.Contains(loc))
+                        {
+                            // check if it was prev
+                            candidates.Add(loc);
+                        }
+                        else if (!candidates.Contains(loc)) // because previous can be null on start
+                        {
+                            candidates.Add(loc);
+                        }
+                    }
+                }
+            }
+
+            if (candidates.Count == 0)
+            {
+                Log(" Failed to parse Gathering location candidates");
+                yield break;
+            }
+
+            // and then reset cooldowns since now its guaranteed to run
+            int newHours = GetActivityHours("Gathering");
+
+            if (newHours != 0)
+            {
+                hoursUntilNextGathering = newHours;
+            }
+            else
+            {
+                // Use mod default that is bound to cartel dealer activity
                 if (DealerActivity.currentDealerActivity >= 0f)
                     hoursUntilNextGathering = UnityEngine.Random.Range(6, 15);
                 else if (DealerActivity.currentDealerActivity < 0f && DealerActivity.currentDealerActivity > -0.5f)
                     hoursUntilNextGathering = UnityEngine.Random.Range(5, 12);
                 else
                     hoursUntilNextGathering = UnityEngine.Random.Range(4, 9);
-
-                List<GatheringLocation> candidates = new();
-                List<GatheringLocation> regLocs = null;
-                foreach (EMapRegion reg in Singleton<Map>.Instance.GetUnlockedRegions())
-                {
-                    gatheringLocationsByRegion.TryGetValue((int)reg, out regLocs);
-                    if (regLocs != null)
-                    {
-                        foreach (GatheringLocation loc in regLocs)
-                        {
-                            yield return Wait01;
-                            if (!registered) yield break;
-
-                            if (previousGatheringLocation != null && loc != previousGatheringLocation && !candidates.Contains(loc))
-                            {
-                                // check if it was prev
-                                candidates.Add(loc);
-                            }
-                            else if (!candidates.Contains(loc)) // because previous can be null on start
-                            {
-                                candidates.Add(loc);
-                            }
-                        }
-                    }
-                }
-
-                if (candidates.Count == 0)
-                {
-                    Log(" Failed to parse Gathering location candidates");
-                    candidates.AddRange(gatheringLocationsByRegion[0]); // default to adding all pos from first region
-                }
-
-                GatheringLocation location = candidates[UnityEngine.Random.Range(0, candidates.Count)];
-                currentGatheringLocation = location;
-                previousGatheringLocation = location;
-                areGoonsGathering = true;
-                Log("Spawning Gather at: " + location.position.ToString());
-                Log(location.description);
-                float offsetFromCenter = 0.67f;
-                Vector3 spawnPos1 = location.position + Vector3.forward * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
-                Vector3 spawnPos2 = location.position + Vector3.right * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
-                Vector3 spawnPos3 = location.position + Vector3.left * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
-
-                if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 3)
-                {
-                    do
-                    {
-                        yield return Wait05;
-                        if (!registered) yield break;
-#if MONO
-                        NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Health.Revive();
-                        if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().IsGoonSpawned)
-                            NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.FirstOrDefault().Despawn();
-#else
-                        int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1;
-                        if (count != -1)
-                        {
-                            NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Health.Revive();
-                            if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].IsGoonSpawned)
-                                NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count].Despawn();
-                        }
-                        else
-                        {
-                            break;
-                        }
-#endif
-                    } while (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 3);
-                }
-
-                spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos1));
-                spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos2));
-                spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos3));
-
-                void CombatStarted()
-                {
-                    if (startedCombat) return;
-                    startedCombat = true;
-                    Player p = Player.GetClosestPlayer(location.position, out float _);
-                    foreach (CartelGoon goon in spawnedGatherGoons)
-                    {
-                        if (combatStartedAction != null)
-                            goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
-                        goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
-                        goon.AttackEntity(p.GetComponent<ICombatTargetable>());
-                    }
-                    combatStartedAction = null;
-                }
-
-                combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
-                
-
-                for (int i = 0; i < spawnedGatherGoons.Count; i++)
-                {
-                    spawnedGatherGoons[i].Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
-                    spawnedGatherGoons[i].Behaviour.ScheduleManager.DisableSchedule();
-                    spawnedGatherGoons[i].Movement.FacePoint(location.position);
-
-                    spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
-
-                    if (DealerActivity.currentDealerActivity < 0f)
-                    {
-                        // increase hp
-                        spawnedGatherGoons[i].Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
-                        spawnedGatherGoons[i].Health.Health = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
-                    }
-                }
-                // Fill random attendant inv slot with stolen item
-                List<ItemInstance> itemsFromPool = GetFromPool(3);
-                lootGoblinIndex = -1;
-                if (itemsFromPool.Count > 0)
-                {
-                    lootGoblinIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
-                    spawnedGatherGoons[lootGoblinIndex].Inventory.Clear();
-                    foreach (ItemInstance item in itemsFromPool)
-                    {
-                        if (spawnedGatherGoons[lootGoblinIndex].Inventory.CanItemFit(item))
-                        {
-                            spawnedGatherGoons[lootGoblinIndex].Inventory.InsertItem(item);
-                        }
-                    }
-                }
-
-                // Fill all attendants inv with stolen money
-                if (cartelCashAmount > 2500f) // 1k overhead
-                {
-                    foreach (CartelGoon goon in spawnedGatherGoons)
-                    {
-                        CashInstance cashInstance = NetworkSingleton<MoneyManager>.Instance.GetCashInstance(500f);
-                        if (goon.Inventory.CanItemFit(cashInstance))
-                        {
-                            goon.Inventory.InsertItem(cashInstance);
-                            cartelCashAmount -= 500f;
-                        }
-                    }
-                }
-
-                // Drink / Smoke animations on random basis
-                if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
-                {
-                    DrinkItem drinkAct = spawnedGatherGoons[0].transform.Find("Aux/Drink").GetComponent<DrinkItem>();
-                    drinkAct.Begin();
-                    void CombatStartedEndAct()
-                    {
-                        drinkAct.End();
-                        Player p = Player.GetClosestPlayer(location.position, out float _);
-                        spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>());
-                        if (endDrinkAction != null)
-                        {
-                            spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
-                            endDrinkAction = null;
-                        }
-                    }
-                    endDrinkAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
-                    spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.AddListener(endDrinkAction);
-                }
-
-                if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
-                {
-                    SmokeCigarette smokeAct = spawnedGatherGoons[1].transform.Find("Aux/SmokeCigarette").GetComponent<SmokeCigarette>();
-                    smokeAct.Begin();
-                    void CombatStartedEndAct()
-                    {
-                        smokeAct.End();
-                        Player p = Player.GetClosestPlayer(location.position, out float _);
-                        spawnedGatherGoons[1].AttackEntity(p.GetComponent<ICombatTargetable>());
-                        if (endSmokeAction != null)
-                        {
-                            spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
-                            endSmokeAction = null;
-                        }
-                    }
-                    endSmokeAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
-                    spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener(endSmokeAction);
-                }
-
-
-                Log("[GATHERING] Gathering Spawned at: " + location.position.ToString());
-                if (activeTruceIntro != null && activeTruceIntro.QuestEntry_GreetGoons != null && activeTruceIntro.QuestEntry_GreetGoons.State != EQuestState.Active)
-                {
-                    activeTruceIntro.QuestEntry_GreetGoons.Begin();
-                }
-                coros.Add(MelonCoroutines.Start(EvaluateCurrentGathering(location)));
             }
 
-            yield return null;
+            GatheringLocation location = candidates[UnityEngine.Random.Range(0, candidates.Count)];
+            currentGatheringLocation = location;
+            previousGatheringLocation = location;
+            areGoonsGathering = true;
+            Log("Spawning Gather at: " + location.position.ToString());
+            Log(location.description);
+            float offsetFromCenter = 0.67f;
+            Vector3 spawnPos1 = location.position + Vector3.forward * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
+            Vector3 spawnPos2 = location.position + Vector3.right * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
+            Vector3 spawnPos3 = location.position + Vector3.left * (offsetFromCenter + UnityEngine.Random.Range(-0.05f, 0.05f));
+
+            spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos1));
+            spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos2));
+            spawnedGatherGoons.Add(NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos3));
+
+            void CombatStarted()
+            {
+                if (startedCombat) return;
+                startedCombat = true;
+                Player p = Player.GetClosestPlayer(location.position, out float _);
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    if (combatStartedAction != null)
+                        goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
+                    goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
+                    goon.AttackEntity(p.GetComponent<ICombatTargetable>());
+                }
+                combatStartedAction = null;
+            }
+
+            combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
+                
+
+            for (int i = 0; i < spawnedGatherGoons.Count; i++)
+            {
+                spawnedGatherGoons[i].Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
+                spawnedGatherGoons[i].Behaviour.ScheduleManager.DisableSchedule();
+                spawnedGatherGoons[i].Movement.FacePoint(location.position);
+
+                spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
+
+                if (DealerActivity.currentDealerActivity < 0f)
+                {
+                    // increase hp
+                    spawnedGatherGoons[i].Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
+                    spawnedGatherGoons[i].Health.Health = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
+                }
+            }
+            // Fill random attendant inv slot with stolen item
+            List<ItemInstance> itemsFromPool = GetFromPool(3);
+            lootGoblinIndex = -1;
+            if (itemsFromPool.Count > 0)
+            {
+                lootGoblinIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
+                spawnedGatherGoons[lootGoblinIndex].Inventory.Clear();
+                foreach (ItemInstance item in itemsFromPool)
+                {
+                    if (spawnedGatherGoons[lootGoblinIndex].Inventory.CanItemFit(item))
+                    {
+                        spawnedGatherGoons[lootGoblinIndex].Inventory.InsertItem(item);
+                    }
+                }
+            }
+
+            // Fill all attendants inv with stolen money
+            if (cartelCashAmount > 2500f) // 1k overhead
+            {
+                foreach (CartelGoon goon in spawnedGatherGoons)
+                {
+                    CashInstance cashInstance = NetworkSingleton<MoneyManager>.Instance.GetCashInstance(500f);
+                    if (goon.Inventory.CanItemFit(cashInstance))
+                    {
+                        goon.Inventory.InsertItem(cashInstance);
+                        cartelCashAmount -= 500f;
+                    }
+                }
+            }
+
+            // Drink / Smoke animations on random basis
+            if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
+            {
+                DrinkItem drinkAct = spawnedGatherGoons[0].transform.Find("Aux/Drink").GetComponent<DrinkItem>();
+                drinkAct.Begin();
+                void CombatStartedEndAct()
+                {
+                    drinkAct.End();
+                    Player p = Player.GetClosestPlayer(location.position, out float _);
+                    spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>());
+                    if (endDrinkAction != null)
+                    {
+                        spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.RemoveListener(endDrinkAction);
+                        endDrinkAction = null;
+                    }
+                }
+                endDrinkAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
+                spawnedGatherGoons[0].Behaviour.CombatBehaviour.onBegin.AddListener(endDrinkAction);
+            }
+
+            if (UnityEngine.Random.Range(0f, 1f) > 0.2f)
+            {
+                SmokeCigarette smokeAct = spawnedGatherGoons[1].transform.Find("Aux/SmokeCigarette").GetComponent<SmokeCigarette>();
+                smokeAct.Begin();
+                void CombatStartedEndAct()
+                {
+                    smokeAct.End();
+                    Player p = Player.GetClosestPlayer(location.position, out float _);
+                    spawnedGatherGoons[1].AttackEntity(p.GetComponent<ICombatTargetable>());
+                    if (endSmokeAction != null)
+                    {
+                        spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.RemoveListener(endSmokeAction);
+                        endSmokeAction = null;
+                    }
+                }
+                endSmokeAction = (UnityEngine.Events.UnityAction)CombatStartedEndAct;
+                spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener(endSmokeAction);
+            }
+
+
+            Log("Gathering Spawned at: " + location.position.ToString());
+            if (activeTruceIntro != null && activeTruceIntro.QuestEntry_GreetGoons != null && activeTruceIntro.QuestEntry_GreetGoons.State != EQuestState.Active)
+            {
+                activeTruceIntro.QuestEntry_GreetGoons.Begin();
+            }
+            coros.Add(MelonCoroutines.Start(EvaluateCurrentGathering(location)));
+
+            yield break;
         }
 
         public static IEnumerator EvaluateCurrentGathering(GatheringLocation location)
@@ -352,7 +350,7 @@ namespace CartelEnforcer
                 {
                     DialogueController ctr = goon.DialogueHandler.gameObject.GetComponent<DialogueController>();
                     if (ctr == null)
-                        Log("[ALLIEDEXT] Failed to find Dialogue Controller for gathering goon");
+                        Log("Failed to find Dialogue Controller for gathering goon");
                     else if (!controllers.Contains(ctr))
                         controllers.Add(ctr);
                 }
@@ -484,7 +482,7 @@ namespace CartelEnforcer
                                 float sum = GetSumOfLastGreet();
                                 if (sum > 0f && sum <= 7f)
                                 {
-                                    Log("[ALLIEDEXT] Greetings challenge completed");
+                                    Log("Greetings challenge completed");
                                     truceRewarded = true;
                                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence((EMapRegion)location.region, influenceConfig.trucedGreetingChallenge);
                                     

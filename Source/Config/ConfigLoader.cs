@@ -5,6 +5,8 @@ using Newtonsoft.Json.Serialization;
 using UnityEngine;
 
 using static CartelEnforcer.CartelInventory;
+using static CartelEnforcer.DriveByEvent;
+using static CartelEnforcer.ModDataPaths;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -27,33 +29,6 @@ namespace CartelEnforcer
     public class ModConfig
     {
         public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, Enable Debug Log Messages, etc.
-
-        // From -1.0 to 0.0 to 1.0,
-        // -1.0= Activity is ~10 times less frequent
-        // 0.0 = Activity is at game default frequency 
-        // 1.0 = Activity is ~10 times more frequent
-        public float activityFrequency = 0.0f;
-
-        // From -1.0 to 0.0 to 1.0,
-        // -1.0 = Activity influence requirement is 100% Less (Means cartel influence requirement is at 0 and activities happen always)
-        // 0.0  = Activity influence requirement is at Game Default
-        // 1.0  = Activity influence requirement is 100% More (Means cartel influence will only happen if at maximum regional cartel influence)
-        public float activityInfluenceMin = 0.0f;
-
-        // All four follow same pattern:
-        // Basically different from the Activity Frequency parameter, because this specifically states how often at maximum something can happen
-        // Whereas the ActivityFrequency simulates hours passing at a faster or slower pace. This Patches the "Start" method to block if condition is not met!
-        // from -1.0 to 0.0 to 1.0
-        // -1.0 = Activity for this specific type can happen only once every 4 days
-        // 0.0 = Activity for this specific type can happen only once every 2 days
-        // 1.0 = Activity for this specific type can happen every hour
-        public float ambushFrequency = 1.0f;
-        public float deadDropStealFrequency = 1.0f;
-        public float cartelCustomerDealFrequency = 1.0f; // NOTE: NOT the "Truced" deals, but the one where CartelDealer goes to customers on the map
-        public float cartelRobberyFrequency = 1.0f;
-        public float cartelGraffitiFrequency = 1.0f;
-        // For drive by its different, random range cooldown is defined by the range -1 -> 1
-        public float driveByFrequency = 0.7f;
 
         public bool driveByEnabled = true;
 
@@ -106,28 +81,18 @@ namespace CartelEnforcer
 
     public static class ConfigLoader
     {
-        private static string pathModConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "config.json");
-        private static string pathAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "ambush.json");
-        private static string pathDefAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "default.json");
-        private static string pathSettingsAmbushes = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Ambush", "settings.json");
-        private static string pathDealerConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Dealers", "dealer.json");
-        private static string pathCartelStolen = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "CartelItems"); // Filename {organization}.json
-        private static string pathInfluenceConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Influence", "influence.json");
-        private static string pathAlliedConfig = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Allied", "config.json");
-        private static string pathAlliedPersist = Path.Combine(MelonEnvironment.ModsDirectory, "CartelEnforcer", "Allied", "QuestData"); // Filename {organization}.json
 
         #region Mod Config 
         public static ModConfig Load()
         {
             ModConfig config;
-            if (File.Exists(pathModConfig))
+            string filePath = GetPathTo(pathModConfig);
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathModConfig);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<ModConfig>(json);
-                    config.activityFrequency = Mathf.Clamp(config.activityFrequency, -1.0f, 1.0f); // Ensure limits
-                    config.activityInfluenceMin = Mathf.Clamp(config.activityInfluenceMin, -1.0f, 1.0f); // Ensure limits
                     config.endGameQuestMonologueSpeed = Mathf.Clamp(config.endGameQuestMonologueSpeed, 0f, 1f);
 
                     if (config.alliedExtensions && !config.endGameQuest)
@@ -135,6 +100,11 @@ namespace CartelEnforcer
                         MelonLogger.Warning("Cartel Enforcer Allied Extensions depend on End Game Quests. Enabling End Game Quest config automatically.");
                         config.endGameQuest = true;
                     }
+                }
+                catch (JsonSerializationException ex) 
+                {
+                    config = new ModConfig();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -154,10 +124,11 @@ namespace CartelEnforcer
         {
             try
             {
+                string filePath = GetPathTo(pathModConfig);
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathModConfig));
-                File.WriteAllText(pathModConfig, json);
-                MelonLogger.Warning($"    CartelEnforcer basic mod config written to: {pathModConfig}");
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                // MelonLogger.Warning($"    CartelEnforcer basic mod config written to: {filePath}");
             }
             catch (Exception ex)
             {
@@ -170,12 +141,19 @@ namespace CartelEnforcer
         public static ListNewAmbush LoadAmbushConfig()
         {
             ListNewAmbush config;
-            if (File.Exists(pathAmbushes))
+            string filePath = GetPathTo(pathAmbushes);
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathAmbushes);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<ListNewAmbush>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new ListNewAmbush();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer User Added Ambush config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -201,10 +179,11 @@ namespace CartelEnforcer
                 {
                     ContractResolver = new UnityContractResolver()
                 };
+                string filePath = GetPathTo(pathAmbushes);
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented, settings);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathAmbushes));
-                File.WriteAllText(pathAmbushes, json);
-                MelonLogger.Warning($"    CartelEnforcer User Added Ambush config written to: {pathAmbushes}");
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                MelonLogger.Warning($"    CartelEnforcer User Added Ambush config written to: {filePath}");
 
             }
             catch (Exception ex)
@@ -219,12 +198,18 @@ namespace CartelEnforcer
         public static ListNewAmbush LoadDefaultAmbushConfig()
         {
             ListNewAmbush config;
-            if (File.Exists(pathDefAmbushes))
+            string filePath = GetPathTo(pathDefAmbushes);
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathDefAmbushes);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<ListNewAmbush>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new ListNewAmbush();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Default ambush config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -271,10 +256,11 @@ namespace CartelEnforcer
                     ContractResolver = new UnityContractResolver()
                 };
                 string json = JsonConvert.SerializeObject(currentState, Formatting.Indented, settings);
+                string filePath = GetPathTo(pathDefAmbushes);
 
-                Directory.CreateDirectory(Path.GetDirectoryName(pathDefAmbushes));
-                File.WriteAllText(pathDefAmbushes, json);
-                MelonLogger.Warning($"    CartelEnforcer Default Ambush config written to: {pathDefAmbushes}");
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                MelonLogger.Warning($"    CartelEnforcer Default Ambush config written to: {filePath}");
 
             }
             catch (Exception ex)
@@ -290,11 +276,13 @@ namespace CartelEnforcer
         public static AmbushGeneralSettingsSerialized LoadAmbushSettings()
         {
             AmbushGeneralSettingsSerialized config;
-            if (File.Exists(pathSettingsAmbushes))
+            string filePath = GetPathTo(pathSettingsAmbushes);
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathSettingsAmbushes);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<AmbushGeneralSettingsSerialized>(json);
                     // For list of strings asset path should only be alpahanumeric + "/" symbols indicating asset path, sanitize or validate?? todo
 
@@ -306,7 +294,15 @@ namespace CartelEnforcer
                     {
                         config.MinRankForRanged = Mathf.Clamp(config.MinRankForRanged, 0, max - 1);
                     }
-
+                    // cap lethality because of lerp
+                    config.AmbushWeaponLethality = Mathf.Clamp01(config.AmbushWeaponLethality);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new AmbushGeneralSettingsSerialized();
+                    config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
+                    config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Ambush/settings.json config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -324,11 +320,77 @@ namespace CartelEnforcer
                 config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
 
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathSettingsAmbushes));
-                File.WriteAllText(pathSettingsAmbushes, json);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
             }
 
             return config;
+        }
+
+        #endregion
+
+        #region Drive By triggers config
+        // Read and generate the drive by locations from DriveBy/driveby.json
+
+        [Serializable]
+        public class DriveByTriggersSerialized
+        {
+            public List<DriveByTrigger> triggers;
+        }
+
+        private static DriveByTriggersSerialized GenerateDefault()
+        {
+            DriveByTriggersSerialized loadedTriggers;
+            loadedTriggers = new();
+            loadedTriggers.triggers = new();
+            GenerateDefaultDriveByTriggers();
+
+            foreach (var kvp in driveByLocations)
+                loadedTriggers.triggers.Add(kvp.Key);
+
+            return loadedTriggers;
+        } 
+
+        public static DriveByTriggersSerialized LoadDriveByConfig()
+        {
+            DriveByTriggersSerialized loadedTriggers = null;
+            string filePath = GetPathTo(pathDriveBys);
+
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(filePath);
+                    loadedTriggers = JsonConvert.DeserializeObject<DriveByTriggersSerialized>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    loadedTriggers = GenerateDefault();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer DriveBy/driveby.json config: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    loadedTriggers = GenerateDefault();
+                    MelonLogger.Warning("Failed to read DriveBy/driveby.json config: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Could not find a file at DriveBy/driveby.json. Generating default template.");
+
+                loadedTriggers = GenerateDefault();
+
+                var settings = new JsonSerializerSettings
+                {
+                    ContractResolver = new UnityContractResolver()
+                };
+
+                string json = JsonConvert.SerializeObject(loadedTriggers, Formatting.Indented, settings);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+            }
+
+            return loadedTriggers;
         }
 
         #endregion
@@ -360,14 +422,22 @@ namespace CartelEnforcer
         public static List<QualityItemInstance> LoadStolenItems()
         {
             StolenItemsList stolenItems = new();
-            string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
-            string fileName = SanitizeAndFormatName(orgName);
-            if (File.Exists(Path.Combine(pathCartelStolen, fileName)))
+            string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+            int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+            string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+            string filePath = GetPathTo(Path.Combine(pathCartelStolen, fileName));
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(Path.Combine(pathCartelStolen, fileName));
+                    string json = File.ReadAllText(filePath);
                     stolenItems = JsonConvert.DeserializeObject<StolenItemsList>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    stolenItems = new();
+                    MelonLogger.Error("Failed to deserialize Cartel Stolen items data: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -492,12 +562,14 @@ namespace CartelEnforcer
 
                 try
                 {
-                    string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
-                    string fileName = SanitizeAndFormatName(orgName);
-                    string saveDestination = Path.Combine(pathCartelStolen, fileName);
+                    string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+                    int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+                    string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+                    string filePath = GetPathTo(Path.Combine(pathCartelStolen, fileName));
+
                     string json = JsonConvert.SerializeObject(itemsList, Formatting.Indented);
-                    Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
-                    File.WriteAllText(saveDestination, json);
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                    File.WriteAllText(filePath, json);
                 }
                 catch (Exception ex)
                 {
@@ -513,11 +585,13 @@ namespace CartelEnforcer
         public static CartelDealerConfig LoadDealerConfig()
         {
             CartelDealerConfig config = new();
-            if (File.Exists(pathDealerConfig))
+            string filePath = GetPathTo(pathDealerConfig);
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathDealerConfig);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<CartelDealerConfig>(json);
                     config.CartelDealerWalkSpeed = Mathf.Clamp(config.CartelDealerWalkSpeed, 1f, 7f);
                     config.CartelDealerHP = Mathf.Clamp(config.CartelDealerHP, 10f, 2000f);
@@ -527,6 +601,11 @@ namespace CartelEnforcer
                     config.DealerActivityDecreasePerKill = Mathf.Clamp(config.DealerActivityDecreasePerKill, 0.0f, 1f); // Ensure limits
                     config.StealDealerContractChance = Mathf.Clamp(config.StealDealerContractChance, 0f, 1f); // at 0.0 disables 
                     config.StealPlayerPendingChance = Mathf.Clamp(config.StealPlayerPendingChance, 0f, 1f); // at 0.0 disables
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new CartelDealerConfig();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Dealer config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -548,9 +627,11 @@ namespace CartelEnforcer
             try
             {
                 string json = JsonConvert.SerializeObject(dealerConfig, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathDealerConfig));
-                File.WriteAllText(pathDealerConfig, json);
-                MelonLogger.Warning($"    CartelEnforcer Dealer config written to: {pathDealerConfig}");
+                string filePath = GetPathTo(pathDealerConfig);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                MelonLogger.Warning($"    CartelEnforcer Dealer config written to: {filePath}");
             }
             catch (Exception ex)
             {
@@ -564,11 +645,13 @@ namespace CartelEnforcer
         public static InfluenceConfig LoadInfluenceConfig()
         {
             InfluenceConfig config = new();
-            if (File.Exists(pathInfluenceConfig))
+            string filePath = GetPathTo(pathInfluenceConfig);
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathInfluenceConfig);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<InfluenceConfig>(json);
 
                     config.interceptFail = ClampInfluence(config.interceptFail, true);
@@ -598,6 +681,11 @@ namespace CartelEnforcer
 
 
                 }
+                catch (JsonSerializationException ex)
+                {
+                    config = new InfluenceConfig();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer influence config: " + ex.Message);
+                }
                 catch (Exception ex)
                 {
                     config = new InfluenceConfig();
@@ -618,9 +706,11 @@ namespace CartelEnforcer
             try
             {
                 string json = JsonConvert.SerializeObject(influenceConfig, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathInfluenceConfig));
-                File.WriteAllText(pathInfluenceConfig, json);
-                MelonLogger.Warning($"    CartelEnforcer Influence config written to: {pathInfluenceConfig}");
+                string filePath = GetPathTo(pathInfluenceConfig);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                MelonLogger.Warning($"    CartelEnforcer Influence config written to: {filePath}");
             }
             catch (Exception ex)
             {
@@ -667,12 +757,19 @@ namespace CartelEnforcer
         public static CartelAlliedConfig LoadAlliedConfig()
         {
             CartelAlliedConfig config = new();
-            if (File.Exists(pathAlliedConfig))
+            string filePath = GetPathTo(pathAlliedConfig);
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(pathAlliedConfig);
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<CartelAlliedConfig>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new CartelAlliedConfig();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Allied config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -694,8 +791,10 @@ namespace CartelEnforcer
             try
             {
                 string json = JsonConvert.SerializeObject(alliedConfig, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(pathAlliedConfig));
-                File.WriteAllText(pathAlliedConfig, json);
+                string filePath = GetPathTo(pathAlliedConfig);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
                 //MelonLogger.Warning($"    CartelEnforcer Allied config written to: {pathAlliedConfig}");
             }
             catch (Exception ex)
@@ -709,7 +808,6 @@ namespace CartelEnforcer
         #region Cartel Allied Extensions Persistence
         // So here all the quest related allied stuff
 
-        // this gets serialized as null ?
         [Serializable]
         public class CartelAlliedQuests
         {
@@ -721,14 +819,22 @@ namespace CartelEnforcer
         public static CartelAlliedQuests LoadAlliedQuests() 
         {
             CartelAlliedQuests config = new();
-            string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
-            string fileName = SanitizeAndFormatName(orgName);
-            if (File.Exists(Path.Combine(pathAlliedPersist, fileName)))
+            string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+            int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+            string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+            string filePath = GetPathTo(Path.Combine(pathAlliedPersist, fileName));
+
+            if (File.Exists(filePath))
             {
                 try
                 {
-                    string json = File.ReadAllText(Path.Combine(pathAlliedPersist, fileName));
+                    string json = File.ReadAllText(filePath);
                     config = JsonConvert.DeserializeObject<CartelAlliedQuests>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new CartelAlliedQuests();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Allied Quests config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
@@ -749,12 +855,13 @@ namespace CartelEnforcer
         {
             try
             {
-                string orgName = LoadManager.Instance.ActiveSaveInfo?.OrganisationName;
-                string fileName = SanitizeAndFormatName(orgName);
-                string saveDestination = Path.Combine(pathAlliedPersist, fileName);
+                string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+                int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+                string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+                string filePath = GetPathTo(Path.Combine(pathAlliedPersist, fileName));
                 string json = JsonConvert.SerializeObject(alliedQuestsState, Formatting.Indented);
-                Directory.CreateDirectory(Path.GetDirectoryName(saveDestination));
-                File.WriteAllText(saveDestination, json);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
                 // MelonLogger.Warning($"    CartelEnforcer Allied Quest data written to: {saveDestination}");
             }
             catch (Exception ex)
@@ -763,6 +870,179 @@ namespace CartelEnforcer
             }
 
 
+        }
+        #endregion
+
+        #region Event frequency config load
+        public static EventFrequencyConfig LoadEventFrequencyConfig()
+        {
+            EventFrequencyConfig config = new();
+            string filePath = GetPathTo(pathEventFrequency);
+
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(filePath);
+                    config = JsonConvert.DeserializeObject<EventFrequencyConfig>(json);
+                    // Validate config values
+                    List<int> indicesToRemove = new();
+                    for (int i = 0; i < config.events.Count; i++)
+                    {
+                        if (config.events[i].Identifier == string.Empty)
+                        {
+                            indicesToRemove.Add(i);
+                            MelonLogger.Warning("Identifier cannot be empty for event frequency found in file at: " + filePath);
+                            continue;
+                        }
+
+                        config.events[i].CooldownHours = Mathf.Clamp(config.events[i].CooldownHours, 0, int.MaxValue);
+                        config.events[i].InfluenceRequirement = Mathf.Clamp01(config.events[i].InfluenceRequirement);
+                        config.events[i].RandomTimeRangePercentage = Mathf.Clamp01(config.events[i].RandomTimeRangePercentage);
+                    }
+
+                    if (indicesToRemove.Count > 0)
+                    {
+                        List<EventFrequency> newList = new();
+                        for (int i = 0; i < config.events.Count; i++)
+                        {
+                            if (indicesToRemove.Contains(i)) continue;
+                            else
+                                newList.Add(config.events[i]);
+                        }
+                        config.events = newList;
+                    }
+
+                }
+                catch (JsonSerializationException ex)
+                {
+                    config = new();
+                    config.InitializeDefault();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Event Frequency config: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    config = new();
+                    config.InitializeDefault();
+                    MelonLogger.Warning("Failed to read CartelEnforcer Event Frequency config: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Missing CartelEnforcer Event Frequency config, creating directory and template.");
+                config = new();
+                config.InitializeDefault();
+                Save(config);
+            }
+            return config;
+        }
+
+        public static void Save(EventFrequencyConfig config)
+        {
+            try
+            {
+                string json = JsonConvert.SerializeObject(config, Formatting.Indented);
+                string filePath = GetPathTo(pathEventFrequency);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+                MelonLogger.Warning($"    CartelEnforcer Event frequency config written to: {filePath}");
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Event frequency config: " + ex);
+            }
+        }
+
+        #endregion
+
+        #region Event cooldowns persistence
+        public static CurrentEventCooldowns LoadPersistentCooldowns()
+        {
+            CurrentEventCooldowns cooldowns = new();
+            string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+            int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+            string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+            string filePath = GetPathTo(Path.Combine(pathEventFrequencyPersist, fileName));
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(filePath);
+                    cooldowns = JsonConvert.DeserializeObject<CurrentEventCooldowns>(json);
+
+                    // Validate sabotage cooldowns to contain expected string keys
+                    bool isValidConfig = true;
+                    if (cooldowns.SabotageCooldowns != null)
+                    {
+                        if (cooldowns.SabotageCooldowns.Count != 3)
+                            isValidConfig = false;
+
+                        if (!cooldowns.SabotageCooldowns.Keys.Contains("Laundromat"))
+                            isValidConfig = false;
+
+                        if (!cooldowns.SabotageCooldowns.Keys.Contains("Post Office"))
+                            isValidConfig = false;
+
+                        if (!cooldowns.SabotageCooldowns.Keys.Contains("Taco Ticklers"))
+                            isValidConfig = false;
+                    }
+                    else
+                    {
+                        isValidConfig = false;
+                    }
+
+                    if (!isValidConfig)
+                    {
+                        MelonLogger.Error("Cartel Enforcer Frequency persistent data has incorrect sagotage cooldowns. Resetting values");
+                        int sabotageHrs = FrequencyOverrides.GetActivityHours("Sabotage");
+                        sabotageHrs = sabotageHrs != 0 ? sabotageHrs : UnityEngine.Random.Range(16, 64);
+                        cooldowns.SabotageCooldowns = new()
+                        {
+                            {"Laundromat", sabotageHrs },
+                            {"Post Office", sabotageHrs },
+                            {"Taco Ticklers", sabotageHrs },
+                        };
+                    }
+                }
+                catch (JsonSerializationException ex)
+                {
+                    cooldowns = new();
+                    cooldowns.InitializeDefault();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Frequency persistent data: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    cooldowns = new();
+                    cooldowns.InitializeDefault();
+                    MelonLogger.Warning("Failed to read CartelEnforcer Frequency persistent data: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Missing CartelEnforcer Frequency persistent data, creating directory and template.");
+                cooldowns = new();
+                cooldowns.InitializeDefault();
+                Save(cooldowns);
+            }
+            return cooldowns;
+        }
+
+        public static void Save(CurrentEventCooldowns cooldowns)
+        {
+            try
+            {
+                string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+                int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+                string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+                string filePath = GetPathTo(Path.Combine(pathEventFrequencyPersist, fileName));
+                string json = JsonConvert.SerializeObject(cooldowns, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer Frequency persistent data: " + ex);
+            }
         }
         #endregion
 

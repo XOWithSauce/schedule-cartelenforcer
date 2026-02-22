@@ -110,7 +110,8 @@ namespace CartelEnforcer
 
         public static void OnDayPassNewDiag()
         {
-            Log("[DAY PASS] Resetting Mini Quest Dialogue Flags");
+            if (!currentConfig.miniQuestsEnabled) return;
+            Log("Resetting Mini Quest Dialogue Flags");
             foreach (NPC npc in targetNPCsList)
             {
                 targetNPCs[npc].HasAskedQuestToday = false;
@@ -127,7 +128,8 @@ namespace CartelEnforcer
 
             while (registered)
             {
-
+                yield return Wait2;
+                if (!currentConfig.miniQuestsEnabled) continue;
 #if MONO
                 // Only when hostile
                 if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile)
@@ -148,7 +150,7 @@ namespace CartelEnforcer
 
                 if (passStatus && passTime)
                 {
-                    Log("[MINI QUEST] Try Generate");
+                    Log("Try Generate");
                     NPC random = targetNPCsList[UnityEngine.Random.Range(0, targetNPCsList.Count)];
                     if (targetNPCs.ContainsKey(random))
                     {
@@ -218,13 +220,12 @@ namespace CartelEnforcer
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnMiniQuestChosenWrapped);
 #endif
             controller.AddDialogueChoice(choice);
-            Log("[MINI QUEST]    Created Mini Quest Dialogue for: " + npc.FirstName);
+            Log("Created Mini Quest Dialogue for: " + npc.FirstName);
             return;
         }
 
         public static void OnMiniQuestChosen(DialogueController.DialogueChoice choice, NPC npc, DialogueController controller, float paid)
         {
-            Log("[MINI QUEST]    Option Chosen");
             float chance = Mathf.Lerp(0.40f, 0.75f, npc.RelationData.NormalizedRelationDelta); // At max rela 75% chance to accept
             bool hasCash = NetworkSingleton<MoneyManager>.Instance.cashBalance >= paid;
             if ((TimeManager.Instance.CurrentTime >= 1200 || TimeManager.Instance.CurrentTime <= 1800))
@@ -243,8 +244,6 @@ namespace CartelEnforcer
             if (UnityEngine.Random.Range(0f, 1f) < chance && hasCash)
             {
                 // Start mini quest
-                Log("[MINI QUEST]    Start Quest");
-
                 emptyDrops.Clear(); // From fresh
                 foreach(DeadDrop drop in DeadDrop.DeadDrops)
                 {
@@ -343,7 +342,6 @@ namespace CartelEnforcer
             }
             else if (CartelGathering.areGoonsGathering && CartelGathering.currentGatheringLocation != null && hasCash)
             {
-                Log("[MINI QUEST] Display Gathering Loc");
                 controller.handler.ContinueSubmitted();
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
                 switch (UnityEngine.Random.Range(0, 3))
@@ -366,7 +364,6 @@ namespace CartelEnforcer
             }
             else
             {
-                Log("[MINI QUEST] RefuseQuestGive");
                 controller.handler.ContinueSubmitted();
                 switch (UnityEngine.Random.Range(0, 3))
                 {
@@ -408,7 +405,7 @@ namespace CartelEnforcer
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(oldChoices.Count - 1);
             controller.Choices = oldChoices;
-            Log("[MINI QUEST]    Disposed Choice");
+            Log("Disposed Choice");
             yield return null;
         }
 
@@ -418,11 +415,11 @@ namespace CartelEnforcer
             if (!registered) yield break;
             bool changeInfluence = ShouldChangeInfluence(entity.Region);
 
-            Log($"[MINI QUEST]    MiniQuest Drop at: {entity.DeadDropName}");
+            Log($"MiniQuest Drop at: {entity.DeadDropName}");
             for (int i = 0; i < filledItems.Count; i++)
             {
                 entity.Storage.InsertItem(filledItems[i], true);
-                Log($"[MINI QUEST]    MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
+                Log($"MiniQuest Reward: {filledItems[i].Name} x {filledItems[i].Quantity}");
             }
             bool opened = false;
 
@@ -434,7 +431,7 @@ namespace CartelEnforcer
 #endif
             void WrapOnOpenCallback()
             {
-                Log("[MINI QUEST] Quest Complete");
+                Log("Quest Complete");
                 NetworkSingleton<LevelManager>.Instance.AddXP(100);
                 opened = true;
                 if (changeInfluence)
@@ -485,7 +482,7 @@ namespace CartelEnforcer
                 onOpenedAction = null;
             }
 
-            Log($"[MINI QUEST] Removed MiniQuest Reward.");
+            Log($"Removed MiniQuest Reward.");
             yield return null;
         }
 

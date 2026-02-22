@@ -1,44 +1,54 @@
 ﻿using HarmonyLib;
-using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.FrequencyOverrides;
+using static CartelEnforcer.AmbushOverrides;
 
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Map;
+using ScheduleOne.PlayerScripts;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Map;
+using Il2CppScheduleOne.PlayerScripts;
 #endif
 
 namespace CartelEnforcer
 {
-    // Basically same as in original source code but patched to obey the global activity frequency cap of mod
+    // Basically same as in original source code but patched to obey config cooldowns
     [HarmonyPatch(typeof(CartelActivities), "TryStartActivity")]
     public static class CartelActivities_TryStartActivityPatch
     {
-#if IL2CPP
-        public static List<CartelActivity> activitiesReadyToStart = new(); 
-        public static List<EMapRegion> validRegionsForActivity = new();
-#endif
+
+        private static readonly string name = "TryStartGlobalActivity";
+
         [HarmonyPrefix]
         public static bool Prefix(CartelActivities __instance)
         {
-            Log("[GLOBACT] TryStartGlobalActivity");
-            __instance.HoursUntilNextGlobalActivity = CartelActivities.GetNewCooldown();
+            Log("TryStartGlobalActivity");
+
+            int hours = GetActivityHours("Ambush");
+
+            if (hours == 0) // use game default
+                __instance.HoursUntilNextGlobalActivity = CartelActivities.GetNewCooldown();
+            else
+                __instance.HoursUntilNextGlobalActivity = hours;
+
             if (!__instance.CanNewActivityBegin())
             {
-                Log("[GLOBACT]    NewActivity Cant Begin");
+                Log("NewActivity Cant Begin", name);
                 return false;
             }
 #if MONO
-            List<CartelActivity> activitiesReadyToStart = NetworkSingleton<Cartel>.Instance.Activities.GetActivitiesReadyToStart();
-            List<EMapRegion> validRegionsForActivity = NetworkSingleton<Cartel>.Instance.Activities.GetValidRegionsForActivity();
+            List<CartelActivity> activitiesReadyToStart = new(__instance.GetActivitiesReadyToStart());
+            List<EMapRegion> validRegionsForActivity = new(__instance.GetValidRegionsForActivity());
 #else
+            List<CartelActivity> activitiesReadyToStart = new(); 
+            List<EMapRegion> validRegionsForActivity = new();
             foreach (CartelActivity actItem in __instance.GetActivitiesReadyToStart())
             {
                 activitiesReadyToStart.Add(actItem);
@@ -50,50 +60,33 @@ namespace CartelEnforcer
 #endif
             if (activitiesReadyToStart.Count == 0 || validRegionsForActivity.Count == 0)
             {
-                Log("[GLOBACT]    No Activities or Regions ready to start");
+                Log("No Activities or Regions ready to start", name);
                 return false;
             }
-            Log($"[GLOBACT]    Total Activities ready to start: {activitiesReadyToStart.Count}");
+            Log($"Total Activities ready to start: {activitiesReadyToStart.Count}", name);
             validRegionsForActivity.Sort((a, b) => NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(b).CompareTo(NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(a)));
+
+            bool useOrdered = false;
+            EMapRegion playerRegion = Player.Local.CurrentRegion;
+            if (validRegionsForActivity.Contains(playerRegion))
+            {
+                useOrdered = true;
+                // Set to first
+                validRegionsForActivity.Remove(playerRegion);
+                validRegionsForActivity.Insert(0, playerRegion);
+            }
+
             EMapRegion region = EMapRegion.Northtown;
             bool flag = false;
-            foreach (EMapRegion emapRegion in validRegionsForActivity)
+            if (!currentConfig.debugMode)
             {
-                float influence = NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(emapRegion);
-                // This part is modified to obey the influence mod
-                float mult = 0f;
-                float result = 0f;
-                if (currentConfig.activityInfluenceMin == 0.0f)
+                foreach (EMapRegion emapRegion in validRegionsForActivity)
                 {
-                    //per original source code
-                    mult = 0.8f;
-                    result = influence * mult; // this is actually division, only 80% of original influence
-                                               // And then if result is higher than 0..1 ranged rand
-                                               // Per original source code Random value 0..1 is smaller than result
-                    if (UnityEngine.Random.Range(0f, 1f) < result)
-                    {
-                        region = emapRegion;
-                        flag = true;
-                        break;
-                    }
-                }
-                else if (currentConfig.activityInfluenceMin > 0.0f)
-                {
-                    result = Mathf.Lerp(influence * 0.8f, 1f, currentConfig.activityInfluenceMin);
-                    if (UnityEngine.Random.Range(0f, 1f) < result)
-                    {
-                        region = emapRegion;
-                        flag = true;
-                        break;
-                    }
-                }
-                else
-                {
-                    // flip because negative
-                    float t = -currentConfig.activityInfluenceMin;
-                    // now if activityInfluenceMin was -1.0, it becomes t=1 so that multiplier is always 0f
-                    // meaning that the random range check will always return true
-                    mult = Mathf.Lerp(1f, 0f, currentConfig.activityInfluenceMin);
+                    float influence = NetworkSingleton<Cartel>.Instance.Influence.GetInfluence(emapRegion);
+                    float mult = 0f;
+                    float result = 0f;
+                    //per original source code mult config default is 0.8 
+                    mult = ambushSettings.AmbushTriggerProbability;
                     result = influence * mult;
                     if (UnityEngine.Random.Range(0f, 1f) < result)
                     {
@@ -102,36 +95,48 @@ namespace CartelEnforcer
                         break;
                     }
                 }
-
+                if (!flag)
+                {
+                    Log("Ambush Random Roll not triggered", name);
+                    return false;
+                }
+                Log("Check the Ambush hours", name);
             }
-            if (!flag)
+            else // For DEbug mode it always gets the trigger where player stands
             {
-                Log("[GLOBACT]    Ambush Random Roll not triggered");
-                return false;
+                flag = true;
+                region = Player.Local.CurrentRegion;
             }
-            Log("[GLOBACT]    Check the Ambush hours");
-            // Now we check that the activity activation obeys to the ambush in config
-            // Element at 0 is always the timer for Ambush global activity
-            if (regActivityHours[0].hoursUntilEnable > 0)
-            {
-                Log("[GLOBACT]    Ambush not ready");
-                return false;
-            }
-
 
             int readyCount = activitiesReadyToStart.Count;
-            Log($"[GLOBACT]    Ambush Pos ReadyCount: {readyCount}");
+            Log($"Ambush Pos ReadyCount: {readyCount}", name);
+            
+            bool hasCheckedFirst = false;
             do
             {
                 readyCount = activitiesReadyToStart.Count;
                 if (readyCount == 0) break;
 
-                int activityIndex = UnityEngine.Random.Range(0, readyCount);
+                // And then here also check first index and after that continue as random
+                // to make the current region ambushes more preferred
+                int activityIndex = 0;
+                if (useOrdered)
+                {
+                    activityIndex = hasCheckedFirst ? UnityEngine.Random.Range(0, readyCount) : 0;
+                    hasCheckedFirst = true;
+                }
+                else
+                    activityIndex = UnityEngine.Random.Range(0, readyCount);
+
                 if (activitiesReadyToStart[activityIndex].IsRegionValidForActivity(region))
                 {
-                    Log("[GLOBACT]    Start Global Activity");
+                    Log("SPAWN AMBUSH in region: " + region, name);
                     NetworkSingleton<Cartel>.Instance.Activities.StartGlobalActivity(null, region, 0);
-                    regActivityHours[0].hoursUntilEnable = GetActivityHours(currentConfig.ambushFrequency);
+                    // And Then because that above function overrides the cooldown we must reset
+                    if (hours == 0) // use game default
+                        __instance.HoursUntilNextGlobalActivity = CartelActivities.GetNewCooldown();
+                    else
+                        __instance.HoursUntilNextGlobalActivity = hours;
                     break;
                 }
                 else
@@ -141,7 +146,7 @@ namespace CartelEnforcer
 
             } while (readyCount != 0);
 
-            Log("[GLOBACT] TryStartGlobalActivity Finished");
+            Log("TryStartGlobalActivity Finished", name);
 #if IL2CPP
             activitiesReadyToStart.Clear();
             validRegionsForActivity.Clear();
@@ -153,98 +158,100 @@ namespace CartelEnforcer
     [HarmonyPatch(typeof(CartelRegionActivities), "TryStartActivity")]
     public static class CartelRegionActivities_TryStartActivityPatch
     {
-        public static Dictionary<CartelActivity, List<int>> enabledActivities = new();
+        private static readonly string name = "TryStartRegionActivity";
+
         [HarmonyPrefix]
         public static bool Prefix(CartelRegionActivities __instance)
         {
-            __instance.HoursUntilNextActivity = CartelRegionActivities.GetNewCooldown(__instance.Region);
-            Log("[REGACT] TryStartRegionalActivity");
-            // Maps out indexes in the reg act hours
-            List<int> foundMatch = new();
-            for (int i = 0; i < regActivityHours.Count; i++)
-            {
-                if (regActivityHours[i].region == (int)__instance.Region)
-                {
-                    foundMatch.Add(i);
-                }
-            }
-            // parse activity int
+            // inst + tuple int, identifier string
+            Dictionary<CartelActivity, Tuple<int, string>> enabledActivities = new();
+
+            int hours = GetActivityHours("RegionActivity");
+
+            if (hours == 0) // use game default
+                __instance.HoursUntilNextActivity = CartelRegionActivities.GetNewCooldown(__instance.Region);
+            else
+                __instance.HoursUntilNextActivity = hours;
+
+            Log("TryStartRegionalActivity", name);
+
+            // parse activity int and identifier
             foreach (CartelActivity inRegAct in __instance.Activities)
             {
                 int actInt = 0;
+                string identifier = "";
 #if MONO
                 if (inRegAct is StealDeadDrop)
+                {
                     actInt = 0;
+                    identifier = "StealDeadDrop";
+                }
                 else if (inRegAct is CartelCustomerDeal)
+                {
                     actInt = 1;
+                    identifier = "CartelCustomerDeal";
+                }
                 else if (inRegAct is RobDealer)
+                {
                     actInt = 2;
+                    identifier = "RobDealer";
+                }
                 else // spray graffiti
+                {
                     actInt = 3;
+                    identifier = "SprayGraffiti";
+                }
 #else
                 if (inRegAct.TryCast<StealDeadDrop>() != null)
-                    actInt = 0;
-                else if (inRegAct.TryCast<CartelCustomerDeal>() != null)
-                    actInt = 1;
-                else if (inRegAct.TryCast<RobDealer>() != null)
-                    actInt = 2;
-                else // spray graffiti
-                    actInt = 3;
-#endif
-
-                for (int i = 0; i < foundMatch.Count; i++)
                 {
-                    if (regActivityHours[foundMatch[i]].cartelActivityClass == actInt)
-                    {
-                        if (regActivityHours[foundMatch[i]].hoursUntilEnable <= 0)
-                        {
-                            if (!enabledActivities.ContainsKey(inRegAct))
-                            {
-                                //Log("Hours Until Enable Satisfied - IDX: " + foundMatch[i]);
-                                List<int> indexAndActInt = new() { foundMatch[i], actInt };
-                                enabledActivities.Add(inRegAct, indexAndActInt);
-                            }
-                        }
-                    }
+                    actInt = 0;
+                    identifier = "StealDeadDrop";
                 }
+                else if (inRegAct.TryCast<CartelCustomerDeal>() != null)
+                {
+                    actInt = 1;
+                    identifier = "CartelCustomerDeal";
+                }
+                else if (inRegAct.TryCast<RobDealer>() != null)
+                {
+                    actInt = 2;
+                    identifier = "RobDealer";
+                }
+                else // spray graffiti
+                {
+                    actInt = 3;
+                    identifier = "SprayGraffiti";
+                }
+#endif
+                CartelRegActivityHours hrInstance = regActivityHours.First(x => x.cartelActivityClass == actInt);
+                if (hrInstance != null && hrInstance.hoursUntilEnable <= 0)
+                    enabledActivities.Add(inRegAct, new (actInt, identifier));
             }
 
             if (enabledActivities.Count == 0)
             {
-                Log("[REGACT]    No Regional Activities can be enabled at this moment");
+                Log("No Regional Activities can be enabled at this moment", name);
                 enabledActivities.Clear();
                 return false;
             }
 
             int enabledCount = enabledActivities.Count;
-            Log("[REGACT]    Enabled Activities Count: " + enabledCount);
+            Log("Enabled Activities Count: " + enabledCount, name);
             do
             {
                 enabledCount = enabledActivities.Count;
                 if (enabledCount == 0) break;
 
-                KeyValuePair<CartelActivity, List<int>> selected = enabledActivities.ElementAt(UnityEngine.Random.Range(0, enabledCount));
+                KeyValuePair<CartelActivity, Tuple<int, string>> selected = enabledActivities.ElementAt(UnityEngine.Random.Range(0, enabledCount));
                 if (selected.Key.IsRegionValidForActivity(__instance.Region))
                 {
                     __instance.StartActivity(null, __instance.Activities.IndexOf(selected.Key));
-                    Log("[REGACT]    Starting Activity!");
-                    if (selected.Value[1] == 0)// StealDeadDrop
-                    {
-                        regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.deadDropStealFrequency);
-                    }
-                    else if (selected.Value[1] == 1)// CartelCustomerDeals
-                    {
-                        regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelCustomerDealFrequency);
-                    }
-                    else if (selected.Value[1] == 2)// RobDealer
-                    {
-                        regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelRobberyFrequency);
-                    }
-                    else if (selected.Value[1] == 3)// Spray graffiti
-                    {
-                        regActivityHours[selected.Value[0]].hoursUntilEnable = GetActivityHours(currentConfig.cartelGraffitiFrequency);
-                    }
 
+                    // User wants to use game default cooldown for the regional inner events
+                    // that means its by default NOT cooldown limited at all and is only
+                    // limited by the Region level activity cooldown therefore hours until enable is 0
+                    // otherwise if they have custom value it will obey to those...
+                    regActivityHours[selected.Value.Item1].hoursUntilEnable = GetActivityHours(selected.Value.Item2);
                     // Finally break
                     break;
                 }
@@ -254,8 +261,9 @@ namespace CartelEnforcer
                 }
             } while (enabledCount != 0);
 
-            Log("[REGACT] Finished TryStartRegionalActivity");
+            Log("Finished TryStartRegionalActivity", name);
             enabledActivities.Clear();
+            enabledActivities = null;
             return false; 
         }
     }

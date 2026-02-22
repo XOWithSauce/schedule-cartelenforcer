@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.UI;
 using MelonLoader;
+using UnityEngine.UI;
 
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelEnforcer;
@@ -27,6 +27,7 @@ using ScheduleOne.GameTime;
 using ScheduleOne.UI;
 using ScheduleOne.UI.Handover;
 using ScheduleOne.NPCs;
+using ScheduleOne.Property;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
@@ -51,6 +52,7 @@ using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Handover;
 using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.Property;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
@@ -87,7 +89,8 @@ namespace CartelEnforcer
 
         public static void InitSuppliesModule()
         {
-            Log("[ALLIEDEXT] Init supplies module");
+            Log("Init supplies module");
+
             #region Init Car locations
             SupplyLocation manorCar = new SupplyLocation();
             manorCar.CarPosition = new Vector3(167.3347f, 10.5078f, -68.9665f);
@@ -207,7 +210,7 @@ namespace CartelEnforcer
             }
             else
             {
-                Log($"[ALLIEDEXT] Failed to find transform: {transformPath}");
+                Log($"Failed to find transform: {transformPath}");
             }
             return;
         }
@@ -220,7 +223,7 @@ namespace CartelEnforcer
             Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
             if (thomas == null)
             {
-                Log("[ALLIEDEXT] Failed to find thomas obj");
+                Log("Failed to find thomas obj");
                 yield break;
             }
 
@@ -233,7 +236,7 @@ namespace CartelEnforcer
 
             if (location.Type == ESupplyType.Barrel)
             {
-                Log("[ALLIEDEXT] Spawn Supply Barrel");
+                Log("Spawn Supply Barrel");
                 foreach (GameObject go in location.BarrelObjects)
                 {
                     SetBarrelInteractable(
@@ -245,16 +248,32 @@ namespace CartelEnforcer
             }
             else // ESupplyType.Van
             {
-                Log("[ALLIEDEXT] Spawn Supply Van");
+                Log("Spawn Supply Van");
 
                 // if manor open gates
                 if (location.ID == "SUPPLY_MANOR")
                 {
-                    ManorGate[] gate = UnityEngine.Object.FindObjectsOfType<ManorGate>(true);
-                    if (gate != null && gate.Length > 1)
+                    for (int i = 0; i < Property.Properties.Count; i++)
                     {
-                        // Log("Gates count:" + gate.Length); // there are 2
-                        gate[1].SetEnterable(true);
+                        if (Property.Properties[i].propertyCode == "manor")
+                        {
+                            ManorGate gate1 = Property.Properties[i].gameObject.GetComponentInChildren<ManorGate>();
+                            if (gate1 == null)
+                            {
+                                // try again with transform child direct
+                                Transform manorGateTr = Property.Properties[i].transform.Find("Manor Gate");
+                                if (manorGateTr != null)
+                                {
+                                    ManorGate gate2 = manorGateTr.gameObject.GetComponent<ManorGate>();
+                                    if (gate2 != null)
+                                        gate2.SetEnterable(true);
+                                }
+                            }
+                            else
+                            {
+                                gate1.SetEnterable(true);
+                            }
+                        }
                     }
                 }
 
@@ -264,7 +283,7 @@ namespace CartelEnforcer
             // spawn guard
             if (activeAlliedSupplies != null)
             {
-                Log("[ALLIEDEXT] Goon Spawned");
+                Log("Goon Spawned");
                 SpawnGuardGoon(location.GuardPosition, location.GuardRotation);
             }
             yield return null;
@@ -325,13 +344,11 @@ namespace CartelEnforcer
 #endif
             void CloseTrigger()
             {
-                Log("[ALLIEDEXT] Close trigger");
                 if (activeAlliedSupplies == null) return;
                 if (activeAlliedSupplies.State != EQuestState.Active) return;
                 if (activeAlliedSupplies.QuestEntry_GatherSupplies != null &&
                     activeAlliedSupplies.QuestEntry_GatherSupplies.State == EQuestState.Active)
                 {
-                    Log("[ALLIEDEXT] storage count:" + rewardStorage.ItemCount);
                     if (rewardStorage.ItemCount == 0)
                     {
                         activeAlliedSupplies.Complete(false);
@@ -366,7 +383,7 @@ namespace CartelEnforcer
             {
                 if (!PlayerSingleton<PlayerInventory>.InstanceExists)
                 {
-                    Log("[ALLIEDEXT] PlayerInventory instance does not exist");
+                    Log("PlayerInventory instance does not exist");
                     return;
                 }
 
@@ -447,7 +464,7 @@ namespace CartelEnforcer
 
             goonGuard.Health.MaxHealth = 500f;
             goonGuard.Health.Health = 500f;
-            goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.38f));
+            goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.55f));
 
             // create dialogue choice
             DialogueController controller = goonGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
@@ -488,17 +505,14 @@ namespace CartelEnforcer
                 yield return Wait1;
                 if (!registered) yield break;
 
+                // otherwise it tries to traverse back to pos during ui open
+                if (activeAlliedSupplies.interrogatingPlayer) continue;
+
                 if (activeAlliedSupplies == null || activeAlliedSupplies.State != EQuestState.Active)
                     break;
 
                 if (alliedGuard == null || alliedGuard.Health.IsDead || alliedGuard.Health.IsKnockedOut || alliedGuard.Behaviour.activeBehaviour == alliedGuard.Behaviour.CombatBehaviour)
                     break;
-
-                Log("Guard in building " + alliedGuard.isInBuilding);
-                Log("Guard ragdolled " + alliedGuard.Avatar.Ragdolled);
-                Log("Guard CanMove " + alliedGuard.Movement.CanMove());
-                Log("Hasdest " + alliedGuard.Movement.HasDestination);
-                Log("ISMoving " + alliedGuard.Movement.IsMoving);
 
                 float distFromGuardPos = Vector3.Distance(alliedGuard.CenterPoint, activeAlliedSupplies.location.GuardPosition);
                 if (distFromGuardPos > 30f || (activeAlliedSupplies.playerNoticed && activeAlliedSupplies.playerInterrogated && distFromGuardPos > 2f))
@@ -533,7 +547,6 @@ namespace CartelEnforcer
 
                 if (!activeAlliedSupplies.playerNoticed && !activeAlliedSupplies.playerInterrogated)
                 {
-                    Log("Look For Player");
                     if (Player.Local.IsPointVisibleToPlayer(alliedGuard.CenterPointTransform.position))
                     {
                         alliedGuard.Movement.FacePoint(Player.Local.CenterPointTransform.position, lerpTime: 0.9f);
@@ -549,7 +562,6 @@ namespace CartelEnforcer
                 {
                     // if not traversing to player
                     if (alliedGuard.Movement.HasDestination || alliedGuard.Movement.IsMoving) continue;
-                    Log("Traverse");
                     alliedGuard.Movement.SetDestination(Player.Local.CenterPointTransform);
                     if (alliedGuard.Movement.IsPaused)
                         alliedGuard.Movement.ResumeMovement();
@@ -584,7 +596,6 @@ namespace CartelEnforcer
 #endif
                 if (Vector3.Distance(Player.Local.CenterPointTransform.position, alliedGuard.CenterPoint) > 3f) continue;
 
-                Log("Interrogate Start");
                 activeAlliedSupplies.playerInterrogated = true;
                 if (alliedGuard.DialogueHandler != null)
                 {
@@ -602,7 +613,7 @@ namespace CartelEnforcer
         public static void OnHourPassEvaluateSupply()
         {
             if (!registered || SaveManager.Instance.IsSaving || isSaving) return;
-
+            if (!currentConfig.alliedExtensions) return;
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced) return;
 #else

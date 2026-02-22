@@ -5,18 +5,21 @@ using HarmonyLib;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 
+
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Levelling;
 using ScheduleOne.Economy;
+using ScheduleOne.Equipping;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Economy;
+using Il2CppScheduleOne.Equipping;
 #endif
 
 namespace CartelEnforcer
@@ -96,8 +99,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        // TODO there was something in logs about user modded ambushes accessing index out of bounds? what was that
-        public static IEnumerator AddUserModdedAmbush() // Todo optimize this code is ugly
+        public static IEnumerator AddUserModdedAmbush()
         {
             yield return Wait2;
             if (!registered) yield break;
@@ -190,6 +192,8 @@ namespace CartelEnforcer
                     Log($"Equippable failed to load from {ambushSettings.RangedWeaponAssetPaths[i]}");
                     continue;
                 }
+                if (!equippable.gameObject.activeSelf)
+                    equippable.gameObject.SetActive(true);
 #if MONO
                 Log("  AvatarWeaponCast: " + i);
                 if (equippable is AvatarWeapon rangedWeapon)
@@ -202,6 +206,25 @@ namespace CartelEnforcer
                 if (weapon != null)
                     RangedWeapons[i] = weapon;
 #endif
+                // configure weapon stats, at AmbushWeaponLethality 1 stats are essentially doubled/halved to make it better, at 0 default
+#if MONO
+                AvatarRangedWeapon rangedWep = equippable as AvatarRangedWeapon;
+#else
+                AvatarRangedWeapon rangedWep = equippable.TryCast<AvatarRangedWeapon>();
+#endif
+                if (rangedWep != null && ambushSettings.AmbushWeaponLethality > 0f)
+                {
+                    rangedWep.Damage = Mathf.Lerp(rangedWep.Damage, rangedWep.Damage * 2f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.AimTime_Max = Mathf.Lerp(rangedWep.AimTime_Max, rangedWep.AimTime_Max * 0.5f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.AimTime_Min = Mathf.Lerp(rangedWep.AimTime_Min, rangedWep.AimTime_Min * 0.5f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.HitChance_MaxRange = Mathf.Lerp(rangedWep.HitChance_MaxRange, rangedWep.HitChance_MaxRange * 2f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.HitChance_MinRange = Mathf.Lerp(rangedWep.HitChance_MinRange, rangedWep.HitChance_MinRange * 2f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.MaxUseRange = Mathf.Lerp(rangedWep.MaxUseRange, rangedWep.MaxUseRange * 2f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.MinUseRange = Mathf.Lerp(rangedWep.MinUseRange, rangedWep.MinUseRange * 0.5f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.MaxFireRate = Mathf.Lerp(rangedWep.MaxFireRate, rangedWep.MaxFireRate * 0.5f, ambushSettings.AmbushWeaponLethality);
+                    rangedWep.ReloadTime = Mathf.Lerp(rangedWep.ReloadTime, rangedWep.ReloadTime * 0.5f, ambushSettings.AmbushWeaponLethality);
+                }
+
                 Log($"Succesfully loaded {ambushSettings.RangedWeaponAssetPaths[i]}");
             }
 
@@ -218,11 +241,14 @@ namespace CartelEnforcer
 #endif
 
                 AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
+                
                 if (equippable == null)
                 {
                     Log($"Equippable failed to load from {ambushSettings.MeleeWeaponAssetPaths[i]}");
                     continue;
                 }
+                if (!equippable.gameObject.activeSelf)
+                    equippable.gameObject.SetActive(true);
 #if MONO
                 if (equippable is AvatarWeapon weapon)
                     MeleeWeapons[i] = weapon;
@@ -231,8 +257,25 @@ namespace CartelEnforcer
                 if (weapon != null)
                     MeleeWeapons[i] = weapon;
 #endif
+                // configure weapon stats, at AmbushWeaponLethality 1 stats are essentially doubled/halved to make it better, at 0 default
+#if MONO
+                AvatarMeleeWeapon meleeWep = equippable as AvatarMeleeWeapon;
+#else
+                AvatarMeleeWeapon meleeWep = equippable.TryCast<AvatarMeleeWeapon>();
+#endif
+                if (meleeWep != null && ambushSettings.AmbushWeaponLethality > 0f)
+                {
+                    meleeWep.Damage = Mathf.Lerp(meleeWep.Damage, meleeWep.Damage * 2f, ambushSettings.AmbushWeaponLethality);
+                    meleeWep.CooldownDuration = Mathf.Lerp(meleeWep.CooldownDuration, meleeWep.CooldownDuration * 0.5f, ambushSettings.AmbushWeaponLethality);
+                    meleeWep.AttackRange = Mathf.Lerp(meleeWep.AttackRange, meleeWep.AttackRange * 2f, ambushSettings.AmbushWeaponLethality);
+                    meleeWep.AttackRadius = Mathf.Lerp(meleeWep.AttackRadius, meleeWep.AttackRadius * 2f, ambushSettings.AmbushWeaponLethality);
+                    meleeWep.MaxUseRange = Mathf.Lerp(meleeWep.MaxUseRange, meleeWep.MaxUseRange * 2f, ambushSettings.AmbushWeaponLethality);
+                }
+
                 Log($"Succesfully loaded {ambushSettings.MeleeWeaponAssetPaths[i]}");
             }
+
+
 
             FullRank MinRankForRanged = new ((ERank)ambushSettings.MinRankForRanged, 1); // cast from int thats validated in config load
             Ambush.MIN_RANK_FOR_RANGED_WEAPONS = MinRankForRanged;

@@ -62,49 +62,6 @@ namespace CartelEnforcer
                 changeInfluence = false;
             return changeInfluence;
         }
-        
-        public static IEnumerator ApplyInfluenceConfig()
-        {
-            yield return Wait2;
-            if (!registered) yield break;
-            if (currentConfig.activityInfluenceMin != 0.0f)
-            {
-                Log("Changing Activity Influence Requirements");
-                // Change Activity Influence requirements
-                CartelActivities instanceActivities = NetworkSingleton<Cartel>.Instance.Activities;
-
-                foreach (CartelActivity act in instanceActivities.GlobalActivities)
-                {
-                    float result = 0f;
-                    if (currentConfig.activityInfluenceMin > 0.0f && act.InfluenceRequirement > 0.0f)
-                        result = Mathf.Lerp(act.InfluenceRequirement, 1.0f, currentConfig.activityInfluenceMin);
-                    else
-                        result = Mathf.Lerp(act.InfluenceRequirement, 0.0f, -currentConfig.activityInfluenceMin);
-
-                    Log($"Changing Global Activity Influence from {act.InfluenceRequirement} to {result}");
-                    act.InfluenceRequirement = result;
-                }
-
-                CartelRegionActivities[] regAct = UnityEngine.Object.FindObjectsOfType<CartelRegionActivities>(true);
-                foreach (CartelRegionActivities act in regAct)
-                {
-                    foreach (CartelActivity activity in act.Activities)
-                    {
-                        float result = 0f;
-                        if (currentConfig.activityInfluenceMin > 0.0f && activity.InfluenceRequirement > 0.0f)
-                            result = Mathf.Lerp(activity.InfluenceRequirement, 1.0f, currentConfig.activityInfluenceMin);
-                        else
-                            result = Mathf.Lerp(activity.InfluenceRequirement, 0.0f, -currentConfig.activityInfluenceMin);
-
-                        Log($"Changing Regional Activity Influence from {activity.InfluenceRequirement} to {result}");
-                        activity.InfluenceRequirement = result;
-                    }
-                }
-
-            }
-            Log("Finished changing Activity Influence Requirements");
-            yield return null;
-        }
 
         public static IEnumerator OnDayChangeApplyPassiveGain()
         {
@@ -113,8 +70,7 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (ShouldChangeInfluence(region.Region))
                 {
-                    // flip the original influence and apply the mod one
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region.Region, -0.02f + influenceConfig.passiveInfluenceGainPerDay);
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region.Region, influenceConfig.passiveInfluenceGainPerDay);
                 }
             }
             yield return null;
@@ -122,6 +78,7 @@ namespace CartelEnforcer
 
         public static void OnDayPassChangePassive()
         {
+            if (influenceConfig.passiveInfluenceGainPerDay == 0f) return;
             Log("On Day Pass Change Passive Influence");
             coros.Add(MelonCoroutines.Start(OnDayChangeApplyPassiveGain()));
         }
@@ -196,21 +153,28 @@ namespace CartelEnforcer
     {
         public static bool Prefix(Ambush __instance, Player target, Vector3[] potentialSpawnPoints)
         {
+            Log("Prefix Ambush");
             List<CartelGoon> currentlySpawned = [.. NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons];
             coros.Add(MelonCoroutines.Start(OverMonitorAmbush(potentialSpawnPoints, currentlySpawned, __instance.Region)));
+            Log("Continue Ambush");
             return true;
         }
 
         public static IEnumerator OverMonitorAmbush(Vector3[] potentialSpawnPoints, List<CartelGoon> currentlySpawned, EMapRegion region)
         {
-            float preMaxElapsed = 1f;
+            float preMaxElapsed = 0.3f;
             float preElapsed = 0f;
             List<CartelGoon> ambushSpawned = new();
 
+            // Detect the spawned goons
+
+            // Theoretically its possible that this could detect for example a Spray Graffiti spawned goon
+            // OR a Cartel Dealer death spawned defender goon, if the events triggered within this 0.3s timeframe...
+            // very improbable but possible, todo fix in the future how...
             while (registered && preElapsed < preMaxElapsed)
             {
-                yield return Wait025;
-                preElapsed += 0.25f;
+                yield return Wait01;
+                preElapsed += 0.1f;
                 if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count != currentlySpawned.Count)
                 {
                     foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons)
@@ -226,6 +190,7 @@ namespace CartelEnforcer
             // if nothing was found ambush didnt run
             if (ambushSpawned.Count == 0)
             {
+                Log("Ambush spawned nothing!!");
                 yield break;
             }
 
@@ -259,6 +224,8 @@ namespace CartelEnforcer
                         ambushSpawned.Remove(goon);
                 }
             }
+
+            yield return Wait01;
 
             if ((ambushSpawned.Count == 0 || deadGoons.Count == spawnedCount) && InstanceFinder.IsServer)
             {
@@ -305,6 +272,25 @@ namespace CartelEnforcer
         {
             // based on source the influence is guarded as follows
             if (!notify || !NetworkSingleton<Cartel>.InstanceExists) return true;
+
+#if MONO
+            bool isHostile = NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile;
+            bool isTruced = NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced;
+#else
+            bool isHostile = NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile;
+            bool isTruced = NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced;
+#endif
+
+            if (isHostile || isTruced)
+            {
+                if (isTruced && !currentConfig.alliedExtensions)
+                {
+                    return true;
+                }
+            }
+            else
+                return true;
+
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
 #else

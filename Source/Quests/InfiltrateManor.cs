@@ -546,29 +546,23 @@ namespace CartelEnforcer
             List<Vector3> roomPositionsList = roomsPositions.Keys.ToList();
 
             // if unspawned goon count is too low we insta despawn
-            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 3)
+            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count == 0)
             {
-                // because below dowhile not limited by max iter added this
-                int maxIter = 5;
-                int currentIter = 0;
-                do
+                foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.goons)
                 {
-                    if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count == 0) break;
-                    int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1; // list pos to last
-                    CartelGoon target = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count];
-                    target.Health.Revive();
-                    target.Despawn();
-                    // If combat behaviour is active then the goon will be invis but fight player ensure disable
-                    if (target.Behaviour.CombatBehaviour.Active)
-                        target.Behaviour.CombatBehaviour.Disable_Networked(null);
+                    if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count >= 3) break;
+                    if (!NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(goon)) continue;
 
-                    currentIter++;
-                } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 3 || currentIter >= maxIter);
+                    if (goon.IsGoonSpawned && (goon.Health.IsDead || goon.Health.IsKnockedOut))
+                    {
+                        goon.Health.Revive();
+                        goon.Despawn();
+                    }
+                }
             }
 
-            for (int i = 0; i < NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count; i++)
+            for (int i = 0; i < 3; i++)
             {
-                if (i > 2) break;
                 Log("SpawnGoon");
                 CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(roomPositionsList[i]);
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);

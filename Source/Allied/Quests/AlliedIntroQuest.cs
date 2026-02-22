@@ -10,7 +10,6 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.CartelGathering;
 
-
 #if MONO
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Map;

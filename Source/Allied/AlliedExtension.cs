@@ -69,7 +69,7 @@ namespace CartelEnforcer
             if (oldStatus == (Il2Cpp.ECartelStatus)0 && newStatus == Il2Cpp.ECartelStatus.Truced)
 #endif
             {
-                Log("[ALLIEDEXT] Status Change: adding truce dialogue");
+                Log("Status Change: adding truce dialogue");
                 // Player accepted truce with cartel
                 foreach (CartelDealer d in DealerActivity.allCartelDealers)
                 {
@@ -100,7 +100,7 @@ namespace CartelEnforcer
             else if (oldStatus == Il2Cpp.ECartelStatus.Truced && newStatus == Il2Cpp.ECartelStatus.Hostile)
 #endif
             {
-                Log("[ALLIEDEXT] Status Change: Removing hired cartel dealers and assigned customers");
+                Log("Status Change: Removing hired cartel dealers and assigned customers");
 
                 // If Player recruited cartel dealers
                 foreach (CartelDealer d in DealerActivity.allCartelDealers)
@@ -137,6 +137,7 @@ namespace CartelEnforcer
         public static void OnAlliedStateChange(Il2Cpp.ECartelStatus oldStatus, Il2Cpp.ECartelStatus newStatus)
 #endif
         {
+            if (!currentConfig.alliedExtensions) return;
             Log("OnAlliedStateChange");
             coros.Add(MelonCoroutines.Start(DelayedStateChange(oldStatus, newStatus)));
             return;
@@ -146,10 +147,9 @@ namespace CartelEnforcer
         public static IEnumerator SetupAlliedExtension()
         {
             yield return Wait10;
-            Log("[ALLIEDEXT] Setting up Allied features");
+            Log("Setting up Allied features");
             alliedConfig = LoadAlliedConfig();
             alliedQuests = LoadAlliedQuests();
-            Log("[ALLIEDEXT]     Loaded Config");
 
             // Prepare the persuade feature dialogue container
             persuadeContainer = CartelPersuade.InitPersuadeContainer();
@@ -158,7 +158,6 @@ namespace CartelEnforcer
 
             TimeManager timeInstance = NetworkSingleton<TimeManager>.Instance;
             timeInstance.onMinutePass.Add(new Action(ReduceCooldown));
-            Log($"[ALLIEDEXT]     Added minpass reduce cooldown");
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassEvaluateSupply;
 #else
@@ -180,15 +179,12 @@ namespace CartelEnforcer
                 instance.OnStatusChange += (Il2CppSystem.Action<Il2Cpp.ECartelStatus, Il2Cpp.ECartelStatus>)OnAlliedStateChange;
 #endif
             }
-            Log("[ALLIEDEXT]     Applied status callback");
-
-            Log("[ALLIEDEXT]     Parsing Dealers");
             if (DealerActivity.allCartelDealers == null)
                 DealerActivity.allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
 
             if (DealerActivity.allCartelDealers == null || DealerActivity.allCartelDealers.Length == 0)
             {
-                Log("[ALLIEDEXT] Failed to initiate AlliedExtensions");
+                Log("Failed to initiate AlliedExtensions");
                 yield break;
             }
 
@@ -198,12 +194,10 @@ namespace CartelEnforcer
             foreach (Dealer d in Dealer.AllPlayerDealers)
                 if (d.ID == "molly_presley")
                     molly = d;
-            if (molly == null)
-                Log("[ALLIEDEXT]     Warning molly is null");
 
             Dictionary<EMapRegion, CartelDealer> dealersByRegion = new();
 #if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced)
+            if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced && currentConfig.alliedExtensions)
 #else
             if (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced)
 #endif
@@ -264,12 +258,12 @@ namespace CartelEnforcer
                     {
                         d.Inventory.ClearInventoryEachNight = false;
                         // Already has default dialogue options
-                        Log($"[ALLIEDEXT]     - {d.Region} already recruited");
+                        Log($"- {d.Region} already recruited");
                         continue;
                     }
                     else if (!d.IsRecruited && !d.HasBeenRecommended)
                     {
-                        Log($"[ALLIEDEXT]     + {d.Region} add persuade");
+                        Log($"+ {d.Region} add persuade");
                         CartelPersuade.AddPersuadeDialogue(d);
                     }
                 }
@@ -303,7 +297,7 @@ namespace CartelEnforcer
                 }
             }
 
-            Log("[ALLIEDEXT] Finished setup");
+            Log("Finished setup");
             yield return null;
         }
 

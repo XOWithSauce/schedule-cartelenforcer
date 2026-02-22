@@ -41,7 +41,7 @@ namespace CartelEnforcer
         [HarmonyPostfix]
         public static void Postfix(DialogueController_Dealer __instance, ref string choiceLabel, ref bool __result, ref string invalidReason)
         {
-            Log("[ALLIEDEXT] Check Choice Postfix");
+            Log("Check Choice Postfix");
 
             // If the dealer is not cartel dealer dont patch
             if (__instance.Dealer.DealerType == EDealerType.PlayerDealer) return;
@@ -176,10 +176,10 @@ namespace CartelEnforcer
 
             if (choiceLabel == "START_PERSUADE")
             {
-                Log("[ALLIEDEXT] START PERSUADE");
+                Log("START PERSUADE");
                 if (__instance.OverrideContainer.DialogueNodeData.Count != 2)
                 {
-                    Log("[ALLIEDEXT] Override container is missing nodes");
+                    Log("Override container is missing nodes");
                     return true;
                 }
                 // compute the chance
@@ -188,8 +188,6 @@ namespace CartelEnforcer
                 persuasionChances["THREATEN_CARTEL"] = CalculateThreathenProbability();
                 persuasionChances["SPREAD_RUMOURS"] = CalculateRumourProbability();
                 persuadeCooldown = alliedConfig.PersuadeCooldownMins;
-                Log("[ALLIEDEXT] Chance calculated");
-                Log("[ALLIEDEXT] Reset nodes");
                 for (int i = 0; i < __instance.OverrideContainer.DialogueNodeData[1].choices.Length; i++)
                 {
                     DialogueChoiceData choice = __instance.OverrideContainer.DialogueNodeData[1].choices[i];
@@ -211,7 +209,7 @@ namespace CartelEnforcer
                         choice.ChoiceText = formattedChoiceText;
                     }
                 }
-                Log($"[ALLIEDEXT] Nodes reset");
+                Log($"Nodes reset");
             }
             else if (choiceLabel == "EXIT")
             {
@@ -222,7 +220,6 @@ namespace CartelEnforcer
             }
             else // one of the 4 inner choices
             {
-                Log($"[ALLIEDEXT] PERSUADE OPTIONS");
                 NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Dealer.Region, influenceConfig.cartelDealerPersuaded);
 
                 if (!(!registered || SaveManager.Instance.IsSaving || isSaving))
@@ -230,7 +227,7 @@ namespace CartelEnforcer
                     if (AlliedExtension.alliedQuests != null)
                         AlliedExtension.alliedQuests.timesPersuaded++;
                     else
-                        Log("[ALLIEDEXT] Allied Quests are null");
+                        Log("Allied Quests are null");
                 }
 
                 // Check if chance hits
@@ -239,13 +236,10 @@ namespace CartelEnforcer
                 {
                     if (chance != 0f && UnityEngine.Random.Range(0f, 1f) < chance)
                     {
-                        Log("[ALLIEDEXT] Chance hits");
                         coros.Add(MelonCoroutines.Start(EnableDelayed(__instance, choiceLabel)));
                     }
                     else
                     {
-                        Log("[ALLIEDEXT] Chance Doesnt hit");
-
                         switch (UnityEngine.Random.Range(0, 5))
                         {
                             case 0:
@@ -268,18 +262,6 @@ namespace CartelEnforcer
                                 __instance.npc.PlayVO(EVOLineType.Annoyed, false);
                                 break;
                         }
-#if MONO
-                        //__instance.handler.EndDialogue();
-#else
-                        // Maybe there needs to be strict typing
-                        // its ControlledDialogueHandler type where as intellisense fills out DialogueHandler in handler property
-                        //ControlledDialogueHandler cdHandler = __instance.handler.TryCast<ControlledDialogueHandler>();
-                        //if (cdHandler != null)
-                        //    cdHandler.EndDialogue();
-
-                        // so test without it?
-                        // without it, it still ends dialogue as usual?
-#endif
 
                         if (choiceLabel == "THREATEN_CARTEL")
                         {

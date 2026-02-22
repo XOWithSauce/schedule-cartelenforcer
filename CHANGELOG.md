@@ -1,3 +1,36 @@
+# Version 1.8.4
+- Added support for using MelonLoader Preferences alongside the previous .json file implementation. The basic mod features can now be toggled through the preferences and hot reloaded while playing and the preferences will sync with the main config.json file.
+- Added support for installing the mod through Thunderstore Mod Manager alongside the manual installation methods
+- Added support for changing the hourly frequency and influence requirement for each cartel activity type from the base game and the mod added events all from 1 config file
+- Added support for saving cooldowns of mod added events and regional activities (if used in config) to the EventFrequency/Cooldowns/ directory for each save separately
+- Added support for changing the Ambush Trigger Probability from the Ambush/settings.json file. It controls how much of the regions influence is required for the chance to trigger. Default is 0.8. Lower values make it LESS likely to trigger. Higher values (e.g. 1.0 or 2.0 make it more likely to trigger)
+- Added support for changing the Ambush weapon lethality from the Ambush/settings.json file. At 0.0 the lethality is at default, at 1.0 its doubled. Works for both the ranged and melee weapon lists.
+- Added support for changing the Drive By event triggers positions and radius, in addition to the driving start and end positions for all triggers from the DriveBy/driveby.json file which gets generated automatically if missing.
+- Added support for using regional influence requirement to the Drive By event triggers
+- Added support for using regional influence requirement to the Cartel Gathering event
+- Added support for using regional influence requirement to the Intercept Deals event
+- Added support for using regional influence requirement to the Sabotage Business event
+- Changed the mod data files (.json config files) to be loaded from UserData/XO_WithSauce-CartelEnforcer directory by default instead of using the Mods/CartelEnforcer directory as the primary folder. This is more of a best practices change and partly allows the TS mod manager compatibility.
+- Changed the loading of mod data files (.json config files) to log out any JSON Serialization errors at the Error logging level instead of Warning. This aims to fix an issue where if warnings are surpressed by Melon Loader config, then any potential problems with mod configs would not be visible to the user.
+- Refactored the mod initialization code to run initialization for all mod features even if they are disabled to allow hot reloading basic features at runtime
+- Refactored the event frequency system entirely which contributes for most of changes / additions / removals for this version
+- Changed the way that Ambush triggering is calculated by default. Now the activity prefers to trigger players current region ambush triggers, instead of pure random selection.
+- Changed the Customer unlock influence reduction to also be enabled while the cartel is truced only when the allied extensions are enabled
+- Fixed an issue where killed Cartel Goons can spawn as invisible and active after being despawned and respawned once.
+- Fixed an issue where usage of the mod additional spawned weapons would cause errors in the game logs due to being disabled after instantiation
+- Fixed a bug where the passive influence gain could have incorrectly decreased influence in certain configurations
+- Fixed a bug where during the Allied Supplies quest the Manor gates would not open when player gets near
+- Fixed a bug where during the Allied Supplies quest the guard goon would try to traverse back to its guard position while talking to the player
+- Fixed a bug that was caused by the addition of Infiltrate Manor decoration changes, where the player would be unable to exit the game through the exit screen button
+- Fixed a bug where the Sabotage Business event would never select a business for sabotage based on active laundering operation as intended
+- Fixed a potential bug where mod forced despawns in certain scenarios could cause actively in use Cartel Goons to be despawned. Now forced despawns can only despawn killed and or knocked out goons.
+- Removed activityFrequency, activityInfluenceMin, and event frequency values from the main config.json file since these are replaced by the new logic for activity frequency and influences in EventFrequency/config.json file
+- misc
+- Added Godmode to Debug mode so that the player is healed to 100hp if they take damage
+- Changed Debug mode to always spawn the 2 defending goons whenever a cartel dealer is killed (normally 50%)
+- Changed Debug mode to always use the supply location for manor whenever allied extension is enabled
+- Changed debug build configuration logging to use function name in the logs to make it easier to develop and debug issues
+
 # Version 1.8.3
 
 - Ensured that the mod works in latest 0.4.3f3 default and alternate

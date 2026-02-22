@@ -48,6 +48,7 @@ namespace CartelEnforcer
     [HarmonyPatch(typeof(Dealer), "TryRobDealer")] // This is only reached by FishNet Instance IsServer
     public static class DealerRobberyPatch
     {
+
         private static bool IsPlayerNearby(Dealer dealer, float maxDistance = 120f)
         {
             return Vector3.Distance(dealer.transform.position, Player.Local.transform.position) < maxDistance;
@@ -125,10 +126,6 @@ namespace CartelEnforcer
                     {
                         num = Mathf.Max(num, tempDef.CombatUtility);
                     }
-                    else
-                    {
-                        Log("[TRY ROB ORIGINAL] Evaluate Result - Temp Definition is null");
-                    }
                 }
 #endif
             }
@@ -197,15 +194,12 @@ namespace CartelEnforcer
                 // Check not in building, dead or knocked out
                 if (!__instance.Health.IsDead && !__instance.Health.IsKnockedOut && !__instance.isInBuilding)
                 {
-                    Log("[TRY ROB] Started");
-                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled)
+                    if (IsPlayerNearby(__instance) && currentConfig.realRobberyEnabled && NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count > 0)
                     {
-                        Log("[TRY ROB]    Run Custom");
                         coros.Add(MelonCoroutines.Start(RobberyCombatCoroutine(__instance)));
                     }
                     else if (currentConfig.defaultRobberyEnabled)
                     {
-                        Log("[TRY ROB]    Run original");
                         Original(__instance);
                     }
                 }
@@ -218,8 +212,6 @@ namespace CartelEnforcer
     {
         public static IEnumerator RobberyCombatCoroutine(Dealer dealer)
         {
-            yield return Wait2;
-            if (!registered) yield break;
             EMapRegion region = EMapRegion.Northtown;
             for (int i = 0; i < Singleton<Map>.Instance.Regions.Length; i++)
             {
@@ -240,7 +232,7 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                Log("[TRY ROB]    Finding Spawn Robber Position");
+                Log("Finding Spawn Robber Position");
                 randomDirection = UnityEngine.Random.onUnitSphere;
                 randomDirection.y = 0f;
                 randomDirection.Normalize();
@@ -250,22 +242,21 @@ namespace CartelEnforcer
                 j++;
             } while (spawnPos == Vector3.zero && j <= maxAttempts); // Because GetClosestReachablePoint can return V3.Zero as default (unreachable)
 
-            Log("[TRY ROB]    Position for robber: " + spawnPos.ToString());
+            Log("Position for robber: " + spawnPos.ToString());
 
             if (spawnPos == Vector3.zero)
             {
-                Log("[TRY ROB]    Failed to find valid spawn position for robber");
+                Log("Failed to find valid spawn position for robber");
                 yield break;
             }
 
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
             if (goon == null)
             {
-                Log("[TRY ROB]    Failed to spawn goon. Robbery failed.");
+                Log("Failed to spawn goon. Robbery failed.");
                 yield break;
             }
 
-            Log("[TRY ROB]    Send Message");
             string text = "";
             switch (UnityEngine.Random.Range(0, 5))
             {
@@ -333,11 +324,10 @@ namespace CartelEnforcer
                     wep.Damage = 44f;
                 }
             }
-            Log("[TRY ROB]    Warp to spawn");
+            Log("Warp to spawn");
             goon.Movement.Warp(spawnPos);
             yield return Wait05;
             if (!registered) yield break;
-            Log("[TRY ROB]    Set combat target");
             dealer.Behaviour.CombatBehaviour.SetTarget(goon.GetComponent<ICombatTargetable>().NetworkObject); 
             dealer.Behaviour.CombatBehaviour.Enable_Networked();
 
@@ -375,7 +365,7 @@ namespace CartelEnforcer
             if (dealer.Health.IsDead || !dealer.IsConscious || dealer.Health.IsKnockedOut)
             {
                 // Dealer is dead Partial rob first start with getting goon to the body
-                Log("[TRY ROB]    Dealer was defeated! Initiating partial robbery.");
+                Log("Dealer was defeated! Initiating partial robbery.");
                 goon.Inventory.Clear();
                 goon.Behaviour.ScheduleManager.DisableSchedule();
                 goon.Behaviour.ScheduleManager.ActionList[0].End();
@@ -473,14 +463,14 @@ namespace CartelEnforcer
                 dealer.Inventory.InventoryContentsChanged();
                 goon.Inventory.InventoryContentsChanged();
 
-                Log("[TRY ROB    Finished Body Intercept]");
+                Log("Finished Body Intercept]");
                 goon.Avatar.Animation.SetCrouched(false);
                 coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence)));
             }
             else if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
                 // Goon is dead or knocked out,defended robbery
-                Log("[TRY ROB]    Goon was defeated! Robbery attempt defended.");
+                Log("Goon was defeated! Robbery attempt defended.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
@@ -492,7 +482,7 @@ namespace CartelEnforcer
             else if (Vector3.Distance(Player.Local.CenterPointTransform.position, goon.CenterPointTransform.position) > 160f)
             {
                 // Player is out of range
-                Log("[TRY ROB]    Player outside of range. Dealer defends robbery.");
+                Log("Player outside of range. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
@@ -504,7 +494,7 @@ namespace CartelEnforcer
             }
             else if (elapsed >= 60)
             {
-                Log("[TRY ROB]    State Timed Out. Dealer defends robbery.");
+                Log("State Timed Out. Dealer defends robbery.");
                 dealer.MSGConversation.SendMessage(new Message(dealer.DialogueHandler.Database.GetLine(EDialogueModule.Dealer, "dealer_rob_defended"), Message.ESenderType.Other, false, -1), true, true);
 
                 dealer.Behaviour.CombatBehaviour.Disable_Networked(null);
@@ -528,9 +518,11 @@ namespace CartelEnforcer
             if (!instant)
                 yield return Wait60;
             if (!registered) yield break;
-            Log("[TRY ROB]    Despawned Goon");
+            Log("Despawned Goon");
 
-            goon.Despawn();
+            if (goon.IsGoonSpawned)
+                goon.Despawn();
+
             goon.Health.MaxHealth = 100f;
             goon.Health.Health = 100f;
             goon.Health.Revive();
@@ -543,7 +535,7 @@ namespace CartelEnforcer
         public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence)
         {
             if (!registered) yield break;
-            Log("[TRY ROB]    Start Escape");
+            Log("Start Escape");
             // After succesful robbery, navigate goon towards nearest CartelDealer apartment door
             float distance = 150f;
             float distCalculated = 0f;
@@ -555,18 +547,15 @@ namespace CartelEnforcer
             // Find nearest CartelDealer Home building Sometimes code hangs here no clue why
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
-                Log("Check dealer " + dealer.name);
                 if (dealer.Home != null && dealer.Home.Doors != null && dealer.Home.Doors.Length > 0)
                 {
                     doorTemp = dealer.Home.Doors[0];
                     if (doorTemp == null)
                     {
-                        Log("Temp door is null");
                         continue;
                     }
                     if (doorTemp.AccessPoint == null)
                     {
-                        Log("Door accesspoint is null");
                         continue;
                     }
                     distCalculated = Vector3.Distance(doorTemp.AccessPoint.position, goon.CenterPointTransform.position);
@@ -578,18 +567,13 @@ namespace CartelEnforcer
                         distance = distCalculated;
                     }
                 }
-                else
-                {
-                    Log("Dealer does not have a valid home");
-                }
             }
-            Log("Done parsing");
 
             // Check that within 150f units distance there was a building
             // otherwise it might unintentionally set the goon stay inside building and door to null
             if (door == null || building == null)
             {
-                // todo waht?
+                // todo waht? dunno
                 Log($"Door {door == null} or building {building == null} is null");
             }
             else
@@ -614,8 +598,8 @@ namespace CartelEnforcer
                 }
             }
 
-            Log($"[TRY ROB]    Escaping to: {destination}");
-            Log($"[TRY ROB]    Distance: {distance}");
+            Log($"Escaping to: {destination}");
+            Log($"Distance: {distance}");
             goon.Behaviour.ScheduleManager.EnableSchedule();
             goon.Behaviour.CombatBehaviour.Disable_Networked(null);
             goon.Behaviour.GetBehaviour("Follow Schedule").Enable();
@@ -630,12 +614,12 @@ namespace CartelEnforcer
                 goon.Behaviour.FleeBehaviour.SetEntityToFlee(Player.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
                 goon.Behaviour.FleeBehaviour.Enable_Networked();
                 isFleeing = true;
-                Log("[TRY ROB]    Robber fleeing player");
+                Log("Robber fleeing player");
             }
             else
             {
                 goon.Movement.SetDestination(closest);
-                Log("[TRY ROB]    Robber fleeing to cartel dealer");
+                Log("Robber fleeing to cartel dealer");
             }
 
             // While not dead or escape has elapsed under 60 seconds
@@ -665,7 +649,7 @@ namespace CartelEnforcer
             if (!goon.Health.IsDead && !goon.Health.IsKnockedOut && remainingDist < 5f)
             {
                 // The goon successfully escaped.
-                Log("[TRY ROB]    Goon Escaped to Cartel Dealer!");
+                Log("Goon Escaped to Cartel Dealer!");
                 EscapeEndSuccess(changeInfluence, region, goon);
             }
             else if (goon.Health.IsDead || goon.Health.IsKnockedOut)
@@ -678,10 +662,9 @@ namespace CartelEnforcer
             else if (elapsedNav >= 60f && goon.IsGoonSpawned)
             {
                 // The escape attempt timed out.
-                Log("[TRY ROB]    Despawned escaping goon due to timeout");
+                Log("Despawned escaping goon due to timeout");
                 EscapeEndSuccess(changeInfluence, region, goon);
             }
-            Log("[TRY ROB] End");
             yield return null;
         }
 
@@ -699,7 +682,6 @@ namespace CartelEnforcer
 #if MONO
                 if (goon.Inventory.ItemSlots[i].ItemInstance != null && goon.Inventory.ItemSlots[i].ItemInstance is CashInstance inst)
                 {
-                    Log($"[TRY ROB]    Stolen {inst.Balance} cash");
                     cartelCashAmount += inst.Balance;
                     continue;
                 }

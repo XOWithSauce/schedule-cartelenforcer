@@ -30,6 +30,13 @@ namespace CartelEnforcer
 
         public int MinRankForRanged = 2; // default 3 see below
         public bool AfterDealAmbushEnabled = true; // By default in source code its enabled (see Ambush.ContractReceiptRecorded), patched prefix true/false by this condition
+        
+        // Note: just replaces multiplier of the function not true probability but conttrols influence cap
+        public float AmbushTriggerProbability = 0.8f; 
+
+        // Same thing as with Cartel Dealer weapon lethality, 0.0 - 1.0 (at 0 default)
+        public float AmbushWeaponLethality = 0.33f;
+
     }
 
 }

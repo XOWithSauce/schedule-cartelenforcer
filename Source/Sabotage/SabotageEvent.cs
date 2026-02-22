@@ -5,6 +5,7 @@ using MelonLoader;
 
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelEnforcer;
+using static CartelEnforcer.FrequencyOverrides;
 
 #if MONO
 using ScheduleOne.Interaction;
@@ -22,6 +23,7 @@ using ScheduleOne.NPCs;
 using ScheduleOne.Combat;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.VoiceOver;
+using ScheduleOne.Persistence;
 using FishNet;
 #else
 using Il2CppScheduleOne.Interaction;
@@ -39,6 +41,7 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.VoiceOver;
+using Il2CppScheduleOne.Persistence;
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.Injection;
 #endif
@@ -142,7 +145,7 @@ namespace CartelEnforcer
                 }
             }
 
-            Log("[SABOTAGE] Finished populating business bomb locations");
+            Log("Finished populating business bomb locations");
             return;
         }
 
@@ -269,21 +272,23 @@ namespace CartelEnforcer
             // Fetch the PoliceVO beeping sound for the audio clip
             PoliceChatterVO voObj = UnityEngine.Object.FindObjectOfType<PoliceChatterVO>(true);
             if (voObj == null)
-                Log("[SABOTAGE] Could not find police chatter vo");
+                Log("Could not find police chatter vo");
             else
                 bombSound.clip = voObj.StartEndBeep.AudioSource.clip;
 
-            Log("[SABOTAGE] Instantiated gameobjects for event");
+            Log("Instantiated gameobjects for event");
 
             return;
         }
 
         public static IEnumerator EvaluateBombEvent()
         {
+            float influenceRequirement = GetByID("Sabotage").InfluenceRequirement;
             while (true)
             {
                 yield return Wait60;
                 if (!registered) yield break;
+                if (!currentConfig.businessSabotage) continue;
 
                 if (!InstanceFinder.IsServer)
                     yield break;
@@ -294,21 +299,34 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     continue;
 #endif
+                if (SaveManager.Instance.IsSaving || isSaving) continue;
 
                 if (sabotageEventActive) continue;
 
                 if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount == 0) continue;
 
-                // Check each location, meet either condition
-                // active laundering operation or player is inside business?
+                // Check each location and meet either condition
+                // active laundering operation or player is inside business
                 SabotageEventLocation selected = null;
                 foreach (SabotageEventLocation location in locations)
                 {
                     if (location.hoursUntilEnabled != 0) continue;
 
-                    if (location.business.LaunderingOperations.Count != 0 && location.business.currentLaunderTotal > location.business.appliedLaunderLimit * 2f)
+                    if (influenceRequirement >= 0f)
                     {
-                        Log("[SABOTAGE] Selected by active launder operation and launder threshold met");
+                        EMapRegion reg = Map.Instance.GetRegionFromPosition(location.business.transform.position);
+                        if (reg == EMapRegion.Northtown)
+                            reg = EMapRegion.Downtown; // because taco ticklers is closer to it and northtown doesnt have infl
+
+                        if (NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(reg).Influence < influenceRequirement)
+                        {
+                            continue; // not enough influence in region to sabotage the business
+                        }
+                    }
+
+                    if (location.business.LaunderingOperations.Count != 0 && location.business.currentLaunderTotal > location.business.appliedLaunderLimit * 0.5f)
+                    {
+                        Log("Selected by active launder operation and launder threshold met");
                         selected = location;
                         break;
                     }
@@ -316,7 +334,7 @@ namespace CartelEnforcer
                     Player nearbyPlayer = Player.GetClosestPlayer(location.bombLocation.Item1, out float distance);
                     if (distance < 20f && nearbyPlayer.CurrentBusiness != null && nearbyPlayer.CurrentBusiness == location.business && location.business.IsOwned)
                     {
-                        Log("[SABOTAGE] Selected by player inside business");
+                        Log("Selected by player inside business");
                         selected = location;
                         break;
                     }
@@ -324,24 +342,30 @@ namespace CartelEnforcer
                 }
                 if (selected == null) 
                 {
-                    Log("[SABOTAGE] No valid locations for sabotage");
+                    Log("No valid locations for sabotage");
                     continue;
                 }
 
-
-                // Reset cooldown based on influence
-                float allInfluence = 0f;
-                foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
+                int hours = GetActivityHours("Sabotage");
+                if (hours == 0)
                 {
-                    allInfluence += data.Influence;
+                    // Reset cooldown based on influence as mod default
+                    float allInfluence = 0f;
+                    foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
+                    {
+                        allInfluence += data.Influence;
+                    }
+                    
+                    float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
+                    int minHrs = Mathf.RoundToInt(Mathf.Lerp(16f, 37f, allInfluenceNormalized));
+                    int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
+                    selected.hoursUntilEnabled = UnityEngine.Random.Range(minHrs, maxHrs);
                 }
-                // When all influence is close to being max, the business sabotage becomes more infrequent
-                // when cartel gets more and more weaker as game progresses, this event should in theory become more common
-                // could use persistence because it can become nearly impossible to encounter if player just plays 1 day and quits each time?
-                float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
-                int minHrs = Mathf.RoundToInt(Mathf.Lerp(16f, 38f, allInfluenceNormalized));
-                int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
-                selected.hoursUntilEnabled = UnityEngine.Random.Range(minHrs, maxHrs);
+                else
+                {
+                    // Reset cooldown based on what the user wants
+                    selected.hoursUntilEnabled = hours;
+                }
 
                 // pass
                 sabotageEventActive = true;
@@ -356,7 +380,7 @@ namespace CartelEnforcer
             Vector3 randomPoint = location.sabotagerSpawns[UnityEngine.Random.Range(0, location.sabotagerSpawns.Count)];
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
             goon.Movement.WarpToNavMesh();
-            Log($"[SABOTAGE] Sabotager spawned at {goon.CenterPointTransform.position}");
+            Log($"Sabotager spawned at {goon.CenterPointTransform.position}");
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
             goon.Behaviour.ScheduleManager.DisableSchedule();
             goon.Movement.SetDestination(location.bombLocation.Item1);
@@ -373,7 +397,7 @@ namespace CartelEnforcer
                 if (!registered) yield break;
                 if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
                 {
-                    Log("[SABOTAGE] Goon killed while traverse");
+                    Log("Goon killed while traverse");
                     EventEnded(location, influenceConfig.sabotageGoonKilled);
                     sabotageEventActive = false;
                     coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
@@ -385,7 +409,7 @@ namespace CartelEnforcer
 
             if (n >= 120 && distanceToBombLoc > 2f)
             {
-                Log("[SABOTAGE] Failed traverse timeout");
+                Log("Failed traverse timeout");
                 sabotageEventActive = false;
                 coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
                 yield break;
@@ -399,7 +423,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
             if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
-                Log("[SABOTAGE] Goon killed while planting");
+                Log("Goon killed while planting");
                 EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
                 coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
@@ -412,7 +436,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
             if (goon.Health.IsDead || !goon.IsConscious || goon.Health.IsKnockedOut)
             {
-                Log("[SABOTAGE] Goon killed while planting");
+                Log("Goon killed while planting");
                 EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
                 coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
@@ -437,7 +461,7 @@ namespace CartelEnforcer
             // should walk back inside on its own, but doesnt on long render distances
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
-            Log($"[SABOTAGE] Goon planted bomb now at pos: {goon.CenterPoint}");
+            Log($"Goon planted bomb now at pos: {goon.CenterPoint}");
 
             goon.Movement.MoveSpeedMultiplier = 1.6f;
 
@@ -497,7 +521,7 @@ namespace CartelEnforcer
                 }
                 if (proximityInitiated)
                 {
-                    Log($"[SABOTAGE] Bomb exploding after {maxTicksInProximity-ticksInProximity} ticks");
+                    Log($"Bomb exploding after {maxTicksInProximity-ticksInProximity} ticks");
                     
                     if (ticksInProximity % 2 == 0)
                     {
@@ -526,7 +550,7 @@ namespace CartelEnforcer
             if (bombDefused)
             {
                 EventEnded(location, influenceConfig.sabotageBombDefused);
-                Log("[SABOTAGE] Bomb succesfully defused");
+                Log("Bomb succesfully defused");
                 sabotageEventActive = false;
                 yield break;
             }
@@ -538,7 +562,7 @@ namespace CartelEnforcer
 
         public static IEnumerator ExplosionEvent(SabotageEventLocation location)
         {
-            Log("[SABOTAGE] Trigger Explosion");
+            Log("Trigger Explosion");
 
             intBomb.SetActive(false);
             bombCubeMat.color = Color.grey;
@@ -603,7 +627,7 @@ namespace CartelEnforcer
             }
 
 
-            Log("[SABOTAGE] Cancel business launder");
+            Log("Cancel business launder");
             foreach (LaunderingOperation operation in location.business.LaunderingOperations)
             {
                 operation.amount = 0f;
@@ -619,11 +643,10 @@ namespace CartelEnforcer
             }
 
             EventEnded(location, influenceConfig.sabotageBombExploded);
-            Log("[SABOTAGE] End Event");
+            Log("End Event");
 
             yield return Wait10;
             if (!registered) yield break;
-            Log("[SABOTAGE] Clear Fleeing");
 
             foreach (NPC npc in npcsFleeing)
             {
@@ -644,7 +667,6 @@ namespace CartelEnforcer
 
             float maxIntensity = 14f;
             float minIntensity = 10f;
-            Log("[SABOTAGE] Scale down");
 
             while (currentScale >= targetScale)
             {
@@ -664,7 +686,7 @@ namespace CartelEnforcer
 
             sabotageEventActive = false;
             bombDefused = false;
-            Log("[SABOTAGE] End sabotage event");
+            Log("End sabotage event");
 
             yield return null;
         }
@@ -683,9 +705,9 @@ namespace CartelEnforcer
                         EImpactType.PhysicsProp,
                         impactSource: null
                     );
-            Log($"[SABOTAGE] Direct explosion damage: {maxExplosionDmg * ratio}\n  force: {impactForce * ratio}\n  ratio: {ratio}");
+            Log($"Direct explosion damage: {maxExplosionDmg * ratio}\n  force: {impactForce * ratio}\n  ratio: {ratio}");
             recipient.SendImpact(newImpact);
-            Log("[SABOTAGE] Direct explosion impact processed");
+            Log("Direct explosion impact processed");
             return;
         }
 
@@ -712,7 +734,7 @@ namespace CartelEnforcer
 
                     float dmg = UnityEngine.Random.Range(minFireTickDamage, maxFireTickDamage);
                     dmg *= successiveBurns;
-                    Log($"[SABOTAGE] Fire damage: {dmg}, tick {i}");
+                    Log($"Fire damage: {dmg}, tick {i}");
 
                     player.Health.TakeDamage(dmg, true, true);
                 }
@@ -729,7 +751,7 @@ namespace CartelEnforcer
         {
             yield return Wait30;
             if (!registered) yield break;
-            Log($"[SABOTAGE] Goon despawned now at pos: {goon.CenterPoint}");
+            Log($"Goon despawned now at pos: {goon.CenterPoint}");
 
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
@@ -753,11 +775,23 @@ namespace CartelEnforcer
             if (InstanceFinder.IsServer)
             {
                 if (reg == EMapRegion.Northtown)
-                    reg = EMapRegion.Westville;
+                    reg = EMapRegion.Downtown; // because taco ticklers is closer to that than westville
                 
                 NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(reg, influenceChange);
             }
 
+        }
+
+        public static void ReduceSabotageHours()
+        {
+            if (locations == null || locations.Count == 0) return;
+            if (SaveManager.Instance.IsSaving || isSaving) return;
+            if (!currentConfig.businessSabotage) return;
+
+            foreach (SabotageEventLocation loc in locations)
+            {
+                loc.HourPass();
+            }
         }
 
         public class SabotageEventLocation
@@ -775,7 +809,7 @@ namespace CartelEnforcer
                 this.bombLocation = bombLocation;
                 this.fireLocation = fireLocation;
                 this.sabotagerSpawns = sabotagerSpawns;
-
+                /* MAYBE IF NEEDED?
                 float allInfluence = 0f;
                 foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
                 {
@@ -784,13 +818,16 @@ namespace CartelEnforcer
                 float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
                 int minHrs = Mathf.RoundToInt(Mathf.Lerp(16f, 38f, allInfluenceNormalized));
                 int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
-
-                this.hoursUntilEnabled = UnityEngine.Random.Range(minHrs, maxHrs);
+                */
+                this.hoursUntilEnabled = eventCooldowns.SabotageCooldowns.First(x => x.Key == business.PropertyName).Value;
             }
 
             public void HourPass()
             {
                 if (!InstanceFinder.IsServer)
+                    return;
+
+                if (!this.business.IsOwned)
                     return;
 #if MONO
                 if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
@@ -799,7 +836,7 @@ namespace CartelEnforcer
                 if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
                     return;
 #endif
-                this.hoursUntilEnabled = Mathf.Clamp(hoursUntilEnabled - 1, 0, 64);
+                this.hoursUntilEnabled = Mathf.Clamp(this.hoursUntilEnabled - 1, 0, int.MaxValue);
             }
         }
     }

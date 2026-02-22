@@ -54,6 +54,8 @@ namespace CartelEnforcer
         #region Persuade dialogues
         public static void ReduceCooldown()
         {
+            if (!currentConfig.alliedExtensions) return;
+
             if (persuadeCooldown > 0)
                 persuadeCooldown--;
         }
@@ -76,7 +78,6 @@ namespace CartelEnforcer
             persuadeOverride.BranchNodeData = new(); // Can leave empty
             persuadeOverride.DialogueNodeData = new(); // Fill this with the created nodes
             persuadeOverride.NodeLinks = new(); // Link logic with guids
-            Log("[ALLIEDEXT] Persuade container created");
 
             // Node 1 Data section
 
@@ -104,7 +105,6 @@ namespace CartelEnforcer
 
             entryNode.choices[0] = node1StartPersuadeChoice;
             entryNode.choices[1] = node1ExitChoice;
-            Log("[ALLIEDEXT] Node 1 created");
 
             // Node 2 Data section
             DialogueNodeData node2 = new DialogueNodeData();
@@ -134,7 +134,7 @@ namespace CartelEnforcer
             persuadeOverride.DialogueNodeData.Add(entryNode);
             persuadeOverride.DialogueNodeData.Add(node2);
             persuadeOverride.NodeLinks.Add(node1LinkData);
-            Log($"[ALLIEDEXT] Persuade override created");
+            Log($"Persuade override created");
 
             return persuadeOverride;
         }
@@ -143,13 +143,13 @@ namespace CartelEnforcer
         {
             if (d == null)
             {
-                Log("[ALLIEDEXT]    Dealer null cant add persuade");
+                Log("Dealer null cant add persuade");
                 return;
             }
             DialogueController controller = d.DialogueHandler.GetComponent<DialogueController>();
             if (controller == null)
             {
-                Log("[ALLIEDEXT]    DGController is null");
+                Log("DGController is null");
                 return;
             }
 
@@ -157,7 +157,6 @@ namespace CartelEnforcer
 
             void OnConversationStarted()
             {
-                Log("[ALLIEDEXT] Conversation Started");
                 DialogueHandler.activeDialogueNode = entryNode;
             }
 
@@ -270,7 +269,7 @@ namespace CartelEnforcer
                     else if (setting.skinnedMeshesToColor.Length > 0)
                         dealerAccessoryColor = setting.skinnedMeshesToBind[0].material.color;
                     else
-                        Log("[ALLIEDEXT] no mesh color found");
+                        Log("no mesh color found");
 
                     if (CalculateColorSimilarity(dealerAccessoryColor, playerSetting.color) < colorSimilarityThreshold)
                         currentColorMatched = true;
@@ -293,7 +292,7 @@ namespace CartelEnforcer
 
             float similarity = Mathf.Clamp01(((float)apparelMatched / (float)totalApparel) * 1.2f);
             float probability = ExpCurve(CLOTHING_SIMILARITY_BASE_CHANCE, CLOTHING_SIMILARITY_MAX_CHANCE, similarity);
-            Log("[ALLIEDEXT] Total Similarity:" + similarity + "-> " + probability);
+            Log("Total Similarity:" + similarity + "-> " + probability);
             return probability;
         }
 
@@ -302,7 +301,7 @@ namespace CartelEnforcer
             // at 0f they are equal of color
             // at 1f they are opposite color
             float result = Vector3.Distance(new Vector3(a.r, a.g, a.b), new Vector3(b.r, b.g, b.b)) / Mathf.Sqrt(3f);
-            Log("[ALLIEDEXT] Clothing color diff: " + result);
+            Log("Clothing color diff: " + result);
             return result;
         }
 
@@ -312,7 +311,7 @@ namespace CartelEnforcer
             if (a == "Avatar/Layers/Top/Tucked T-Shirt") // Because tucked t shirt doesnt exist in shop, player cant buy
                 a = "Avatar/Layers/Top/T-Shirt";
             // Otherwise this should work to check the paths of clothing
-            Log($"[ALLIEDEXT] Clothing path same: {(a==b)}\n    {a}\n    {b}");
+            Log($"Clothing path same: {(a==b)}\n    {a}\n    {b}");
 
             return a == b;
         }
@@ -340,7 +339,7 @@ namespace CartelEnforcer
                 if (item != null)
                     id = item.ID;
                 else
-                    Log("[ALLIEDEXT] Item Instance is null");
+                    Log("Item Instance is null");
             }
             else
                 return 0f;

@@ -55,6 +55,7 @@ namespace CartelEnforcer
 
         public static void OnDayPassTrySteal()
         {
+            if (!currentConfig.stealBackCustomers) return;
             coros.Add(MelonCoroutines.Start(WaitSleepEndTrySteal()));
         }
         public static IEnumerator WaitSleepEndTrySteal()
@@ -65,7 +66,7 @@ namespace CartelEnforcer
 #else
             yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => !isSaving && !SaveManager.Instance.IsSaving));
 #endif
-            if (!registered) yield break;
+            if (!registered || !currentConfig.stealBackCustomers) yield break;
             if (!InstanceFinder.NetworkManager.IsServer) yield break;
             // Only when hostile
 #if MONO
@@ -167,7 +168,7 @@ namespace CartelEnforcer
         {
             if (npc.Region == EMapRegion.Northtown) return false;
             if (!npc.RelationData.Unlocked) return false;
-            Log($"[STEALBACK] Evaluate {npc.Region} Customer: {npc.fullName}");
+            Log($"Evaluate {npc.Region} Customer: {npc.fullName}");
 
             float chance = UnityEngine.Random.Range(0f, 1f);
 
@@ -180,7 +181,7 @@ namespace CartelEnforcer
             // t = ~0 = a low cartel influence total and higher relations are now only ones which wont run chance
             // t = ~1 = b high cartel influence total lower threshold pass
             float thresholdRelation = Mathf.Lerp(a: 4.5f, b: 1.5f, cartelInfluence);
-            Log("[STEALBACK]   Evaluate Steal Threshold: " + thresholdRelation);
+            Log("Evaluate Steal Threshold: " + thresholdRelation);
             // If relation delta is above the threshold then 90% chance to not steal
             if (npc.RelationData.RelationDelta > thresholdRelation && chance > 0.10f) return false;
             Customer c = npc.GetComponent<Customer>();
@@ -193,7 +194,7 @@ namespace CartelEnforcer
 
             // If only 1 connection then dont lock it
             if (npc.RelationData.Connections.Count < 2) return false;
-            Log("[STEALBACK]   Evaluate Steal Connections: " + npc.RelationData.Connections.Count);
+            Log("Evaluate Steal Connections: " + npc.RelationData.Connections.Count);
             // If atleast one of the connections of this customer are locked (prevent perma locking everyone thus cant re unlock)
             for (int i = 0; i < npc.RelationData.Connections.Count; i++)
             {
@@ -245,8 +246,8 @@ namespace CartelEnforcer
             Singleton<NewCustomerPopup>.Instance.PlayPopup(c);
             Singleton<NewCustomerPopup>.Instance.Title.text = "Customer has been stolen by Cartel!";
 
-            Log($"[STEALBACK]     Stole customer: {npc.fullName}");
-            Log($"[STEALBACK]     RelationDelta: {npc.RelationData.RelationDelta}");
+            Log($"Stole customer: {npc.fullName}");
+            Log($"RelationDelta: {npc.RelationData.RelationDelta}");
             coros.Add(MelonCoroutines.Start(LateSendMessage(npc)));
 
             return;
@@ -286,6 +287,8 @@ namespace CartelEnforcer
         [HarmonyPostfix]
         public static void Postfix(Customer __instance, ref float __result)
         {
+            if (!currentConfig.stealBackCustomers) return;
+
             List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
             StealBackCustomer.StolenNPC stolen = null;
             for (int i = 0; i < currentStolen.Count; i++)

@@ -158,12 +158,12 @@ namespace CartelEnforcer
 
                         if (foundIdx >= 0) // Exists in already stolen items
                         {
-                            Log($"[CARTEL INV]    EXISTS ADD: {inst.ID} x {inst.Quantity * realQty}");
+                            Log($" EXISTS ADD: {inst.ID} x {inst.Quantity * realQty}");
                             cartelStolenItems[foundIdx].Quantity += inst.Quantity * realQty;
                         }
                         else // not exist
                         {
-                            Log($"[CARTEL INV]    ADD: {items[i].ID} x {inst.Quantity * realQty}");
+                            Log($" ADD: {items[i].ID} x {inst.Quantity * realQty}");
                             inst.Quantity = inst.Quantity * realQty;
                             cartelStolenItems.Add(inst);
                         }
@@ -187,7 +187,7 @@ namespace CartelEnforcer
                                 if (cartelStolenItems[j].ID == tempQt.ID && cartelStolenItems[j].Quality == tempQt.Quality)
                                 {
                                     foundIdx = j;
-                                    Log($"[CARTEL INV]    Item Already exists, append");
+                                    Log($" Item Already exists, append");
                                     break;
                                 }
                             }
@@ -211,18 +211,18 @@ namespace CartelEnforcer
                                         realQty = 1;
                                         break;
                                 }
-                                Log($"[CARTEL INV]   Real Qty: {pTemp.ID} = {realQty}");
+                                Log($" Real Qty: {pTemp.ID} = {realQty}");
                             }
                         }
 
                         if (foundIdx >= 0) // Exists in already stolen items
                         {
-                            Log($"[CARTEL INV]    EXISTS ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
+                            Log($" EXISTS ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
                             cartelStolenItems[foundIdx].Quantity += tempQt.Quantity * realQty;
                         }
                         else // not exist
                         {
-                            Log($"[CARTEL INV]    ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
+                            Log($" ADD: {items[i].Name}x{tempQt.Quantity * realQty}");
                             tempQt.Quantity = tempQt.Quantity * realQty;
                             cartelStolenItems.Add(tempQt);
                         }

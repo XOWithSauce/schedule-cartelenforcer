@@ -663,23 +663,17 @@ namespace CartelEnforcer
             // if unspawned goon count is too low we insta despawn
             if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4)
             {
-                // because below dowhile not limited by max iter added this
-                int maxIter = 5;
-                int currentIter = 0;
-                do
+                foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.goons)
                 {
-                    if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count == 0) break;
-                    int count = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count - 1; // list pos to last
-                    CartelGoon target = NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons[count];
-                    target.Health.Revive();
-                    target.Despawn();
-                    // If combat behaviour is active then the goon will be invis but fight player ensure disable
-                    if (target.Behaviour.CombatBehaviour.Active)
-                        target.Behaviour.CombatBehaviour.Disable_Networked(null);
+                    if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count >= 4) break;
+                    if (!NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(goon)) continue;
 
-                    yield return Wait05;
-                    currentIter++;
-                } while (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count < 4 || currentIter == maxIter);
+                    if (goon.IsGoonSpawned && (goon.Health.IsDead || goon.Health.IsKnockedOut))
+                    {
+                        goon.Health.Revive();
+                        goon.Despawn();
+                    }
+                }
             }
 
             // first handler guy crouched next to bricks

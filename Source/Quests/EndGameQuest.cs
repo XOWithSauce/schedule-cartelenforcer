@@ -75,7 +75,6 @@ namespace CartelEnforcer
         {
             if (activeQuest == null && activeManorQuest == null && activeCarMeetupQuest == null) return true;
 
-            // because after quest complete it auto disables object we check that the quest is active and not completed
             if (activeQuest != null && activeQuest.gameObject.activeSelf) 
             {
                 if (bossGoon != null && bossGoon.GUID == __instance.GUID)
@@ -212,7 +211,7 @@ namespace CartelEnforcer
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(fixerDiagIndex);
             controller.Choices = oldChoices;
-            Log("[END GAME QUEST]    Disposed Choice");
+            Log("Disposed Choice");
             yield return null;
         }
 
@@ -263,7 +262,7 @@ namespace CartelEnforcer
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(0);
             controller.Choices = oldChoices;
-            Log("[END GAME QUEST]    Disposed Choice");
+            Log("Disposed Choice");
             yield return null;
         }
         public static void OnOptionSelected(DialogueController controller, Action cb)
@@ -551,7 +550,7 @@ namespace CartelEnforcer
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(rayChoiceIndex);
             controller.Choices = oldChoices;
-            Log("[END GAME QUEST]    Disposed Choice");
+            Log("Disposed Choice");
             yield return null;
         }
 
@@ -661,7 +660,7 @@ namespace CartelEnforcer
             var oldChoices = controller.Choices;
             oldChoices.RemoveAt(rayChoiceIndex);
             controller.Choices = oldChoices;
-            Log("[END GAME QUEST]    Disposed Choice");
+            Log("Disposed Choice");
 
             yield return Wait30;
             if (!registered) yield break;
@@ -892,7 +891,7 @@ namespace CartelEnforcer
                 var oldChoices = controller.Choices;
                 oldChoices.RemoveAt(frankDiagIndex);
                 controller.Choices = oldChoices;
-                Log("[END GAME QUEST]    Disposed Choice");
+                Log("Disposed Choice");
 
                 frankDiagIndex = -1;
             }
@@ -1042,7 +1041,7 @@ namespace CartelEnforcer
                 var oldChoices = controller.Choices;
                 oldChoices.RemoveAt(jeremyDiagIndex);
                 controller.Choices = oldChoices;
-                Log("[END GAME QUEST]    Disposed Choice");
+                Log("Disposed Choice");
 
                 jeremyDiagIndex = -1;
             }
@@ -1189,9 +1188,29 @@ namespace CartelEnforcer
             // if Manor, gate is enterable
             if (location.ID == "SUPPLY_MANOR")
             {
-                ManorGate[] gate = UnityEngine.Object.FindObjectsOfType<ManorGate>(true);
-                if (gate != null && gate.Length > 1)
-                    gate[1].SetEnterable(false);
+                for (int i = 0; i < Property.Properties.Count; i++)
+                {
+                    if (Property.Properties[i].propertyCode == "manor")
+                    {
+                        ManorGate gate1 = Property.Properties[i].gameObject.GetComponentInChildren<ManorGate>();
+                        if (gate1 == null)
+                        {
+                            // try again with transform child direct
+                            Transform manorGateTr = Property.Properties[i].transform.Find("Manor Gate");
+                            if (manorGateTr != null)
+                            {
+                                ManorGate gate2 = manorGateTr.gameObject.GetComponent<ManorGate>();
+                                if (gate2 != null)
+                                    gate2.SetEnterable(false);
+                            }
+                        }
+                        else
+                        {
+                            gate1.SetEnterable(false);
+                        }
+                    }
+                }
+
             }
 
             if (!(SaveManager.Instance.IsSaving || isSaving))
@@ -1206,7 +1225,7 @@ namespace CartelEnforcer
                 alliedQuests.hoursUntilNextSupplies = alliedConfig.SupplyQuestCooldownHours;
             }
             alliedSuppliesActive = false;
-            Log("[ALLIEDEXT] Cleanup of Supply Quest Completed");
+            Log("Cleanup of Supply Quest Completed");
             yield return null;
         }
 

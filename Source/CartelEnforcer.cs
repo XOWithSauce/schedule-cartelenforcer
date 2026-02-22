@@ -2,9 +2,11 @@
 using HarmonyLib;
 using MelonLoader;
 using UnityEngine;
+using System.Reflection;
 
 using static CartelEnforcer.AmbushOverrides;
 using static CartelEnforcer.CartelInventory;
+using static CartelEnforcer.ConfigLoader;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.DriveByEvent;
 using static CartelEnforcer.FrequencyOverrides;
@@ -72,21 +74,23 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.3";
+        public const string Version = "1.8.4";
         public const string DownloadLink = null;
     }
 
     public class CartelEnforcer : MelonMod
     {
+        public static ModPrefsHandler Prefs { get; private set; } 
         public static CartelEnforcer Instance { get; private set; }
         public static ModConfig currentConfig;
         public static InfluenceConfig influenceConfig;
+        public static CurrentEventCooldowns eventCooldowns;
         public static List<object> coros = new();
         public static bool registered = false;
         private bool firstTimeLoad = false;
         public static bool isSaving = false;
 
-        #region No Suffering for GC anymore because of this code region
+        #region await
         public static WaitForSeconds Wait01 = new WaitForSeconds(0.1f);
         public static WaitForSeconds Wait025 = new WaitForSeconds(0.25f);
         public static WaitForSeconds Wait05 = new WaitForSeconds(0.5f);
@@ -98,12 +102,58 @@ namespace CartelEnforcer
         public static WaitForSeconds Wait60 = new WaitForSeconds(60f);
         #endregion
 
+        #region Melon Prefs
+        // On init sync .json config based on melon preferences if they differ from default
+        public static void SyncConfig()
+        {
+            bool hasChanged = false;
+            FieldInfo[] modConfigFields = currentConfig.GetType().GetFields();
+            foreach (FieldInfo field in modConfigFields)
+            {
+                if (field.Name.Contains("endGameQuestMonologueSpeed")) continue;
+
+                var entry = Prefs.modConfigCategory.GetEntry(field.Name);
+                if (entry == null) continue;
+
+                if ((bool)field.GetValue(currentConfig) == (bool)entry.BoxedValue)
+                {
+                    //MelonLogger.Msg("No changed value for :" + field.Name);
+                    continue; // not changed
+                }
+                else
+                {
+                    hasChanged = true;
+                    //MelonLogger.Msg("Update config value for :" + field.Name);
+                    field.SetValue(currentConfig, entry.BoxedValue);
+                }
+            }
+
+            // Because allied extension depends on the end game quest -> enable on incorrect state
+            // regardless if its changed
+            if (currentConfig.alliedExtensions && !currentConfig.endGameQuest)
+            {
+                hasChanged = true;
+                currentConfig.endGameQuest = true;
+            }
+            if (hasChanged)
+            {
+                ConfigLoader.Save(currentConfig);
+            }
+        }
+        #endregion
+
         public override void OnInitializeMelon()
         {
             base.OnInitializeMelon();
+
             Instance = this;
             currentConfig = ConfigLoader.Load();
             influenceConfig = ConfigLoader.LoadInfluenceConfig();
+
+            Prefs = new ModPrefsHandler();
+            Prefs.SetupMelonPreferences();
+            SyncConfig();
+
             MelonLogger.Msg("Cartel Enforcer Mod Loaded");
             return;
         }
@@ -125,8 +175,9 @@ namespace CartelEnforcer
                 if (Input.GetKey(KeyCode.LeftControl))
                 {
                     // SEE Debug #region in code for InputFunctions
+
                     // Left CTRL + R to Start Rob Dealer Function to nearest
-                    if (Input.GetKey(KeyCode.R))
+                    if (Input.GetKeyDown(KeyCode.R))
                     {
                         if (!debounce)
                         {
@@ -135,7 +186,7 @@ namespace CartelEnforcer
                         }
                     }
                     // Left CTRL + G to Start Drive By Instant 
-                    else if (Input.GetKey(KeyCode.G))
+                    else if (Input.GetKeyDown(KeyCode.G))
                     {
                         if (!debounce)
                         {
@@ -144,7 +195,7 @@ namespace CartelEnforcer
                         }
                     }
                     // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
-                    else if (Input.GetKey(KeyCode.H))
+                    else if (Input.GetKeyDown(KeyCode.H))
                     {
                         if (!debounce)
                         {
@@ -153,7 +204,7 @@ namespace CartelEnforcer
                         }
                     }
                     // Left CTRL + L to Log Big Blop of info
-                    else if (Input.GetKey(KeyCode.L))
+                    else if (Input.GetKeyDown(KeyCode.L))
                     {
                         if (!debounce)
                         {
@@ -163,7 +214,7 @@ namespace CartelEnforcer
                     }
 
                     // Left CTRL + T Intercept random deal
-                    else if (Input.GetKey(KeyCode.T))
+                    else if (Input.GetKeyDown(KeyCode.T))
                     {
                         if (!debounce)
                         {
@@ -173,7 +224,7 @@ namespace CartelEnforcer
                     }
 
                     // Left CTRL + Y Gen End quest
-                    else if (Input.GetKey(KeyCode.Y))
+                    else if (Input.GetKeyDown(KeyCode.Y))
                     {
                         if (!debounce)
                         {
@@ -183,7 +234,7 @@ namespace CartelEnforcer
                     }
 
                     // Left CTRL + U Gen Manor quest
-                    else if (Input.GetKey(KeyCode.U))
+                    else if (Input.GetKeyDown(KeyCode.U))
                     {
                         if (!debounce)
                         {
@@ -296,6 +347,9 @@ namespace CartelEnforcer
             currentConfig = ConfigLoader.Load();
             influenceConfig = ConfigLoader.LoadInfluenceConfig();
             cartelStolenItems = ConfigLoader.LoadStolenItems();
+            frequencyConfig = ConfigLoader.LoadEventFrequencyConfig();
+            eventCooldowns = ConfigLoader.LoadPersistentCooldowns();
+            dealerConfig = ConfigLoader.LoadDealerConfig();
 
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassChangePassive;
@@ -303,60 +357,56 @@ namespace CartelEnforcer
             NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassChangePassive;
 #endif
             PreparePackagingRefs();
+            PopulateBombLocations();
+            PrepareBombFXObjects();
 
-            // This needed by intercept, endgame quests, allied cartel quest & assigned to cartel dealers in phone contact menu
             coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
 
-            if (currentConfig.driveByEnabled)
-                coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
+            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
 
             coros.Add(MelonCoroutines.Start(InitializeAmbush()));
 
-            if (currentConfig.miniQuestsEnabled)
-                coros.Add(MelonCoroutines.Start(InitializeAndEvaluateMiniQuest()));
+            InitFrequencyOverrides();
 
-            if (currentConfig.interceptDeals)
-            {
-                coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
-            }
-
-            if (currentConfig.endGameQuest)
-                coros.Add(MelonCoroutines.Start(InitializeEndGameQuest()));
-
-            if (currentConfig.enhancedDealers)
-            {
-                dealerConfig = ConfigLoader.LoadDealerConfig();
-                coros.Add(MelonCoroutines.Start(EvaluateDealerState()));
-            }
-
-            if (currentConfig.alliedExtensions)
-            {
-                coros.Add(MelonCoroutines.Start(SetupAlliedExtension()));
-            }
-
-            if (currentConfig.cartelGatherings)
-            {
 #if MONO
-                NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTryGather;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassReduceCartelRegActHours;
 #else
-                NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTryGather;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassReduceCartelRegActHours;
 #endif
-            }
 
-            if (currentConfig.businessSabotage)
-                coros.Add(MelonCoroutines.Start(InitializeAndEvaluateSabotage()));
+            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateMiniQuest()));
 
-            if (currentConfig.stealBackCustomers)
-            {
+            coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
 #if MONO
-                NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnDayPassTrySteal;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += HourPassInterceptCooldown;
 #else
-                NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnDayPassTrySteal;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)HourPassInterceptCooldown;
 #endif
-            }
+
+            coros.Add(MelonCoroutines.Start(InitializeEndGameQuest()));
+
+            coros.Add(MelonCoroutines.Start(EvaluateDealerState()));
+
+            coros.Add(MelonCoroutines.Start(SetupAlliedExtension()));
+
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTryGather;
+#else
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTryGather;
+#endif
+            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateSabotage()));
+
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnDayPassTrySteal;
+#else
+            NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnDayPassTrySteal;
+#endif
 
             if (currentConfig.debugMode)
+            {
+                coros.Add(MelonCoroutines.Start(GodMode()));
                 MelonCoroutines.Start(MakeUI());
+            }
 
             coros.Add(MelonCoroutines.Start(ExtendGoonPool()));
 
@@ -365,8 +415,18 @@ namespace CartelEnforcer
 
         public static void ReduceDriveByHours()
         {
-            hoursUntilDriveBy = Mathf.Clamp(hoursUntilDriveBy - 1, 0, 96);
+            if (isSaving) return;
+            if (!currentConfig.driveByEnabled) return;
+#if MONO
+            bool isHostile = NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile;
+#else
+            bool isHostile = NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile;
+#endif
+            if (!isHostile) return;
+
+            hoursUntilDriveBy = Mathf.Clamp(hoursUntilDriveBy - 1, 0, int.MaxValue);
         }
+
         public static IEnumerator InitializeAndEvaluateDriveBy()
         {
             yield return MelonCoroutines.Start(InitializeDriveByData());
@@ -379,7 +439,7 @@ namespace CartelEnforcer
             coros.Add(MelonCoroutines.Start(EvaluateDriveBy()));
             if (currentConfig.debugMode)
                 yield return MelonCoroutines.Start(SpawnDriveByAreaVisual());
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator InitializeAmbush()
@@ -387,53 +447,25 @@ namespace CartelEnforcer
             yield return MelonCoroutines.Start(ApplyGameDefaultAmbush());
             yield return MelonCoroutines.Start(AddUserModdedAmbush());
             yield return MelonCoroutines.Start(SetAmbushGeneralSettings());
-            yield return MelonCoroutines.Start(AfterAmbushInitComplete());
-
-            yield return null;
-        }
-
-        public static IEnumerator AfterAmbushInitComplete()
-        {
-            yield return MelonCoroutines.Start(PopulateParameterMap());
-            yield return MelonCoroutines.Start(ApplyInfluenceConfig());
-
-
-            coros.Add(MelonCoroutines.Start(TickOverrideHourPass()));
-            Log("Adding HourPass Function to callbacks");
-#if MONO
-            NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassReduceCartelRegActHours;
-#else
-            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassReduceCartelRegActHours;
-#endif
             if (currentConfig.debugMode)
                 yield return MelonCoroutines.Start(SpawnAmbushAreaVisual());
-
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator InitializeAndEvaluateSabotage()
         {
             yield return Wait2;
             if (!registered) yield break;
-            PopulateBombLocations();
-            PrepareBombFXObjects();
+
             Log("Starting Sabotage Event evaluation");
 #if MONO
-            NetworkSingleton<TimeManager>.Instance.onHourPass += ReduceSabotageHours;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += SabotageEvent.ReduceSabotageHours;
 #else
-            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)ReduceSabotageHours;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)SabotageEvent.ReduceSabotageHours;
 #endif
             coros.Add(MelonCoroutines.Start(EvaluateBombEvent()));
 
-            yield return null;
-        }
-
-        public static void ReduceSabotageHours()
-        {
-            foreach (SabotageEventLocation loc in locations)
-            {
-                loc.HourPass();
-            }
+            yield break;
         }
 
         public static IEnumerator InitializeAndEvaluateMiniQuest()
@@ -442,7 +474,6 @@ namespace CartelEnforcer
             if (!registered) yield break;
 
             yield return InitMiniQuest();
-            Log("Adding DayPass Function for Mini Quest");
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassNewDiag;
 #else
@@ -450,7 +481,7 @@ namespace CartelEnforcer
 #endif
             coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
 
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator InitializeEndGameQuest()
@@ -460,13 +491,17 @@ namespace CartelEnforcer
 
             coros.Add(MelonCoroutines.Start(InitManorItemRef()));
 
-            Log("[END GAME QUEST] Evaluating End Game Quest Creation");
+            Log("Evaluating End Game Quest Creation");
             bool hasGeneratedQuest = false;
             bool hasGeneratedManorQuest = false;
             bool hasGeneratedCarQuest = false;
             DialogueController frankController;
             while (registered)
             {
+                yield return Wait30;
+                if (!registered) yield break;
+                if (!currentConfig.endGameQuest) continue;
+
                 if (PreRequirementsMet() && !completed && !hasGeneratedQuest && activeQuest == null)
                 {
                     hasGeneratedQuest = true;
@@ -482,24 +517,21 @@ namespace CartelEnforcer
                 if (CarQuestPreRequirementsMet() && !carMeetupCompleted && !hasGeneratedCarQuest && frankDiagIndex == -1 && inTimeWindowForCarQuest && activeCarMeetupQuest == null)
                 {
                     // Gen quest opt in time window
-                    Log("[END GAME QUEST] Car Quest opt generated");
+                    Log("Car Quest opt generated");
                     hasGeneratedCarQuest = true;
                     coros.Add(MelonCoroutines.Start(GenFrankOption()));
                 }
                 else if (hasGeneratedCarQuest && !carMeetupCompleted && frankDiagIndex != -1 && !inTimeWindowForCarQuest && crankyFrank != null && activeCarMeetupQuest == null)
                 {
-                    Log("[END GAME QUEST] Car Quest opt removed");
+                    Log("Car Quest opt removed");
                     hasGeneratedCarQuest = false;
                     frankController = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
                     // Del quest opt out of time window when it exists and quest not generated
                     coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
                 }
-
-                yield return Wait30;
-                if (!registered) yield break;
             }
 
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator ExtendGoonPool()
@@ -539,6 +571,7 @@ namespace CartelEnforcer
                 {
                     NetworkObject nobNew = UnityEngine.Object.Instantiate<NetworkObject>(nob);
                     CartelGoon newGoon = nobNew.GetComponent<CartelGoon>();
+                    newGoon.name = newGoon.name + i;
                     newGoon.transform.parent = NPCManager.Instance.NPCContainer;
                     NPCManager.NPCRegistry.Add(newGoon);
                     yield return Wait05;
@@ -554,7 +587,6 @@ namespace CartelEnforcer
 
                     newGoon.Movement.enabled = true;
                     newGoon.gameObject.SetActive(true);
-                    newGoon.Despawn_Client(null);
                     newGoons[i] = newGoon;
                     goonPool.unspawnedGoons.Add(newGoon);
                 }
@@ -572,14 +604,13 @@ namespace CartelEnforcer
                 {
                     goon.Behaviour.ScheduleManager.ActionList[0].Resume();
                 }
-
                 goon.IsGoonSpawned = true;
                 yield return Wait05;
                 if (!registered) yield break;
                 goon.Despawn_Client(null);
             }
             Log("Array swapped now count: " + NetworkSingleton<Cartel>.Instance.GoonPool.goons.Length);
-            yield return null;
+            yield break;
         }
 
 #endregion
@@ -599,7 +630,6 @@ namespace CartelEnforcer
             // Now mostly just the different mod related lists that got populated in init, reset and clear to repopulate everything on new load
             driveByLocations.Clear();
             regActivityHours.Clear();
-            actFreqMapping.Clear();
             targetNPCs.Clear();
             cartelStolenItems.Clear();
             emptyDrops.Clear();
@@ -625,6 +655,12 @@ namespace CartelEnforcer
             }
 
             allCartelDealers = null;
+
+            currentConfig = null;
+            influenceConfig = null;
+            eventCooldowns = null;
+
+            isSaving = false;
 
             // Now the created states and any boolean flags for events
             // QUests
@@ -695,10 +731,6 @@ namespace CartelEnforcer
             currentDealerActivity = 0f;
             previousDealerActivity = 0f;
 
-#if IL2CPP
-            CartelActivities_TryStartActivityPatch.activitiesReadyToStart.Clear();
-            CartelActivities_TryStartActivityPatch.validRegionsForActivity.Clear();
-#endif
         }
         
         [HarmonyPatch(typeof(SaveManager), "Save", new Type[] { typeof(string) })]
@@ -715,6 +747,22 @@ namespace CartelEnforcer
                     }
                     if (currentConfig.alliedExtensions)
                         ConfigLoader.Save(alliedQuests);
+
+                    CurrentEventCooldowns currentCooldowns = new();
+
+                    currentCooldowns.StealDeadDropCooldown = regActivityHours.First(x => x.cartelActivityClass == 0).hoursUntilEnable;
+                    currentCooldowns.CartelCustomerDealCooldown = regActivityHours.First(x => x.cartelActivityClass == 1).hoursUntilEnable;
+                    currentCooldowns.RobDealerCooldown = regActivityHours.First(x => x.cartelActivityClass == 2).hoursUntilEnable;
+                    currentCooldowns.SprayGraffitiCooldown = regActivityHours.First(x => x.cartelActivityClass == 3).hoursUntilEnable;
+
+                    currentCooldowns.DriveByCooldown = DriveByEvent.hoursUntilDriveBy;
+                    currentCooldowns.GatheringCooldown = CartelGathering.hoursUntilNextGathering;
+                    currentCooldowns.InterceptDealsCooldown = InterceptEvent.hoursUntilInterceptEvent;
+                    
+                    currentCooldowns.SabotageCooldowns = new();
+                    SabotageEvent.locations.ForEach(x => currentCooldowns.SabotageCooldowns.Add(x.business.PropertyName, x.hoursUntilEnabled));
+
+                    ConfigLoader.Save(currentCooldowns);
                 }
                 isSaving = false;
                 return true;
@@ -749,8 +797,71 @@ namespace CartelEnforcer
                 return true;
             }
         }
-#endregion
+        #endregion
 
+
+        #region Fix the Invisible Cartel Goon Bug
+        /*
+        Sometimes during cartel goon despawn the
+        IsGoonSpawned state does not reset back to false (dunno why)
+        causing the subsequent spawn attempts to not enable the avatar
+        and still have the movement agent enabled
+        upon spawn and then starts adding into the spawned goons list "unspawned" goons
+
+        Despawn postfix checks each possible bugged state and then reverts it.
+        Additionally theres 2 additions, one which disables/enables awareness
+        And one which potentially clears out any remaining goon mates in the list
+         */
+
+        [HarmonyPatch(typeof(CartelGoon), "Spawn")]
+        public static class CartelGoon_Spawn_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(CartelGoon __instance, GoonPool pool, Vector3 spawnPoint)
+            {
+                if (!__instance.Awareness.enabled)
+                    __instance.Awareness.SetAwarenessActive(true);
+
+                if (__instance.goonMates.Count > 0)
+                    __instance.goonMates.Clear();
+
+                return true;
+            }
+        }
+
+        [HarmonyPatch(typeof(CartelGoon), "Despawn")]
+        public static class CartelGoon_Despawn_Patch
+        {
+            [HarmonyPostfix]
+            public static void Postfix(CartelGoon __instance)
+            {
+                if (__instance.IsGoonSpawned)
+                    __instance.IsGoonSpawned = false;
+
+                if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(__instance))
+                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Remove(__instance);
+
+                if (!NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Contains(__instance))
+                    NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Add(__instance);
+
+                if (__instance.Behaviour.activeBehaviour != null && __instance.Behaviour.activeBehaviour == __instance.Behaviour.CombatBehaviour)
+                    __instance.Behaviour.CombatBehaviour.Disable();
+
+                if (__instance.Movement.Agent.enabled)
+                    __instance.Movement.Agent.enabled = false;
+
+                if (__instance.Awareness.enabled)
+                    __instance.Awareness.SetAwarenessActive(false);
+
+                if (__instance.goonMates.Count > 0)
+                    __instance.goonMates.Clear();
+
+                return;
+            }
+
+        }
+
+        #endregion
 
     }
 }

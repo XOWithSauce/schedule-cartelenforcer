@@ -577,6 +577,23 @@ namespace CartelEnforcer
         {
             Log("Boss Spawning");
             Vector3 spawnPos = QuestEntry_DefeatBoss.PoILocation.position;
+
+            // if unspawned goon count is too low we insta despawn
+            if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count == 0)
+            {
+                foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.goons)
+                {
+                    if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count >= 1) break;
+                    if (!NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(goon)) continue;
+
+                    if (goon.IsGoonSpawned && (goon.Health.IsDead || goon.Health.IsKnockedOut))
+                    {
+                        goon.Health.Revive();
+                        goon.Despawn();
+                    }
+                }
+            }
+
             CartelGoon _bossGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
             _bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
             _bossGoon.Behaviour.ScheduleManager.DisableSchedule();

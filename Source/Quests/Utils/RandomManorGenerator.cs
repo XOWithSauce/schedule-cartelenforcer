@@ -335,7 +335,7 @@ namespace CartelEnforcer
 
         public static void ResetManorItemRef()
         {
-            foreach (string key in buildablesMap.Keys)
+            foreach (string key in buildablesMap.Keys.ToList())
             {
                 buildablesMap[key] = null;
             }
@@ -1226,6 +1226,7 @@ namespace CartelEnforcer
 #else
                 particleSystem.loop = true;
 #endif
+
                 main.startColor = new Color(0.4129f, 0.2529f, 0.1529f, 1f);
                 yield return Wait05;
                 if (!registered) yield break;

@@ -3,6 +3,7 @@ using MelonLoader;
 using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
+using static CartelEnforcer.ConfigLoader;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.FrequencyOverrides;
 
@@ -17,6 +18,7 @@ using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Vehicles;
 using ScheduleOne.Vehicles.AI;
+using ScheduleOne.Persistence;
 using FishNet;
 #else
 using Il2CppScheduleOne.AvatarFramework.Equipping;
@@ -29,6 +31,7 @@ using Il2CppScheduleOne.NPCs.CharacterClasses;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Vehicles;
 using Il2CppScheduleOne.Vehicles.AI;
+using Il2CppScheduleOne.Persistence;
 using Il2CppFishNet;
 #endif
 
@@ -37,7 +40,6 @@ namespace CartelEnforcer
 {
     public static class DriveByEvent
     {
-
         // Drive By logic
         public static LandVehicle driveByVeh;
         public static VehicleAgent driveByAgent;
@@ -46,7 +48,8 @@ namespace CartelEnforcer
         public static Thomas thomasInstance;
         public static ParkData driveByParking;
         public static int hoursUntilDriveBy = 5;
-        public static List<DriveByTrigger> driveByLocations = new();
+        public static Dictionary<DriveByTrigger, EMapRegion> driveByLocations = new();
+
 #if MONO
         private static RaycastHit[] _raycastHitBuffer = new RaycastHit[8];
 #else
@@ -54,8 +57,10 @@ namespace CartelEnforcer
         private static Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit> _raycastHitBuffer = new Il2CppInterop.Runtime.InteropTypes.Arrays.Il2CppStructArray<RaycastHit>(8);
 #endif
 
+        [Serializable]
         public class DriveByTrigger
         {
+            public string name;
             public Vector3 triggerPosition;
             public float radius;
             public Vector3 spawnEulerAngles;
@@ -65,176 +70,15 @@ namespace CartelEnforcer
 
         public static IEnumerator InitializeDriveByData()
         {
-            yield return Wait5;
-            if (!registered) yield break;
+            DriveByTriggersSerialized ser = ConfigLoader.LoadDriveByConfig();
+            driveByLocations = new();
 
-            Log("Configuring Drive By Triggers");
-            // 1. Uptown Bus Stop
-            DriveByTrigger uptownTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(110.39f, 5.36f, -111.69f),
-                radius = 2f,
-                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
-                spawnEulerAngles = new Vector3(0f, 270f, 0f),
-                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
-            };
-            driveByLocations.Add(uptownTrigger);
+            // if user added custom triggers, check the regions
+            foreach (DriveByTrigger trig in ser.triggers)
+                driveByLocations.Add(trig, Singleton<Map>.Instance.GetRegionFromPosition(trig.triggerPosition));
 
-            // 2. Uptown Park Area (same event as the bus stop but trigger diff)
-            DriveByTrigger uptownParkTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(84.99f, 5.36f, -122.38f),
-                radius = 7f,
-                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
-                spawnEulerAngles = new Vector3(0f, 270f, 0f),
-                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
-            };
-            driveByLocations.Add(uptownParkTrigger);
 
-            // 3. Barn path towards road
-            DriveByTrigger barnTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(163.29f, 1.18f, -9.95f),
-                radius = 6f,
-                startPosition = new Vector3(155.20f, 1.37f, 22.79f),
-                spawnEulerAngles = new Vector3(0f, 240f, 0f),
-                endPosition = new Vector3(89.85f, 5.37f, -81.81f)
-            };
-            driveByLocations.Add(barnTrigger);
 
-            // 4. Mollys house
-            DriveByTrigger mollysTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-168.44f, -2.54f, 88.32f),
-                radius = 15f,
-                startPosition = new Vector3(-146.40f, -2.63f, 39.92f),
-                spawnEulerAngles = new Vector3(0f, 310f, 0f),
-                endPosition = new Vector3(-111.28f, -2.64f, 123.40f)
-            };
-            driveByLocations.Add(mollysTrigger);
-
-            // 5. Car Wash Computer
-            DriveByTrigger carWashTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-6.05f, 1.21f, -17.83f),
-                radius = 5f,
-                startPosition = new Vector3(-19.96f, 1.37f, 20.44f),
-                spawnEulerAngles = new Vector3(0f, 180f, 0f),
-                endPosition = new Vector3(-10.61f, 1.37f, -102.43f)
-            };
-            driveByLocations.Add(carWashTrigger);
-
-            // 6. Laundromat computer
-            DriveByTrigger laundromatTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-29.19f, 1.96f, 26.13f),
-                radius = 4f,
-                startPosition = new Vector3(-17.17f, 1.37f, -22.86f),
-                spawnEulerAngles = new Vector3(0f, 0f, 0f),
-                endPosition = new Vector3(-16.98f, -2.51f, 123.42f)
-            };
-            driveByLocations.Add(laundromatTrigger);
-
-            // 7. Grocery Market
-            DriveByTrigger groceryMarketTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(17.62f, 1.61f, -3.31f),
-                radius = 6f,
-                startPosition = new Vector3(-11.64f, 1.15f, -43.54f),
-                spawnEulerAngles = new Vector3(0f, 60f, 0f),
-                endPosition = new Vector3(33.02f, 1.15f, 65.28f)
-            };
-            driveByLocations.Add(groceryMarketTrigger);
-
-            // 8. Jane's RV
-            DriveByTrigger janeRVTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-36.74f, 0.14f, -77.14f),
-                radius = 11f,
-                startPosition = new Vector3(3.98f, 1.37f, -103.35f),
-                spawnEulerAngles = new Vector3(0f, 270f, 0f),
-                endPosition = new Vector3(-16.90f, 1.37f, 52.00f)
-            };
-            driveByLocations.Add(janeRVTrigger);
-
-            // 9. In front of Town Hall stairs
-            DriveByTrigger townHallTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(51.28f, 1.48f, 31.03f),
-                radius = 6f,
-                startPosition = new Vector3(29.97f, 1.37f, 81.63f),
-                spawnEulerAngles = new Vector3(0f, 180f, 0f),
-                endPosition = new Vector3(-12.39f, 1.37f, -40.43f)
-            };
-            driveByLocations.Add(townHallTrigger);
-
-            // 10. Alley between Ham Legal and Hyland Tower
-            DriveByTrigger alleyTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(84.01f, 1.46f, 63.21f),
-                radius = 2f,
-                startPosition = new Vector3(61.99f, 1.37f, 49.59f),
-                spawnEulerAngles = new Vector3(0f, 90f, 0f),
-                endPosition = new Vector3(90.05f, 5.37f, -79.52f)
-            };
-            driveByLocations.Add(alleyTrigger);
-
-            // 11. Road in front of Ray's Estate and Blueball Boutique
-            DriveByTrigger raysEstateTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(74.65f, 1.37f, -3.24f),
-                radius = 8f,
-                startPosition = new Vector3(93.06f, 2.30f, -37.39f),
-                spawnEulerAngles = new Vector3(6f, 0f, 0f),
-                endPosition = new Vector3(30.11f, 1.37f, 72.90f)
-            };
-            driveByLocations.Add(raysEstateTrigger);
-
-            // 12. Behind the Taco Ticklers
-            DriveByTrigger tacoTicklerTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-33.19f, 1.46f, 85.58f),
-                radius = 6f,
-                startPosition = new Vector3(-17.13f, 1.37f, 61.00f),
-                spawnEulerAngles = new Vector3(0f, 0f, 0f),
-                endPosition = new Vector3(-28.73f, -2.63f, 132.68f)
-            };
-            driveByLocations.Add(tacoTicklerTrigger);
-
-            // 13. Skatepark and surrounding area
-            DriveByTrigger skateparkTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(-49.25f, 1.09f, 75.80f),
-                radius = 10f,
-                startPosition = new Vector3(-93.33f, -1.43f, 70.90f),
-                spawnEulerAngles = new Vector3(-8f, 110f, 0f),
-                endPosition = new Vector3(-16.86f, 1.37f, -5.03f)
-            };
-            driveByLocations.Add(skateparkTrigger);
-
-            // 14. Behind Crimson Canary
-            DriveByTrigger crimsonTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(48.51f, 1.46f, 66.55f),
-                radius = 8f,
-                startPosition = new Vector3(27.37f, 1.37f, 49.58f),
-                spawnEulerAngles = new Vector3(0f, 90f, 0f),
-                endPosition = new Vector3(90.05f, 1.37f, 22.96f)
-            };
-            driveByLocations.Add(crimsonTrigger);
-
-            // 15. Uptown Jeremys house
-            DriveByTrigger jeremyTrigger = new DriveByTrigger
-            {
-                triggerPosition = new Vector3(69.55f, 5.93f, -117.93f),
-                radius = 2f,
-                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
-                spawnEulerAngles = new Vector3(0f, 270f, 0f),
-                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
-            };
-            driveByLocations.Add(jeremyTrigger);
-
-            Log("Succesfully configured Drive By Triggers");
             yield return Wait2;
             if (!registered) yield break;
 
@@ -339,10 +183,198 @@ namespace CartelEnforcer
             else
                 MelonLogger.Warning("Failed to find Thomas Car Instance");
 
+            hoursUntilDriveBy = eventCooldowns.DriveByCooldown;
+        }
+
+        public static void GenerateDefaultDriveByTriggers()
+        {
+            Log("Configuring Drive By Triggers");
+            // 1. Suburbia Bus Stop
+            DriveByTrigger uptownTrigger = new DriveByTrigger
+            {
+                name = "Suburbia Bus Stop",
+                triggerPosition = new Vector3(110.39f, 5.36f, -111.69f),
+                radius = 2f,
+                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
+                spawnEulerAngles = new Vector3(0f, 270f, 0f),
+                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
+            };
+            driveByLocations.Add(uptownTrigger, EMapRegion.Suburbia);
+
+            // 2. Suburbia Park Area (same event as the bus stop but trigger diff)
+            DriveByTrigger uptownParkTrigger = new DriveByTrigger
+            {
+                name = "Suburbia Gazebo Park",
+                triggerPosition = new Vector3(84.99f, 5.36f, -122.38f),
+                radius = 7f,
+                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
+                spawnEulerAngles = new Vector3(0f, 270f, 0f),
+                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
+            };
+            driveByLocations.Add(uptownParkTrigger, EMapRegion.Suburbia);
+
+            // 3. Barn path towards road
+            DriveByTrigger barnTrigger = new DriveByTrigger
+            {
+                name = "Barn path towards road",
+                triggerPosition = new Vector3(163.29f, 1.18f, -9.95f),
+                radius = 6f,
+                startPosition = new Vector3(155.20f, 1.37f, 22.79f),
+                spawnEulerAngles = new Vector3(0f, 240f, 0f),
+                endPosition = new Vector3(89.85f, 5.37f, -81.81f)
+            };
+            driveByLocations.Add(barnTrigger, EMapRegion.Uptown);
+
+            // 4. Mollys house
+            DriveByTrigger mollysTrigger = new DriveByTrigger
+            {
+                name = "Mollys apartment",
+                triggerPosition = new Vector3(-168.44f, -2.54f, 88.32f),
+                radius = 15f,
+                startPosition = new Vector3(-146.40f, -2.63f, 39.92f),
+                spawnEulerAngles = new Vector3(0f, 310f, 0f),
+                endPosition = new Vector3(-111.28f, -2.64f, 123.40f)
+            };
+            driveByLocations.Add(mollysTrigger, EMapRegion.Westville);
+
+            // 5. Car Wash Computer
+            DriveByTrigger carWashTrigger = new DriveByTrigger
+            {
+                name = "Car Wash Computer",
+                triggerPosition = new Vector3(-6.05f, 1.21f, -17.83f),
+                radius = 5f,
+                startPosition = new Vector3(-19.96f, 1.37f, 20.44f),
+                spawnEulerAngles = new Vector3(0f, 180f, 0f),
+                endPosition = new Vector3(-10.61f, 1.37f, -102.43f)
+            };
+            driveByLocations.Add(carWashTrigger, EMapRegion.Downtown); // or docks
+
+            // 6. Laundromat computer
+            DriveByTrigger laundromatTrigger = new DriveByTrigger
+            {
+                name = "Laundromat computer",
+                triggerPosition = new Vector3(-29.19f, 1.96f, 26.13f),
+                radius = 4f,
+                startPosition = new Vector3(-17.17f, 1.37f, -22.86f),
+                spawnEulerAngles = new Vector3(0f, 0f, 0f),
+                endPosition = new Vector3(-16.98f, -2.51f, 123.42f)
+            };
+            driveByLocations.Add(laundromatTrigger, EMapRegion.Docks);
+
+            // 7. Grocery Market
+            DriveByTrigger groceryMarketTrigger = new DriveByTrigger
+            {
+                name = "Grocery Market Downtown",
+                triggerPosition = new Vector3(17.62f, 1.61f, -3.31f),
+                radius = 6f,
+                startPosition = new Vector3(-11.64f, 1.15f, -43.54f),
+                spawnEulerAngles = new Vector3(0f, 60f, 0f),
+                endPosition = new Vector3(33.02f, 1.15f, 65.28f)
+            };
+            driveByLocations.Add(groceryMarketTrigger, EMapRegion.Downtown);
+
+            // 8. Jane's RV
+            DriveByTrigger janeRVTrigger = new DriveByTrigger
+            {
+                name = "Jane's RV",
+                triggerPosition = new Vector3(-36.74f, 0.14f, -77.14f),
+                radius = 11f,
+                startPosition = new Vector3(3.98f, 1.37f, -103.35f),
+                spawnEulerAngles = new Vector3(0f, 270f, 0f),
+                endPosition = new Vector3(-16.90f, 1.37f, 52.00f)
+            };
+            driveByLocations.Add(janeRVTrigger, EMapRegion.Docks);
+
+            // 9. In front of Town Hall stairs
+            DriveByTrigger townHallTrigger = new DriveByTrigger
+            {
+                name = "Town hall stairs",
+                triggerPosition = new Vector3(51.28f, 1.48f, 31.03f),
+                radius = 6f,
+                startPosition = new Vector3(29.97f, 1.37f, 81.63f),
+                spawnEulerAngles = new Vector3(0f, 180f, 0f),
+                endPosition = new Vector3(-12.39f, 1.37f, -40.43f)
+            };
+            driveByLocations.Add(townHallTrigger, EMapRegion.Downtown);
+
+            // 10. Alley between Ham Legal and Hyland Tower
+            DriveByTrigger alleyTrigger = new DriveByTrigger
+            {
+                name = "Alley between Ham Legal and Hyland Tower",
+                triggerPosition = new Vector3(84.01f, 1.46f, 63.21f),
+                radius = 2f,
+                startPosition = new Vector3(61.99f, 1.37f, 49.59f),
+                spawnEulerAngles = new Vector3(0f, 90f, 0f),
+                endPosition = new Vector3(90.05f, 5.37f, -79.52f)
+            };
+            driveByLocations.Add(alleyTrigger, EMapRegion.Uptown);
+
+            // 11. Road in front of Ray's Estate and Blueball Boutique
+            DriveByTrigger raysEstateTrigger = new DriveByTrigger
+            {
+                name = "Road in front of Ray's Estate and Blueball Boutique",
+                triggerPosition = new Vector3(74.65f, 1.37f, -3.24f),
+                radius = 8f,
+                startPosition = new Vector3(93.06f, 2.30f, -37.39f),
+                spawnEulerAngles = new Vector3(6f, 0f, 0f),
+                endPosition = new Vector3(30.11f, 1.37f, 72.90f)
+            };
+            driveByLocations.Add(raysEstateTrigger, EMapRegion.Uptown);
+
+            // 12. Behind the Taco Ticklers
+            DriveByTrigger tacoTicklerTrigger = new DriveByTrigger
+            {
+                name = "Behind the Taco Ticklers",
+                triggerPosition = new Vector3(-33.19f, 1.46f, 85.58f),
+                radius = 6f,
+                startPosition = new Vector3(-17.13f, 1.37f, 61.00f),
+                spawnEulerAngles = new Vector3(0f, 0f, 0f),
+                endPosition = new Vector3(-28.73f, -2.63f, 132.68f)
+            };
+            driveByLocations.Add(tacoTicklerTrigger, EMapRegion.Northtown);
+
+            // 13. Skatepark and surrounding area
+            DriveByTrigger skateparkTrigger = new DriveByTrigger
+            {
+                name = "Skatepark and surrounding area",
+                triggerPosition = new Vector3(-49.25f, 1.09f, 75.80f),
+                radius = 10f,
+                startPosition = new Vector3(-93.33f, -1.43f, 70.90f),
+                spawnEulerAngles = new Vector3(-8f, 110f, 0f),
+                endPosition = new Vector3(-16.86f, 1.37f, -5.03f)
+            };
+            driveByLocations.Add(skateparkTrigger, EMapRegion.Northtown);
+
+            // 14. Behind Crimson Canary
+            DriveByTrigger crimsonTrigger = new DriveByTrigger
+            {
+                name = "Behind Crimson Canary",
+                triggerPosition = new Vector3(48.51f, 1.46f, 66.55f),
+                radius = 8f,
+                startPosition = new Vector3(27.37f, 1.37f, 49.58f),
+                spawnEulerAngles = new Vector3(0f, 90f, 0f),
+                endPosition = new Vector3(90.05f, 1.37f, 22.96f)
+            };
+            driveByLocations.Add(crimsonTrigger, EMapRegion.Downtown);
+
+            // 15. Suburbia Jeremys house
+            DriveByTrigger jeremyTrigger = new DriveByTrigger
+            {
+                name = "Suburbia Jeremys house",
+                triggerPosition = new Vector3(69.55f, 5.93f, -117.93f),
+                radius = 2f,
+                startPosition = new Vector3(144.68f, 5.6f, -103.69f),
+                spawnEulerAngles = new Vector3(0f, 270f, 0f),
+                endPosition = new Vector3(17.40f, 1.37f, -103.53f)
+            };
+            driveByLocations.Add(jeremyTrigger, EMapRegion.Suburbia);
+
+            Log("Succesfully configured Drive By Triggers");
         }
 
         public static IEnumerator EvaluateDriveBy()
         {
+            
             yield return Wait5;
             if (!registered) yield break;
             if (!InstanceFinder.NetworkManager.IsServer)
@@ -350,74 +382,64 @@ namespace CartelEnforcer
                 Log("Not Server instance, returning from Drive By Evaluation");
                 yield break;
             }
-
+            float influenceRequirement = GetByID("DriveBy").InfluenceRequirement;
             Log("Starting Drive By Evaluation");
             while (registered)
             {
                 yield return Wait2;
                 if (!registered) yield break;
+                if (Singleton<SaveManager>.Instance.IsSaving || isSaving) continue;
+                if (!currentConfig.driveByEnabled) continue;
 #if MONO
-                // Only when hostile
-                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
-                {
-                    yield return Wait60;
-                    if (!registered) yield break;
-
-                    continue;
-                }
+                bool isHostile = NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Hostile;
 #else
-                if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
-                {
-                    yield return Wait60;
-                    if (!registered) yield break;
-
-                    continue;
-                }
+                bool isHostile = NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile;
 #endif
-
-                if (driveByActive)
+                bool isInTimeFrame = TimeManager.Instance.IsCurrentTimeWithinRange(2230, 500);
+                if (!isHostile || driveByActive || !isInTimeFrame || hoursUntilDriveBy > 0)
                 {
                     yield return Wait60;
                     if (!registered) yield break;
                     continue;
                 }
 
-                // Only at 22:30 until 05:00
-
-                if ((TimeManager.Instance.CurrentTime >= 2230 || TimeManager.Instance.CurrentTime <= 500) && hoursUntilDriveBy <= 0)
+                foreach (var kvp in driveByLocations)
                 {
-                    foreach (DriveByTrigger trig in driveByLocations)
+                    yield return Wait05;
+                    if (!registered) yield break;
+                    // not in range
+                    if (Vector3.Distance(Player.Local.CenterPointTransform.position, kvp.Key.triggerPosition) > kvp.Key.radius)
+                        continue;
+                    // in vehicle
+                    if (Player.Local.CurrentVehicle != null) 
+                        continue;
+                    // if influence req. is used, check if its met
+                    if (influenceRequirement >= 0f)
                     {
-                        yield return Wait05;
-                        if (!registered) yield break;
-
-                        if (Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius && Player.Local.CurrentVehicle == null)
+                        if (NetworkSingleton<Cartel>.Instance.Influence.GetRegionData(kvp.Value).Influence < influenceRequirement)
                         {
-                            if (!driveByActive)
-                                coros.Add(MelonCoroutines.Start(BeginDriveBy(trig)));
-                            break;
+                            Log("Player detected at trigger, but influence requirement not met");
+                            continue; // not enough influence to run drive by
                         }
                     }
-                }
-                else
-                {
-                    yield return Wait30;
-                    if (!registered) yield break;
-                }
 
+                    if (!driveByActive)
+                    {
+                        coros.Add(MelonCoroutines.Start(BeginDriveBy(kvp.Key)));
+                        break;
+                    }
+                }
             }
-
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator BeginDriveBy(DriveByTrigger trig)
         {
             if (driveByActive || !registered) yield break;
             driveByActive = true;
-            Log("[DRIVE BY] Beginning Drive By Event");
-            Log($"[DRIVE BY]TRIG Pos = {trig.triggerPosition}");
+            Log("Beginning Drive By Event");
+            Log($"TRIG Pos = {trig.triggerPosition}");
             Player player = Player.GetClosestPlayer(trig.triggerPosition, out _);
-            Log($"[DRIVE BY] Player = {player}");
 
             driveByVeh.ExitPark_Networked(null, false);
             driveByVeh.SetTransform_Server(trig.startPosition, Quaternion.Euler(trig.spawnEulerAngles));
@@ -440,7 +462,6 @@ namespace CartelEnforcer
             float distToPlayer;
             int maxBulletsShot = UnityEngine.Random.Range(4, 9);
             int bulletsShot = 0;
-            Log($"[DRIVE BY] Setting Target to {player.GetComponent<ICombatTargetable>().NetworkObject}");
             thomasInstance.Behaviour.CombatBehaviour.SetTarget(player.GetComponent<ICombatTargetable>().NetworkObject);
             thomasInstance.Behaviour.CombatBehaviour.SetWeaponRaised(true);
             int playerLayer = LayerMask.NameToLayer("Player");
@@ -527,7 +548,7 @@ namespace CartelEnforcer
                     }
                 }
             }
-            Log($"[DRIVE BY]    Drive By Bullets shot: {bulletsShot}/{maxBulletsShot}");
+            Log($"Drive By Bullets shot: {bulletsShot}/{maxBulletsShot}");
             yield return null;
         }
 
@@ -537,24 +558,38 @@ namespace CartelEnforcer
             driveByAgent.storedNavigationCallback = null;
             driveByAgent.StopNavigating();
             driveByVeh.Park_Networked(null, driveByParking);
-            driveByActive = false;
             thomasInstance.gameObject.SetActive(false);
-            Log("[DRIVE BY] Drive By Complete");
-            // Note: this is not proper use of the mechanic implemented, but alternative where its not used as cap but base random roll for the generated new hours...
-            int hours = GetActivityHours(currentConfig.driveByFrequency);
-            if (hours <= 24)
+            Log("Drive By Complete");
+            coros.Add(MelonCoroutines.Start(ResetDriveByHours()));
+        }
+
+        public static IEnumerator ResetDriveByHours()
+        {
+            if (SaveManager.Instance.IsSaving || isSaving)
             {
-                hoursUntilDriveBy = UnityEngine.Random.Range(hours, 32);
+#if MONO
+                WaitUntil notSaving = new WaitUntil(() => !SaveManager.Instance.IsSaving && !isSaving);
+#else
+                WaitUntil notSaving = new WaitUntil((Il2CppSystem.Func<bool>)(() => !SaveManager.Instance.IsSaving && !isSaving));
+#endif
+                yield return notSaving;
             }
-            else if (hours > 24 && hours <= 49)
+
+
+            int hours = GetActivityHours("DriveBy");
+            if (hours != 0)
             {
-                hoursUntilDriveBy = UnityEngine.Random.Range(16, hours);
+                hoursUntilDriveBy = hours;
             }
             else
             {
-                hoursUntilDriveBy = UnityEngine.Random.Range(32, hours);
+                // Player wants "game default" value for drive by cooldown
+                // that does not exist
+                // Use random cooldown
+                hoursUntilDriveBy = UnityEngine.Random.Range(24, 68);
             }
 
+            driveByActive = false;
         }
 
         public class HitComparer : IComparer<RaycastHit>

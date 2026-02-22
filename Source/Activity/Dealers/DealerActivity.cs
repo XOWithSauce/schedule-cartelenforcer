@@ -78,7 +78,7 @@ namespace CartelEnforcer
         public static IEnumerator EvaluateDealerState()
         {
             yield return Wait5;
-            Log("[DEALER ACTIVITY] Init Dealer state");
+            Log("Init Dealer state");
 
             if (DealerActivity.allCartelDealers == null)
                 DealerActivity.allCartelDealers = UnityEngine.Object.FindObjectsOfType<CartelDealer>(true);
@@ -103,12 +103,13 @@ namespace CartelEnforcer
 #else
             instance.onDayPass += (Il2CppSystem.Action)OnDayPassChange;
 #endif
-            Log("[DEALER ACTIVITY] Starting evaluation");
+            Log("Starting evaluation");
 
             while (registered)
             {
                 yield return Wait60;
                 if (!registered) yield break;
+                if (!currentConfig.enhancedDealers) continue;
                 // from 4pm to 4am only
                 if (!(TimeManager.Instance.CurrentTime >= 1620 || TimeManager.Instance.CurrentTime <= 359))
                     continue;
@@ -133,7 +134,7 @@ namespace CartelEnforcer
 
                     if (currentDealerActivity > 0f)
                     {
-                        Log("[DEALER ACTIVITY] Decrement Safety Status");
+                        Log("Decrement Safety Status");
 
                         // Calculate stay inside Start time when does dealer go back inside, range 00:01 - 03:59
                         int oldStayInsideStartMins = TimeManager.GetMinSumFrom24HourTime(currentStayInsideStart);
@@ -162,7 +163,7 @@ namespace CartelEnforcer
                     }
                     else if (currentDealerActivity < 0f)
                     {
-                        Log("[DEALER ACTIVITY] Increment Safety Status");
+                        Log("Increment Safety Status");
 
                         // flip t ex -0.3 Becomes 0.3
                         float t = -currentDealerActivity;
@@ -190,16 +191,16 @@ namespace CartelEnforcer
                     }
                     else // Activity at 0.0f
                     {
-                        Log("[DEALER ACTIVITY] Default Activity Set");
+                        Log("Default Activity Set");
                         newStayInsideStart = defaultStayInsideStart;
                         newStayInsideEnd = defaultStayInsideEnd;
                         newStayInsideDur = defaultStayInsideDur;
                     }
 
-                    Log("[DEALER ACTIVITY] Current Dealer activity: " + currentDealerActivity);
-                    Log($"[DEALER ACTIVITY] StayInsideStart changed {currentStayInsideStart} -> {newStayInsideStart}");
-                    Log($"[DEALER ACTIVITY] StayInsideEnd changed {currentStayInsideEnd} -> {newStayInsideEnd}");
-                    Log($"[DEALER ACTIVITY] StayInsideDur changed {currentStayInsideDur} -> {newStayInsideDur}");
+                    Log("Current Dealer activity: " + currentDealerActivity);
+                    Log($"StayInsideStart changed {currentStayInsideStart} -> {newStayInsideStart}");
+                    Log($"StayInsideEnd changed {currentStayInsideEnd} -> {newStayInsideEnd}");
+                    Log($"StayInsideDur changed {currentStayInsideDur} -> {newStayInsideDur}");
 
                     currentStayInsideStart = newStayInsideStart;
                     currentStayInsideEnd = newStayInsideEnd;
@@ -208,7 +209,7 @@ namespace CartelEnforcer
                     // Apply
                     foreach (CartelDealer d in DealerActivity.allCartelDealers)
                     {
-                        Log("[DEALER ACTIVITY] Apply Event state:");
+                        Log("Apply Event state:");
                         yield return Wait05;
                         if (!registered) yield break;
 
@@ -309,7 +310,7 @@ namespace CartelEnforcer
 
         public static void SetupDealers()
         {
-            Log("[DEALER ACTIVITY] Configuring Cartel Dealers");
+            Log("Configuring Cartel Dealers");
             // Note: Brad has that broken bottle weapon whats the resource path, it could be also listed for ambush weapons and these supported?? 
 
             // how to unify these logics currently ambush weps load based on resource path, whereas these are properly validated...
@@ -328,7 +329,7 @@ namespace CartelEnforcer
                 if (!stolenInDealerInv.ContainsKey(dealer))
                     stolenInDealerInv.Add(dealer, new());
 
-            Log("[DEALER ACTIVITY]     Setup inventory tracking stolen items");
+            Log("Setup inventory tracking stolen items");
             string resourcePath = "";
             switch (dealerConfig.CartelDealerWeapon.ToLower())
             {
@@ -361,10 +362,13 @@ namespace CartelEnforcer
 #endif
             if (gameObject == null)
             {
-                Log($"[DEALER ACTIVITY]     Dealer instantiated weapon is null");
+                Log($"Dealer instantiated weapon is null");
             }
 
             AvatarEquippable equippable = UnityEngine.Object.Instantiate<GameObject>(gameObject, new Vector3(0f, -5f, 0f), Quaternion.identity, null).GetComponent<AvatarEquippable>();
+            if (!equippable.gameObject.activeSelf)
+                equippable.gameObject.SetActive(true); 
+
             // configure weapon stats, at CartelDealerLethality 1 stats are essentially doubled/halved to make it better, at 0 default
 #if MONO
             AvatarRangedWeapon rangedWep = equippable as AvatarRangedWeapon;
@@ -406,7 +410,7 @@ namespace CartelEnforcer
                     if (dealer.Avatar != null)
                         equippable.Equip(dealer.Avatar);
                     else
-                        Log($"[DEALER ACTIVITY]     {dealer.Region} dealer is missing avatar field");
+                        Log($"{dealer.Region} dealer is missing avatar field");
                 }
 #else
                 AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
@@ -416,14 +420,13 @@ namespace CartelEnforcer
                     if (dealer.Avatar != null)
                         equippable.Equip(dealer.Avatar);
                     else
-                        Log($"[DEALER ACTIVITY]     {dealer.Region} dealer is missing avatar field");
+                        Log($"{dealer.Region} dealer is missing avatar field");
                 }
 #endif
 
-                Log($"[DEALER ACTIVITY]     Setup {dealer.Region} weapon");
+                Log($"Setup {dealer.Region} weapon");
 
                 dealer.OverrideAggression(1f); 
-
                 #region Stay Inside and Deal Signal actions
                 NPCEvent_StayInBuilding event1 = null;
                 if (dealer.Behaviour.ScheduleManager.ActionList != null)
@@ -445,7 +448,7 @@ namespace CartelEnforcer
 
                     void onStayInsideEnd()
                     {
-                        Log("[DEALER ACTIVITY] OnStayInsideEnd");
+                        Log("OnStayInsideEnd");
                         if (interceptingDeal && interceptor != null && dealer == interceptor) return;
 
                         if (dealer.ActiveContracts.Count == 0)
@@ -469,12 +472,12 @@ namespace CartelEnforcer
                     }
                     else
                     {
-                        Log("[DEALER ACTIVITY]    Dealer Action list is null!");
+                        Log("Dealer Action list is null!");
                     }
                 }
                 else
                 {
-                    Log("[DEALER ACTIVITY]    Failed to find dealer action list!");
+                    Log("Failed to find dealer action list!");
                 }
                 #endregion
 
@@ -484,7 +487,7 @@ namespace CartelEnforcer
                 // 1 callback for random roll to spawn nearby goons on dead
                 void TrySpawnGoonsOnDeath()
                 {
-                    if (UnityEngine.Random.Range(0f, 1f) > 0.5f) return;
+                    if (UnityEngine.Random.Range(0f, 1f) > 0.5f && !currentConfig.debugMode) return;
                     if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 2) return;
 
                     Player p = Player.GetClosestPlayer(dealer.CenterPoint, out _);
@@ -527,16 +530,16 @@ namespace CartelEnforcer
                     return;
                 }
                 dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)TrySpawnGoonsOnDeath);
-                Log($"[DEALER ACTIVITY]     Setup {dealer.Region} health callback");
+                Log($"Setup {dealer.Region} health callback");
                 #endregion
 
 
             }
-            Log("[DEALER ACTIVITY]    Done Configuring Cartel Dealer Event values");
+            Log("Done Configuring Cartel Dealer Event values");
 
             #region Ensure that the dealers have avatar settings loaded
             List<CartelDealer> missingAvatar = new();
-            Log("[DEALER ACTIVITY] Ensure Cartel Dealers have avatar textures");
+            Log("Ensure Cartel Dealers have avatar textures");
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers) 
             {
                 if (dealer.Avatar.CurrentSettings == null)
@@ -546,7 +549,7 @@ namespace CartelEnforcer
             }
             if (missingAvatar.Count > 0)
             {
-                Log($"[DEALER ACTIVITY]  Found {missingAvatar.Count} missing Dealer avatar settings");
+                Log($"Found {missingAvatar.Count} missing Dealer avatar settings");
 
                 foreach (CartelDealer dealer in missingAvatar)
                 {
@@ -556,7 +559,7 @@ namespace CartelEnforcer
             }
             missingAvatar.Clear();
             missingAvatar = null;
-            Log("[DEALER ACTIVITY]  Done checking Cartel Dealer avatar textures");
+            Log("Done checking Cartel Dealer avatar textures");
 
             #endregion
 
@@ -589,6 +592,8 @@ namespace CartelEnforcer
             {
                 if (goon.IsGoonSpawned)
                 {
+                    if ((goon.Health.IsDead || goon.Health.IsKnockedOut))
+                        goon.Health.Revive();
                     goon.Despawn();
                     goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 }
@@ -632,7 +637,7 @@ namespace CartelEnforcer
                 cList.Add(Customer.UnlockedCustomers[i]);
 
             List<Customer> validCustomers = new();
-            Log("[DEALER ACTIVITY] Parse customers");
+            Log("Parse customers");
             do
             {
                 yield return Wait01;
@@ -646,7 +651,7 @@ namespace CartelEnforcer
                 cList.Remove(c);
             } while (cList.Count > 0);
 
-            Log("[DEALER ACTIVITY] Parse dealers");
+            Log("Parse dealers");
             foreach (CartelDealer d in DealerActivity.allCartelDealers)
             {
                 contract = null;
@@ -661,13 +666,13 @@ namespace CartelEnforcer
                 if (d.ActiveContracts == null) continue;
                 if (d.ActiveContracts.Count == 0)
                 {
-                    Log("[DEALER ACTIVITY]    Cartel dealer has 0 active contracts.");
+                    Log("Cartel dealer has 0 active contracts.");
                     bool actionTaken = false;
 
                     // Pick player dealers active contract, treat the config value as likelihood and if its 0.0 then disabled
                     if (validContracts.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance && dealerConfig.StealDealerContractChance != 0.0f)
                     {
-                        Log($"[DEALER ACTIVITY] Checking PlayerDealer active deal");
+                        Log($"Checking PlayerDealer active deal");
                         if (validContracts.ContainsKey(d.Region))
                         {
                             contract = validContracts[d.Region];
@@ -689,11 +694,11 @@ namespace CartelEnforcer
                             if (!d._attendDealBehaviour.Active)
                                 d.CheckAttendStart();
                             actionTaken = true;
-                            Log($"[DEALER ACTIVITY]     Stolen Contract");
+                            Log($"Stolen Contract");
                         }
                         else
                         {
-                            Log("[DEALER ACTIVITY]     No valid deal found, Deal GUID already tracked or completed, skipping.");
+                            Log("No valid deal found, Deal GUID already tracked or completed, skipping.");
                         }
                     }
                     // Previous condition didnt pass another probability
@@ -720,7 +725,7 @@ namespace CartelEnforcer
                             if (!registered) yield break;
 
                             c.offeredContractInfo = contractInfo;
-                            Log("[DEALER ACTIVITY]   Taking pending offer to dealer");
+                            Log("Taking pending offer to dealer");
                             EDealWindow window = d.GetDealWindow();
                             contract = c.ContractAccepted(window, false, d);
                             if (contract != null)
@@ -735,7 +740,7 @@ namespace CartelEnforcer
                             }
                             else
                             {
-                                Log("[DEALER ACTIVITY]   Error: Contract was null when assinging to dealer");
+                                Log("Error: Contract was null when assinging to dealer");
                             }
                         }
                         validCustomers.Remove(c);
@@ -744,7 +749,7 @@ namespace CartelEnforcer
                     // For when no valid contracts were found for this cartel dealer
                     if (!actionTaken)
                     {
-                        Log("[DEALER ACTIVITY] No action taken");
+                        Log("No action taken");
                         // Has no contract but is in time window, and random roll didnt award the contract
                         if (!d.isInBuilding && !d.Movement.HasDestination)
                         {
@@ -765,7 +770,7 @@ namespace CartelEnforcer
                     // hAs contract
                     if (!d._attendDealBehaviour.Active)
                         d.CheckAttendStart();
-                    Log("[DEALER ACTIVITY]    Dealer has pre-existing contract, skip");
+                    Log("Dealer has pre-existing contract, skip");
                     continue;
                 }
 
@@ -826,7 +831,7 @@ namespace CartelEnforcer
                 }
                 else
                 {
-                    Log("[DEALER ACTIVITY] Dealer could not traverse to Dead Drop");
+                    Log("Dealer could not traverse to Dead Drop");
                 }
             }
 
@@ -877,7 +882,7 @@ namespace CartelEnforcer
                 {
                     // should deactivate, since the callback will only run when the activity will only time out
                     dealEvent.Deactivate();
-                    Log("[LOCKED CUSTOMER DEAL] Customer deal deactivated due to region not having locked customers");
+                    Log("Customer deal deactivated due to region not having locked customers");
                     yield break;
                 }
 
@@ -903,13 +908,7 @@ namespace CartelEnforcer
 
                     if (!canAwardContract)
                     {
-                        Log($"[LOCKED CUSTOMER DEAL] Cant award contract at this moment, see below state");
-                        Log($"[LOCKED CUSTOMER DEAL]     Has Contract: {selected.CurrentContract != null}");
-                        Log($"[LOCKED CUSTOMER DEAL]     IsConscious: {selected.NPC.IsConscious}");
-                        Log($"[LOCKED CUSTOMER DEAL]     Order Time in Range: {NetworkSingleton<TimeManager>.Instance.IsCurrentTimeWithinRange(orderTime, max)}");
-                        Log($"[LOCKED CUSTOMER DEAL] Customer: {selected.NPC.fullName}");
-                        Log($"[LOCKED CUSTOMER DEAL]     orderTime: {orderTime} - {max}");
-
+                        Log($"Cant award contract at this moment");
                         // if all customers parsed yield break and deactivate
                         if (j == regionLockedCustomers.Count - 1)
                         {
@@ -961,7 +960,7 @@ namespace CartelEnforcer
                             {
                                 hasMinItems = true;
                                 product.Quality = requiredQuality;
-                                Log("[LOCKED CUSTOMER DEAL] Ensured Cartel Dealer has required product quality");
+                                Log("Ensured Cartel Dealer has required product quality");
                                 break;
                             }
                             else
@@ -978,7 +977,7 @@ namespace CartelEnforcer
                             {
                                 hasMinItems = true;
                                 temp.Quality = requiredQuality;
-                                Log("[LOCKED CUSTOMER DEAL] Ensured Cartel Dealer has required product quality");
+                                Log("Ensured Cartel Dealer has required product quality");
                                 break;
                             }
                             else
@@ -995,7 +994,7 @@ namespace CartelEnforcer
                 // by default we add into inventory of required type
                 if (!hasMinItems)
                 {
-                    Log("[LOCKED CUSTOMER DEAL] Cartel dealer doesnt have required product, inserting.");
+                    Log("Cartel dealer doesnt have required product, inserting.");
                     
                     // Find best affinity product for this customer from dealer random products
                     List<ProductDefinition> allDefs = dealEvent.dealer.RandomProducts.ToList();
@@ -1036,7 +1035,7 @@ namespace CartelEnforcer
                 {
                     // Here we skip the offering, instead manually set the same variables as in source, but we skip checking should accept contract to ensure probability of generating the contract succesfully at the CartelCustomerDeal event is as high as possible
                     //c.OfferContractToDealer(contractInfo, dealEvent.dealer);
-                    Log("[LOCKED CUSTOMER DEAL] Awarded contract to locked customer");
+                    Log("Awarded contract to locked customer");
                     int offeredDeals = selected.OfferedDeals;
                     selected.OfferedDeals = offeredDeals + 1;
                     selected.TimeSinceLastDealOffered = 0;
@@ -1051,7 +1050,7 @@ namespace CartelEnforcer
                 }
                 else
                 {
-                    Log("[LOCKED CUSTOMER DEAL] Locked customer did not generate a contract");
+                    Log("Locked customer did not generate a contract");
                     dealEvent.Deactivate();
                 }
 
@@ -1094,7 +1093,6 @@ namespace CartelEnforcer
                                 // player dealer contract being intercepted by cartel dealer
                                 // OR intercept deals event is active with the contract, it handles it with own mechanic
                                 // dont fail this contract since its duped to player hired dealer?
-                                Log("Dealer Unconscious Fix ");
                             }
                             else
                             {
@@ -1114,6 +1112,8 @@ namespace CartelEnforcer
         [HarmonyPatch(typeof(Customer), "ProcessHandover")]
         public static class Customer_ProcessHandover_Patch
         {
+
+            private static readonly string name = "ProcessHandover";
             [HarmonyPrefix]
 #if MONO
             public static bool Prefix(Customer __instance, HandoverScreen.EHandoverOutcome outcome, Contract contract, List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
@@ -1146,10 +1146,10 @@ namespace CartelEnforcer
                 // This function is still problematic it seems this can return both false when something happens and is indecisive
                 // only at longer distances, needs outcome logged too to figure out what happens with it
 
-                Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.fullName}");
-                Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}");
-                Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f}");
-                Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f}");
+                Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.fullName}", name);
+                Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}", name);
+                Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f}", name);
+                Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f}", name);
 
                 // Player dealer completes contract
                 if (distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f)
@@ -1184,14 +1184,14 @@ namespace CartelEnforcer
                             float relationChange = Mathf.Max(__instance.NPC.RelationData.RelationDelta * 0.85f, 0.20f);
                             float result = Mathf.Clamp(relationChange, min: 0f, max: 5f);
 
-                            Log($"[STEALBACK] {__instance.NPC.fullName} Relation Down: -{relationChange} now: {result}");
+                            Log($"{__instance.NPC.fullName} Relation Down: -{relationChange} now: {result}", name);
                             __instance.NPC.RelationData.RelationDelta = result;
                         }
                     }
                 }
                 else
                 {
-                    Log($"[STOLEN HANDOVER CUSTOMER] {__instance.NPC.fullName} RESULT UNDECIDED");
+                    Log($"{__instance.NPC.fullName} RESULT UNDECIDED", name);
                 }
 
                 lock (playerDealerStolenLock)

@@ -123,7 +123,7 @@ namespace CartelEnforcer
 
         public void ResetSelf()
         {
-            Log("[ALLIEDEXT] Reset Supply Event");
+            Log("Reset Supply Event");
             alliedSuppliesActive = true;
             if (activeAlliedSupplies == null) return;
             // First load in save instantiates it and completes
@@ -170,7 +170,7 @@ namespace CartelEnforcer
 
             this.hudUI.gameObject.SetActive(true);
 
-            Log("[ALLIEDEXT] Reset Complete");
+            Log("Reset Complete");
 
             coros.Add(MelonCoroutines.Start(SpawnSupply(this.location)));
         }
@@ -241,6 +241,17 @@ namespace CartelEnforcer
             this.SetGUID(Il2CppSystem.Guid.NewGuid());
 #endif
             this.location = supplyLocations[UnityEngine.Random.Range(0, supplyLocations.Count)];
+            if (currentConfig.debugMode)
+            {
+                foreach (SupplyLocation loc in supplyLocations)
+                {
+                    if (loc.ID == "SUPPLY_MANOR")
+                    {
+                        this.location = loc; // test if the gate opens now
+                        break;
+                    }
+                }
+            }
 
             // UI related code and the benzies logo
             rtIcon = MakeIcon(this.transform);

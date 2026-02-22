@@ -1,5 +1,6 @@
 ﻿using System.Collections;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using MelonLoader;
 using UnityEngine;
 
@@ -47,10 +48,10 @@ namespace CartelEnforcer
         public static Transform _playerTransform;
 
         [Conditional("DEBUG")]
-        public static void Log(string msg)
+        public static void Log(string msg, [CallerMemberName] string memberName = "")
         {
             if (currentConfig.debugMode)
-                MelonLogger.Msg(msg);
+                MelonLogger.Msg($"[{memberName}] {msg}");
         }
 
         public static IEnumerator OnInputGenerateManorQuest()
@@ -112,12 +113,12 @@ namespace CartelEnforcer
             Player.Local.Health.RecoverHealth(100f);
             float nearest = 150f;
             DriveByTrigger trig = null;
-            foreach (DriveByTrigger trigItem in driveByLocations)
+            foreach (var kvp in driveByLocations)
             {
-                float distanceTo = Vector3.Distance(Player.Local.CenterPointTransform.position, trigItem.triggerPosition);
+                float distanceTo = Vector3.Distance(Player.Local.CenterPointTransform.position, kvp.Key.triggerPosition);
                 if (distanceTo <= nearest)
                 {
-                    trig = trigItem;
+                    trig = kvp.Key;
                     nearest = distanceTo;
                 }
             }
@@ -183,31 +184,35 @@ namespace CartelEnforcer
             {
                 switch (classIndex)
                 {
-                    case -1:
-                        return "Ambush";
                     case 0:
                         return "StealDeadDrop";
                     case 1:
                         return "CartelCustomerDeal";
                     case 2:
                         return "RobDealer";
+                    case 3:
+                        return "SprayGraffiti";
                     default:
                         return "Unknown";
                 }
             }
 
-            Log("\nActivity Hours Table Per Activity Type\n---------------");
-            foreach (CartelRegActivityHours rghrs in regActivityHours)
+            int hrsAmbush = NetworkSingleton<Cartel>.Instance.Activities.HoursUntilNextGlobalActivity;
+            Log($"\nAmbush Hours until next:{hrsAmbush}\n---------------");
+
+            Log("\nRegional Activity Cooldowns\n---------------");
+            CartelRegionActivities[] regInstanceActivies = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
+            foreach (CartelRegionActivities act in regInstanceActivies)
             {
-                Log($"\n  Class: {Map(rghrs.cartelActivityClass)}\n  HoursUntil Enable: {rghrs.hoursUntilEnable}\nRegion: {rghrs.region}\n******");
+                Log($"\n  Region: {act.Region}\n  HoursUntilNext: {act.HoursUntilNextActivity}\n******");
             }
             Log("---------------\n\n\n");
             yield return Wait05;
 
-            Log("\nActivity Frequency Table\n---------------");
-            foreach (HrPassParameterMap map in actFreqMapping)
+            Log("\nActivity Hours Table Per Activity Type\n---------------");
+            foreach (CartelRegActivityHours rghrs in regActivityHours)
             {
-                Log($"\n{map.itemDesc}\n  Ticks Passed: {map.modTicksPassed}\n  Mod HoursUntilNext: {map.currentModHours}\n  Instance HoursUntilNext: {map.Getter()}\n******");
+                Log($"\n  Class: {Map(rghrs.cartelActivityClass)}\n  HoursUntil Enable: {rghrs.hoursUntilEnable}\n******");
             }
             Log("---------------\n\n\n");
             yield return Wait05;
@@ -219,7 +224,6 @@ namespace CartelEnforcer
                 Log($"\n  Item: {itemInst.ID}\n  Quantity: {itemInst.Quantity}\n  Quality: {itemInst.Quality}\n******");
             }
             Log("---------------\n\n\n");
-
             yield return Wait05;
 
             Log("\nMini Quest NPC Status\n---------------");
@@ -273,7 +277,7 @@ namespace CartelEnforcer
                 }
             }
 
-            Log($"[SABOTAGE] Starting sabotage event in 10sec at: {selected.business.PropertyName}");
+            Log($"Starting sabotage event in 10sec at: {selected.business.PropertyName}");
             yield return Wait10;
             if (!registered) yield break;
             
@@ -297,7 +301,7 @@ namespace CartelEnforcer
             }
             if (nearest == null) yield break;
 
-            Log($"[STEALBACK] Stealing {nearest.NPC.fullName}");
+            Log($"Stealing {nearest.NPC.fullName}");
             StealCustomer(nearest.NPC);
 
             yield return Wait05;
@@ -306,6 +310,20 @@ namespace CartelEnforcer
             yield return null;
         }
 
+        public static IEnumerator GodMode()
+        {
+            for (; ; )
+            {
+                yield return Wait01;
+                if (!registered) yield break;
+                if (Player.Local.Health.CurrentHealth < 100f)
+                    Player.Local.Health.RecoverHealth(100f);
+            }
+
+            yield break;
+        }
+
+        // display player pos 
         public static IEnumerator MakeUI()
         {
             _playerTransform = Player.Local.CenterPointTransform;
@@ -321,6 +339,8 @@ namespace CartelEnforcer
             _positionText.rectTransform.anchoredPosition = new Vector2(40, -40);
             yield return null;
         }
+
+        // positional trigger visuals
         public static IEnumerator SpawnAmbushAreaVisual()
         {
             Log("Spawning Debug visuals for Ambush Areas");
@@ -407,8 +427,9 @@ namespace CartelEnforcer
             Material sphereMaterial = new Material(standardShader);
             sphereMaterial.color = new Color(255f / 255f, 145f / 255f, 0f / 255f);
 
-            foreach (DriveByTrigger trig in driveByLocations)
+            foreach (var kvp in driveByLocations)
             {
+                DriveByTrigger trig = kvp.Key;
                 float rad = trig.radius;
                 GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
                 MeshRenderer mr = sphere.GetComponent<MeshRenderer>();
@@ -424,6 +445,7 @@ namespace CartelEnforcer
             }
             yield break;
         }
+
         static Color GetColorCorrespondance(EMapRegion reg)
         {
             switch (reg)
@@ -451,4 +473,5 @@ namespace CartelEnforcer
             }
         }
     }
+
 }
