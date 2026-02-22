@@ -28,7 +28,7 @@ namespace CartelEnforcer
     [Serializable]
     public class ModConfig
     {
-        public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, Enable Debug Log Messages, etc.
+        public bool debugMode = false; // While in debug mode, spawn visuals for Cartel Ambushes, etc.
 
         public bool driveByEnabled = true;
 
@@ -128,7 +128,7 @@ namespace CartelEnforcer
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 File.WriteAllText(filePath, json);
-                // MelonLogger.Warning($"    CartelEnforcer basic mod config written to: {filePath}");
+                DebugModule.Log($"CartelEnforcer basic mod config written to: {filePath}", "SaveModConfig");
             }
             catch (Exception ex)
             {

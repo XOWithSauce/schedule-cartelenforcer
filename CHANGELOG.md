@@ -15,6 +15,7 @@
 - Refactored the mod initialization code to run initialization for all mod features even if they are disabled to allow hot reloading basic features at runtime
 - Refactored the event frequency system entirely which contributes for most of changes / additions / removals for this version
 - Changed the way that Ambush triggering is calculated by default. Now the activity prefers to trigger players current region ambush triggers, instead of pure random selection.
+- Changed the Ambush weapons to be 33% more lethal
 - Changed the Customer unlock influence reduction to also be enabled while the cartel is truced only when the allied extensions are enabled
 - Fixed an issue where killed Cartel Goons can spawn as invisible and active after being despawned and respawned once.
 - Fixed an issue where usage of the mod additional spawned weapons would cause errors in the game logs due to being disabled after instantiation
@@ -25,7 +26,6 @@
 - Fixed a bug where the Sabotage Business event would never select a business for sabotage based on active laundering operation as intended
 - Fixed a potential bug where mod forced despawns in certain scenarios could cause actively in use Cartel Goons to be despawned. Now forced despawns can only despawn killed and or knocked out goons.
 - Removed activityFrequency, activityInfluenceMin, and event frequency values from the main config.json file since these are replaced by the new logic for activity frequency and influences in EventFrequency/config.json file
-- misc
 - Added Godmode to Debug mode so that the player is healed to 100hp if they take damage
 - Changed Debug mode to always spawn the 2 defending goons whenever a cartel dealer is killed (normally 50%)
 - Changed Debug mode to always use the supply location for manor whenever allied extension is enabled

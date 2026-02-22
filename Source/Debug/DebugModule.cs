@@ -217,6 +217,7 @@ namespace CartelEnforcer
             Log("---------------\n\n\n");
             yield return Wait05;
 
+
             Log("\nCartel Stolen Items\n---------------");
             Log($"Balance: {CartelInventory.cartelCashAmount}");
             foreach (QualityItemInstance itemInst in cartelStolenItems)
@@ -242,6 +243,14 @@ namespace CartelEnforcer
                 Log($"  Name: {loc.business.PropertyName}");
                 Log($"    HoursUntilEnable: {loc.hoursUntilEnabled}");
             }
+            Log("---------------\n\n\n");
+            yield return Wait05;
+
+            Log("\nOther cooldowns\n---------------");
+            Log($"\n DriveBy\n  HoursUntil Enable: {DriveByEvent.hoursUntilDriveBy}\n");
+            Log($"\n Intercept\n  HoursUntil Enable: {InterceptEvent.hoursUntilInterceptEvent}\n");
+            Log($"\n Gathering\n  HoursUntil Enable: {CartelGathering.hoursUntilNextGathering}\n");
+
             Log("---------------\n\n\n");
             yield return Wait05;
 

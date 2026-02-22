@@ -27,11 +27,13 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Infiltrate Manor](#infiltrate-manor)
     * [Four Wheels](#four-wheels) 
 * [Modifying Configs](#modifying-configs-and-spawns)
+    * [Modifying Event Frequency](#modifying-event-frequency)
     * [Modifying Cartel Dealers](#modifying-cartel-dealers)
     * [Modifying Ambush Events](#modifying-ambush)
         * [Modifying Ambush Spawns](#modifying-default-spawns)
         * [Modifying Default Spawns](#modifying-default-spawns)
         * [Modifying Ambush Settings](#modifying-ambush-settings)
+    * [Modifying Drive By Events](#modifying-drive-by-events)
     * [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
     * [Modifying Influence Changing Events](#modifying-influence-changing-events)
     * [Modifying Allied Settings](#modifying-allied-settings)
@@ -53,7 +55,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Steal Back Customers:** While hostile with the Cartel your customers might be stolen back by the Cartel, requiring you to re-unlock them with free samples!
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
 - **Business Sabotage:** Cartel will try to actively interfere with your laundering activities at Post Office, Laundromat and Taco Ticklers. Defuse the planted explosive before your business and customers blow up!
-- **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **CartelEnforcer/Dealers/dealer.json** file.
+- **Enhanced Cartel Dealers:** Cartel dealers provide additional challenge and compete with deals with you and your dealers. They will try to intercept pending deal requests and dealers active deals. Cartel Dealers can be configured from the **Dealers/dealer.json** file.
 - **Allied Extensions:** Allied extensions is a bundle of features that allow the player to progress and complete the game even while cartel is Truced. While enabled, the player can hire Cartel Dealers and collect supplies awarded by the cartel!
 - **Persistence for Stolen Items:** Stolen items are now saved per save file.
 - **Debug Mode:** Visualize all locations, trigger events manually for testing.
@@ -61,56 +63,49 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 ---
 ### Installation
 
-1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/).
+> If you are using Thunderstore Mod Manager you can skip these steps and just install the mod through the manager and it will work.
+
+### Manual installation: 
+
+1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/) and follow their setup instructions.
 2. With **Melon Loader** install version **0.7.0** or **0.7.2 nightly builds** for Schedule I (0.7.1 is incompatible in IL2CPP)
     - If you use "alternate" Beta version in Steam -> Game Properties -> Betas, then any 0.7.x version is compatible (Must download MONO)
-3. Manually download the correct .zip file and unzip it.
-4. Copy the **.dll file** and the **Cartel Enforcer** folder into your **Mods** folder.
+3. Download the correct version and unzip the downloaded folder, here you will find the **Mods** folder containing the mod .dll file and **UserData** folder containing the mod data folder
+4. Copy the contents **Mods** folder into the **Steam/steamapps/common/Schedule I/Mods** folder
+5. Copy the contents of **UserData** folder into the **Steam/steamapps/common/Schedule I/UserData** folder
 
-#### Mods folder structure
 
-```
-[Game Root]
-└── Mods/
-    ├── CartelEnforcer.dll (or CartelEnforcer-IL2Cpp.dll)
-    └── CartelEnforcer/
-        ├── config.json
-        ├── Allied/
-        |   ├── config.json
-        |   ├── QuestData/
-        |       └── (Persistent save data gets generated here)
-        ├── Ambush/
-        |   ├── ambush.json
-        |   ├── default.json
-        |   └── settings.json
-        ├── CartelItems/ 
-        |   └── (Persistent save data gets generated here)
-        ├── Dealers/
-        |   └── dealer.json
-        └── Influence/
-            └── influence.json
-```
+### Config Files Locations
 
----
+If you install the mod manually you will find all the config files from the following directory:
+
+`UserData/XO_WithSauce-CartelEnforcer/`
+
+If you installed with Thunderstore Mod manager the config files will be in the following directory:
+
+`UserData/XO_WithSauce-CartelEnforcer_MONO/XO_WithSauce-CartelEnforcer/`
+
+OR
+
+`UserData/XO_WithSauce-CartelEnforcer_IL2CPP/XO_WithSauce-CartelEnforcer/`
+
 
 ### Configuration
 
-You can customize the basic mod settings through the **config.json** file.
+You can enable and disable mod features with the first **config.json** file
 
-1. Open the **CartelEnforcer** folder inside your **Mods** directory.
-2. Open the **config.json** file. Its contents by default are:
+You can alternatively change these settings with the **UserData/MelonPreferences.cfg**
+file OR the **Schedule I mod manager phone app**.
+
+The mod supports "hot-reloading" at runtime for all of these.
+
+Manual editing:
+1. Open the **XO_WithSauce-CartelEnforcer** folder inside your **UserData** directory.
+2. Open the first **config.json** file. Its contents by default are:
 
 ```json
 {
     "debugMode": false,
-    "activityFrequency": 0.0,
-    "activityInfluenceMin": 0.0,
-    "ambushFrequency": 1.0,
-    "deadDropStealFrequency": 1.0,
-    "cartelCustomerDealFrequency": 1.0,
-    "cartelRobberyFrequency": 1.0,
-    "cartelGraffitiFrequency": 1.0,
-    "driveByFrequency":  0.7,
     "driveByEnabled": true,
     "realRobberyEnabled": true,
     "defaultRobberyEnabled": true,
@@ -129,38 +124,6 @@ You can customize the basic mod settings through the **config.json** file.
 - **`debugMode`**:
     - `true`: Show debug messages, visualize spawn locations, and display coordinates.
     - `false`: Hides debug content. The cartel features will still be active.
-- **`activityFrequency`**: Adjusts how often Cartel activities occur.
-    - `1.0`: Activities happen roughly 10 times more frequently.
-    - `-1.0`: Activities happen roughly 10 times less frequently.
-    - `0.0` (Default): Activities happen at the game's default frequency.
-- **`activityInfluenceMin`**: Changes the minimum Cartel Influence required for activities.
-    - `1.0`: Activities will rarely happen, as they require maximum regional influence.
-    - `-1.0`: Activities do not require any regional influence and can happen anywhere.
-    - `0.0` (Default): Influence requirements are set to the game's default.
-- **`ambushFrequency`**: Adjusts the frequency of Ambush events.
-    - `1.0`: Ambush can happen as often as every 1 in-game hour.
-    - `0.0`: Ambush can happen at most once every 2 in-game days.
-    - `-1.0`: Ambush can happen at most once every 4 in-game days.
-- **`deadDropStealFrequency`**: Adjusts the frequency of Dead Drop Steal events.
-    - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0`: Can happen at most once every 2 in-game days.
-    - `-1.0`: Can happen at most once every 4 in-game days.
-- **`cartelCustomerDealFrequency`**: Adjusts the frequency of Cartel Customer Deal events.
-    - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0`: Can happen at most once every 2 in-game days.
-    - `-1.0`: Can happen at most once every 4 in-game days.
-- **`cartelRobberyFrequency`**: Adjusts the frequency of Cartel Robbery events.
-    - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0`: Can happen at most once every 2 in-game days.
-    - `-1.0`: Can happen at most once every 4 in-game days
-- **`cartelGraffitiFrequency`**: Adjusts the frequency of Cartel Goons spraying Graffiti
-    - `1.0`: Can happen as often as every 1 in-game hour.
-    - `0.0`: Can happen at most once every 2 in-game days.
-    - `-1.0`: Can happen at most once every 4 in-game days
-- **`driveByFrequency`**: Adjusts the frequency of the Drive-By events.
-    - `1.0`: Random cooldown can have values down to 1 in-game hour.
-    - `0.0`: Random cooldown is around 2 in-game days.
-    - `-1.0`: Random cooldown can have values up to 4 in-game days.
 - **`driveByEnabled`**:
     - `true`: Enables drive-by events.
     - `false`: Disables drive-by events.
@@ -219,7 +182,7 @@ When a dealer is being robbed, a robber will spawn and engage them in a fight. Y
 
 This is a new type of event where the Cartel actively attempts to intercept one of your deals.
 - The event can only occur between 16:20 and 04:20 and when the Cartel is hostile.
-- Randomized Frequency of Intercept Deals feature is tied to the Activity Frequency config value
+- You can change the frequency and add influence requirement from the `XO_WithSauce-CartelEnforcer/EventFrequency/config.json` file
 - Only deals with less than 5 hours and more than 1 hour and 30 minutes remaining can be intercepted.
 - If the player is within 40 units of the customer, the intercept is canceled.
 - The Cartel Dealer can have your Stolen Items in their inventory
@@ -241,8 +204,8 @@ These events only happen when the Cartel is hostile.
 - Only happens at Night Time from 22:30 to 04:00
 - Thomas will spawn in a car and try to shoot the player.
 - They are triggered when the player is near one of the 14 designated hotspots (common dealing locations, homes, and businesses).
-- These events have a randomized cooldown of 1-96 in-game hours based on the `driveByFrequency` parameter.
-- Their frequency can be adjusted with the `activityFrequency` parameter.
+- The event cooldown and influence requirement can be customized from the `XO_WithSauce-CartelEnforcer/EventFrequency/config.json` file
+- All of the Drive By Triggers and drive routes can be customized from the `XO_WithSauce-CartelEnforcer/DriveBy/driveby.json` file
 
 ---
 
@@ -250,7 +213,7 @@ These events only happen when the Cartel is hostile.
 
 ### Mini-Quests
 
-Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, Jeff, Dan, Jeremy, Marco or Herbert).
+Mini-quests can be obtained from select NPCs (Anna, Fiona, Dean, Mick, Jeff, Dan, Marco or Herbert).
 - The quest-giving NPCs are chosen randomly every 4 ingame hours. Random Choice prefers Unlocked NPCs more.
 - **Refusal Rate:** The chance an NPC will refuse to give you a quest is now based on your relationship with them. It ranges from a base 40% chance (at worst relations) to a base 75% chance (at best relations).
 - **Time Window:** When asking the NPC for rumours during 12:00 to 18:00, the NPC has higher likelihood of giving the __Intercept Cartel Dead Drop__ quest.
@@ -290,6 +253,8 @@ If you have killed enough Cartel Dealers, the Gatherings will be hostile on sigh
 - Killing a gathering will decrease regional cartel influence by 80.
 - If a gathering is not defeated, regional influence will increase by 25 (up to a maximum of 400).
 - If the player has a Truce with the cartel then greeting all the gathering goons lowers influence by 150 and the Gathering will not be hostile or annoyed
+- The event cooldown and influence requirement can be customized from the `XO_WithSauce-CartelEnforcer/EventFrequency/config.json` file
+
 
 ---
 
@@ -304,6 +269,7 @@ Player owned businesses can now be sabotaged by Cartel. For these events you wil
 - If the planted bomb explodes, regional cartel influence increases by 200 and the current business laundering operations fail.
 - If the player defuses the bomb, regional cartel influence decreases by 150.
 - If the player kills the goon that is trying to plant a bomb, regional cartel influence decreases by 50.
+- The event cooldown and influence requirement can be customized from the `XO_WithSauce-CartelEnforcer/EventFrequency/config.json` file
 
 >The frequency of Business Sabotage events is linked directly to the total cartel influence across all regions. When the cartel total influence is lower, these events become more frequent!
 
@@ -314,7 +280,7 @@ Player owned businesses can now be sabotaged by Cartel. For these events you wil
 
 Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock your customers by giving them free samples. This event scales in difficulty and frequency depending on how low the Cartels influence is across all regions. The lower their influence is, the harder they fight back!
 
-- The feature can be disabled in the `CartelEnforcer/config.json` by setting `stealBackCustomer` to `false`
+- The feature can be disabled in the `config.json` by setting `stealBackCustomer` to `false`
 - Player must have atleast 18 customers in total unlocked for this feature to kick in
 - The maximum amount of customers Cartel can steal each day is 2
 - Customer stealing prefers recently unlocked customers more
@@ -330,16 +296,16 @@ Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock
 
 Allied Extensions consists of multiple features that are added to the game while the Cartel is Truced. These features aim to provide new means of reducing influence even while Cartel is Truced in order to progress and complete the game. Additionally the Allied Extensions allow the player to Persude the Cartel Dealers to work for them!
 
-> Allied Extensions features and cooldowns can be modified from the `CartelEnforcer/Allied/config.json` file
+- Allied Extensions features and cooldowns can be modified from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file
 
-> The Allied Extensions saves persistent data and progression to the `CartelEnforcer/Allied/QuestData` folder for each save
+- The Allied Extensions saves persistent data and progression to the `XO_WithSauce-CartelEnforcer/Allied/QuestData` folder for each save
 
 ---
 ### Persuade Cartel Dealers
 
 After choosing to Truce with the Cartel, each Cartel Dealer gets new Persuade Dialogue Options! Each of the choices offer different probability of success to persuade the Cartel Dealer. Once successfully persuaded, the player can hire the Cartel Dealer to work for them! Each persuasion attempt lowers the regions Cartel Influence!
 
-- Cooldown time can be changed from the `CartelEnforcer/Allied/config.json` file at `PersuadeCooldownMins`
+- Cooldown time can be changed from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file at `PersuadeCooldownMins`
 
 
 **Choice 1:** *Clothing Similarity*
@@ -363,7 +329,7 @@ After hiring a succesfully persuaded Cartel Dealer the regions Cartel Influence 
 
 While a Cartel Goon Gathering is active, greeting all 3 goons in a short timeframe will award the player with influence reduction in the respective region.
 
-- The influence reduction can be changed from `CartelEnforcer/Influence/influence.json` by changing the `trucedGreetingChallenge` value
+- The influence reduction can be changed from `XO_WithSauce-CartelEnforcer/Influence/influence.json` by changing the `trucedGreetingChallenge` value
 
 ---
 
@@ -384,7 +350,7 @@ When the Cartel is Truced an Allied Supplies Quest will periodically appear! Gra
 
 > Completion XP: 300
 
-- Cooldown time can be changed from the `CartelEnforcer/Allied/config.json` file at `SupplyQuestCooldownHours`
+- Cooldown time can be changed from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file at `SupplyQuestCooldownHours`
 - Starts at 08:00 whenever the cooldown time has been waited
 - The quest begins by Thomas Benzies sending you a message containing information about the supply location
 - Find the supply location and grab the supplies to complete the quest
@@ -516,11 +482,157 @@ The End Game Quest can be started by speaking to Cranky Frank between 16:00 and 
 
 ## Modifying Configs and spawns
 
+### Modifying Event Frequency
+
+> Cooldowns of specified events are saved for each save separately into the XO_WithSauce-CartelEnforcer/EventFrequency/Cooldowns folder
+
+You can customize the frequency of mod added events and also the base game cartel events from the Event Frequency config.
+
+In this file you can also change influence requirements for all events.
+
+1. Open the **XO_WithSauce-CartelEnforcer/EventFrequency** folder inside your **UserData** directory.
+2. Open the **config.json** file. Its contents by default are:
+
+```json
+{
+  "events": [
+    {
+      "Identifier": "Ambush",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "RegionActivity",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "StealDeadDrop",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "CartelCustomerDeal",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "RobDealer",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "SprayGraffiti",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "CartelPlayerDeal",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "DriveBy",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "InterceptDeals",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "Gathering",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    },
+    {
+      "Identifier": "Sabotage",
+      "CooldownHours": 0,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    }
+  ]
+}
+```
+
+- **`Identifier`**: Name that identifies the event. Do not change the ID values or the mod will break.
+- **`CooldownHours`**: How many ingame hours have to be waited until event can start again
+    - If set at "0" the mod will use the Game Default value for the cooldown for the event OR for mod events it will be the mod default cooldown.
+- **`InfluenceRequirement`**: Amount of regional influence needed for the event to run
+    - If the value is below 0.0 (e.g. -1.0) the mod will NOT apply any requirements OR it will use the game default influence requirements.
+    - Range 0.0 - 1.0
+- **`RandomTimeRangePercentage`**: Random range that is applied to the cooldown hours if cooldown hours is not 0.
+    - If the value is above 0.0 for example 0.2, the mod calculates random cooldown with 20% range.
+    - Range 0.0 - 1.0
+
+
+The **RegionActivity** Cooldown controls how often one of these following *Regional Events* trigger inside any given region: StealDeadDrop, CartelCustomerDeal, RobDealer, SprayGraffiti. These 4 events do not have a cooldown by default, but you can add it in the config if you want.
+
+---
+Example template value for the **Ambush** that is the same random cooldown and influence requirement as the game has by default, but overrides the default game cooldown calculation:
+```json
+    {
+      "Identifier": "Ambush",
+      "CooldownHours": 15,
+      "InfluenceRequirement": 0.1,
+      "RandomTimeRangePercentage": 0.625
+    },
+```
+Result: The cooldown hours will be random between 6 - 24 hours and happens only in regions with more than 100 influence
+
+---
+Example template value for the **RegionActivity** that is the same random cooldown as the game has by default, but overrides the default game cooldown calculation:
+```json
+    {
+      "Identifier": "RegionActivity",
+      "CooldownHours": 30,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.625
+    },
+```
+Result: The cooldown hours will be random between 11 - 49 hours 
+
+---
+Example: I want to have the Dealer robbing at higher influence regions only and increase cooldown for only this event
+```json
+    {
+      "Identifier": "RobDealer",
+      "CooldownHours": 50,
+      "InfluenceRequirement": 0.6,
+      "RandomTimeRangePercentage": 0.3
+    },
+```
+Result: The cooldown hours will be random between 35 - 65 hours and it only happens in regions with higher than 600 influence
+
+---
+Example: I want to have the Sabotage feature less often
+```json
+    {
+      "Identifier": "Sabotage",
+      "CooldownHours": 120,
+      "InfluenceRequirement": -1.0,
+      "RandomTimeRangePercentage": 0.0
+    }
+```
+Result: The cooldown hours for sabotage event will be exactly 120 ingame hours (5 ingame days in total)
+
+---
 
 ### Modifying Cartel Dealers
 You can customize the Cartel Dealers' settings through the **dealer.json** file.
 
-1. Open the **CartelEnforcer/Dealers** folder inside your **Mods** directory.
+1. Open the **XO_WithSauce-CartelEnforcer/Dealers** folder inside your **UserData** directory.
 2. Open the **dealer.json** file. Its contents by default are:
 
 ```json
@@ -560,7 +672,7 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 
 You can add or modify custom ambush locations.
 
-1. Open the `Mods/CartelEnforcer/Ambush/ambush.json` file.
+1. Open the `XO_WithSauce-CartelEnforcer/Ambush/ambush.json` file.
 2. Edit existing entries or add new ones. Each entry has:
     - **`mapRegion`**: A number from `0-5` for the region.
     - **`ambushPosition`**: The X, Y, and Z coordinates of the trigger area.
@@ -603,13 +715,13 @@ You can add or modify custom ambush locations.
 
 #### Modifying Default Spawns
 
-1. Open `Mods/CartelEnforcer/Ambush/default.json`.
+1. Open `XO_WithSauce-CartelEnforcer/Ambush/default.json`.
 2. You can only **modify** the values here; do not add or remove any ambushes.
 3. If the game receives a new update, delete `default.json` to ensure your configuration is up to date. It will be recreated the next time you load a save.
 
 #### Modifying Ambush Settings
 
-1. Open `Mods/CartelEnforcer/Ambush/settings.json`.
+1. Open `XO_WithSauce-CartelEnforcer/Ambush/settings.json`.
 2. You can modify the weapons used for ambush events, change the minimum rank required for ranged weapon usage in ambushes and also disable the ambushes that happen rarely after deals get completed by player.
 
 3. The file content is by default:
@@ -624,7 +736,9 @@ You can add or modify custom ambush locations.
         "Avatar/Equippables/Knife"
     ],
     "MinRankForRanged": 2,
-    "AfterDealAmbushEnabled": true
+    "AfterDealAmbushEnabled": true,
+    "AmbushTriggerProbability": 0.8,
+    "AmbushWeaponLethality": 0.33
 }
 ```
 
@@ -632,12 +746,85 @@ You can add or modify custom ambush locations.
     - Note: Must be a valid path and string is case sensitive (example: Machete melee weapon can't currently be loaded with "Avatar/Equippables/Machete")
 - **MinRankForRanged**: Player Rank requirement that indicates when goons start using ranged weapons in ambushes.
 - **AfterDealAmbushesEnabled**: When true by default, after player completes a deal an ambush can happen instantly after. When disabled these stop happening and ambushes are only triggered by positional triggers.
+- **AmbushTriggerProbability**: Controls how much of the regional influence is taked into the calculation of chance.
+    - Example: If you raise this value from 0.8 to 1.0 it increases the chance of an ambush occuring. Lowering it will decrease the chance.
+- **AmbushWeaponLethality**: Controls the lethality of the Ranged and Melee weapons.
+    - At 0.0 weapon lethality is at game default
+    - At 1.0 weapon lethality is doubled
+
+---
+
+#### Modifying Drive By Events
+
+The Drive By events triggers and trigger radius' in addition to the driving routes can be configured from the **XO_WithSauce-CartelEnforcer/DriveBy/driveby.json**
+
+You can add new triggers, edit existing ones or remove them. When adding new triggers, make sure that the **spawnEulerAngles** are Euler and not default Quaternion and that the car is facing correct rotation at the start position. Both the start and end positions must be on the road.
+
+The file contains all of the drive by triggers data with each entry containing the name, trigger position & radius, car spawning rotation and the driving start and end position.
+
+Example of the .json file content:
+
+```json
+{
+  "triggers": [
+    {
+      "name": "Suburbia Bus Stop",
+      "triggerPosition": {
+        "x": 110.39,
+        "y": 5.36,
+        "z": -111.69
+      },
+      "radius": 2.0,
+      "spawnEulerAngles": {
+        "x": 0.0,
+        "y": 270.0,
+        "z": 0.0
+      },
+      "startPosition": {
+        "x": 144.68,
+        "y": 5.6,
+        "z": -103.69
+      },
+      "endPosition": {
+        "x": 17.4,
+        "y": 1.37,
+        "z": -103.53
+      }
+    },
+    ...
+    {
+      "name": "Suburbia Jeremys house",
+      "triggerPosition": {
+        "x": 69.55,
+        "y": 5.93,
+        "z": -117.93
+      },
+      "radius": 2.0,
+      "spawnEulerAngles": {
+        "x": 0.0,
+        "y": 270.0,
+        "z": 0.0
+      },
+      "startPosition": {
+        "x": 144.68,
+        "y": 5.6,
+        "z": -103.69
+      },
+      "endPosition": {
+        "x": 17.4,
+        "y": 1.37,
+        "z": -103.53
+      }
+    }
+  ]
+}
+```
 
 ---
 
 #### Modifying Cartel Stolen Items
 
-1. Open `Mods/CartelEnforcer/CartelItems/(organisation name).json`.
+1. Open `XO_WithSauce-CartelEnforcer/CartelItems/(slot number)_(organisation name).json`.
 2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id. You can also change cartel stolen balance.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
 
@@ -645,7 +832,7 @@ You can add or modify custom ambush locations.
 
 ### Modifying Influence Changing Events
 
-1. Open `Mods/CartelEnforcer/Influence/influence.json`.
+1. Open `XO_WithSauce-CartelEnforcer/Influence/influence.json`.
 2. Each type of event and its corresponding influence change is listed in the file. 
 3. Positive values means that Cartel Influence Increases and Negative values mean that Cartel Influence Decreases.
 4. Values are divided by a thousand, meaning that for example 0.050 corresponds to 50 increase in Cartel Influence.
@@ -682,7 +869,7 @@ Note: Due to the way which the mod handles some of the influence changes, someti
 
 ### Modifying Allied Settings
 
-1. Open `Mods/CartelEnforcer/Allied/config.json`.
+1. Open `XO_WithSauce-CartelEnforcer/Allied/config.json`.
 2. Each Cartel Dealers "Cut" and "Signing Fee" is defined in this file
 3. Additionally the Persuade Cooldown (in-game) minutes and Supply Quest Cooldown (in-game) Hours are defined in this file
 
@@ -740,20 +927,22 @@ In debug mode, you can see various visual cues and use keybinds to test features
     - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
     - `Left CTRL + N`: Start a Sabotage Event at nearest supported business
     - `Left CTRL + O`: Steal back the nearest customer to the player without checking prerequirements
-    - `Left CTRL + I`: Start the Allied Intro Quest (note: might cause errors or break the game)
-    - `Left CTRL + K`: Start the Allied Supplies Quest (note: might cause errors or break the game)
+    - `Left CTRL + I`: Start the Allied Intro Quest (note: might cause errors or break the game if not truced)
+    - `Left CTRL + K`: Start the Allied Supplies Quest (note: might cause errors or break the game if not truced)
 
 ---
 
 ### In Multiplayer
 
-For multiplayer to function correctly, all players must have the same `default.json`, `ambush.json` and `config.json` content.
+For multiplayer to function correctly, all players must have the same configuration content inside the `UserData/XO_WithSauce-CartelEnforcer` folder
 
 Most of the events and activities added by this mod **do not** support multiplayer yet.
 
 ---
 
-> **Note:** The configuration files and directory structure described in this document will be created automatically in the `Mods/CartelEnforcer/` directory if they are missing.
+###
+
+**Note:** The configuration files and directory structure described in this document will be created automatically in the `UserData` directory if the files are missing.
 
 ---
 

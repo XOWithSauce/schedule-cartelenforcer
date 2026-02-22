@@ -10,11 +10,9 @@ namespace CartelEnforcer
     {
         public MelonPreferences_Category modConfigCategory;
 
-        // Basically just create prefs for Mod basic config and on updated rewrite the config json
         public void SetupMelonPreferences()
         {
-            modConfigCategory = MelonPreferences.CreateCategory($"{BuildInfo.Name} {BuildInfo.Author}", BuildInfo.Name);
-
+            modConfigCategory = MelonPreferences.CreateCategory(identifier: $"{BuildInfo.Name} {BuildInfo.Author}", display_name: BuildInfo.Name);
             modConfigCategory.CreateEntry(
                 "debugMode", currentConfig.debugMode,
                 display_name: "Debug Mode Enabled",
@@ -90,14 +88,17 @@ namespace CartelEnforcer
             for (int i = 0; i < modConfigCategory.Entries.Count; i++)
             {
                 string id = modConfigCategory.Entries[i].Identifier;
+
                 void ThisEntryChanged(object objOld, object objNew)
                 {
+                    Log("Entry change wrapperd");
                     OnEntryChange(id, objOld, objNew);
                 }
                 modConfigCategory.Entries[i].OnEntryValueChangedUntyped.Subscribe(ThisEntryChanged);
             }
-
-            //Log("Melon preferences created");
+           
+            MelonPreferences.Save();
+            Log("Melon preferences created");
         }
 
         public static void OnEntryChange(string identifier, object objOld, object objNew)
@@ -107,6 +108,8 @@ namespace CartelEnforcer
             foreach (FieldInfo field in modConfigFields)
             {
                 if (!field.Name.Contains(identifier)) continue;
+                if (!field.Name.Contains("endGameQuestMonologueSpeed")) continue; // not supported
+
                 // Prevent disabling end game quest if allied extension is enabled
                 if (field.Name.Contains("endGameQuest") && currentConfig.alliedExtensions && !(bool)objNew)
                 {
@@ -115,7 +118,6 @@ namespace CartelEnforcer
 
                 field.SetValue(currentConfig, (bool)objNew);
             }
-
             // Instantly reflect the melon pref change in .json
             ConfigLoader.Save(currentConfig);
         }

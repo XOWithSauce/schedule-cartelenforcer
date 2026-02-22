@@ -656,7 +656,6 @@ namespace CartelEnforcer
 
             allCartelDealers = null;
 
-            currentConfig = null;
             influenceConfig = null;
             eventCooldowns = null;
 
