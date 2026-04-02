@@ -54,8 +54,6 @@ namespace CartelEnforcer
             => ClassInjector.DerivedConstructorBody(this);
 #endif
 
-        private GameObject UiPrefab = null;
-        private RectTransform rtIcon;
         private float questDifficultyScalar = 1f;
         private int manorGoonsAlive = 4;
 
@@ -169,31 +167,6 @@ namespace CartelEnforcer
 
         #endregion
 
-
-#if IL2CPP
-        // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries is il2cpp system ienumerable but expecting system ienumerable?
-        public new int ActiveEntryCount
-        {
-            get
-            {
-                if (this.Entries == null)
-                {
-                    return 0;
-                }
-
-                int count = 0;
-                foreach (var entry in this.Entries)
-                {
-                    if (entry.State == EQuestState.Active)
-                    {
-                        count++;
-                    }
-                }
-                return count;
-            }
-        }
-#endif
-
         public void SetupSelf()
         {
             Log("SetupSelfStart");
@@ -234,11 +207,8 @@ namespace CartelEnforcer
             }
 
             // UI related code and the benzies logo
-            RectTransform rt = MakeIcon(this.transform);
-            rtIcon = rt;
-            this.IconPrefab = rt;
-            UiPrefab = MakeUIPrefab(this.transform);
-            PoIPrefab = MakePOI(this.transform, UiPrefab);
+            base.IconPrefab = MakeIcon(this.transform);
+            base.PoIPrefab = MakePOI();
 
             // Create the QuestEntry GameObjects and parent them.
 
@@ -279,12 +249,7 @@ namespace CartelEnforcer
             this.QuestEntry_DefeatManorGoons = defeatGoons;
             this.QuestEntry_SearchResidence = searchResidence;
             this.QuestEntry_EscapeManor = escapeManor;
-#if MONO
-            this.Entries = new()
-                {
-                    investigate, returnToRay, waitForNight, breakIn, defeatGoons, searchResidence, escapeManor
-                };
-#else
+
             this.Entries = new();
             this.Entries.Add(investigate);
             this.Entries.Add(returnToRay);
@@ -293,17 +258,15 @@ namespace CartelEnforcer
             this.Entries.Add(defeatGoons);
             this.Entries.Add(searchResidence);
             this.Entries.Add(escapeManor);
-#endif
 
             investigate.SetEntryTitle("Investigate the hillside forest near Manor (0/4)");
-            investigate.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            investigate.PoILocation.name = "InvestigateEntry_POI";
+            investigate.ParentQuest = this;
+            investigate.CompleteParentQuest = false;
+            investigate.PoILocation = new GameObject("InvestigateEntry_POI").transform;
             investigate.PoILocation.transform.SetParent(investigate.transform);
             investigate.PoILocation.transform.position = new Vector3(164.96f, 3.10f, -32.65f);
             investigate.AutoUpdatePoILocation = true;
             investigate.SetState(EQuestState.Active, true);
-            investigate.ParentQuest = this;
-            investigate.CompleteParentQuest = false;
             UnityEngine.Events.UnityAction investigateCompleteAction = null;
             void OnInvestigateComplete()
             {
@@ -311,9 +274,7 @@ namespace CartelEnforcer
                 if (returnToRay == null) return;
 
                 returnToRay.Begin();
-                returnToRay.CreateCompassElement();
-                returnToRay.PoI.gameObject.SetActive(true);
-                returnToRay.compassElement.Visible = true;
+                UpdateQuestMapLogo(returnToRay);
                 returnToRay.SetPoILocation(ray.transform.position);
 
                 MelonCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete));
@@ -327,14 +288,13 @@ namespace CartelEnforcer
             investigate.onComplete.AddListener(investigateCompleteAction);
 
             returnToRay.SetEntryTitle("Return to Ray and ask for more information");
-            returnToRay.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            returnToRay.PoILocation.name = "ReturnToRayEntry_POI";
+            returnToRay.ParentQuest = this;
+            returnToRay.CompleteParentQuest = false;
+            returnToRay.PoILocation = new GameObject("ReturnToRayEntry_POI").transform;
             returnToRay.PoILocation.transform.SetParent(returnToRay.transform);
             returnToRay.PoILocation.transform.position = new Vector3(77.30f, 1.46f, -12.85f);
             returnToRay.AutoUpdatePoILocation = true;
             returnToRay.SetState(EQuestState.Inactive, false);
-            returnToRay.ParentQuest = this;
-            returnToRay.CompleteParentQuest = false;
             UnityEngine.Events.UnityAction returnToRayAction = null;
             void OnReturnToRayComplete()
             {
@@ -342,7 +302,6 @@ namespace CartelEnforcer
                 if (waitForNight == null) return;
 
                 waitForNight.Begin();
-                waitForNight.PoI.gameObject.SetActive(false);
                 if (waitForNight.compassElement != null)
                     waitForNight.compassElement.Visible = false;
                 coros.Add(MelonCoroutines.Start(RandomManorGenerator.SetupManor()));
@@ -356,14 +315,13 @@ namespace CartelEnforcer
             returnToRay.onComplete.AddListener(returnToRayAction);
 
             waitForNight.SetEntryTitle("Wait for night time (22:00)");
-            waitForNight.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            waitForNight.PoILocation.name = "WaitForNightEntry_POI";
-            waitForNight.PoILocation.transform.SetParent(waitForNight.transform);
-            waitForNight.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            waitForNight.AutoUpdatePoILocation = true;
-            waitForNight.SetState(EQuestState.Inactive, false);
             waitForNight.ParentQuest = this;
             waitForNight.CompleteParentQuest = false;
+            waitForNight.AutoCreatePoI = false;
+            waitForNight.PoILocation = new GameObject("WaitForNightEntry_POI").transform;
+            waitForNight.PoILocation.transform.SetParent(waitForNight.transform);
+            waitForNight.SetState(EQuestState.Inactive, false);
+
             UnityEngine.Events.UnityAction waitForNightAction = null;
             void OnWaitForNightComplete()
             {
@@ -371,10 +329,7 @@ namespace CartelEnforcer
                 if (breakIn == null) return;
 
                 breakIn.Begin();
-                breakIn.CreateCompassElement();
-                breakIn.PoI.gameObject.SetActive(true);
-                if (breakIn.compassElement != null)
-                    breakIn.compassElement.Visible = true;
+                UpdateQuestMapLogo(breakIn);
                 if (waitForNightAction != null)
                 {
                     waitForNight.onComplete.RemoveListener(waitForNightAction);
@@ -385,14 +340,12 @@ namespace CartelEnforcer
             waitForNight.onComplete.AddListener(waitForNightAction);
 
             breakIn.SetEntryTitle("Break into Manor through the back door");
-            breakIn.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            breakIn.PoILocation.name = "BreakInEntry_POI";
-            breakIn.PoILocation.transform.SetParent(breakIn.transform);
-            breakIn.PoILocation.transform.position = new Vector3(163.37f, 11.86f, -50.12f);
-            breakIn.AutoUpdatePoILocation = true;
-            breakIn.SetState(EQuestState.Inactive, false);
             breakIn.ParentQuest = this;
             breakIn.CompleteParentQuest = false;
+            breakIn.PoILocation = new GameObject("BreakInEntry_POI").transform;
+            breakIn.PoILocation.transform.SetParent(breakIn.transform);
+            breakIn.PoILocation.transform.position = new Vector3(163.37f, 11.86f, -50.12f);
+            breakIn.SetState(EQuestState.Inactive, false);
             UnityEngine.Events.UnityAction breakInAction = null;
             void OnBreakInComplete()
             {
@@ -401,7 +354,6 @@ namespace CartelEnforcer
 
                 SpawnManorGoons();
                 defeatGoons.Begin();
-                defeatGoons.PoI.gameObject.SetActive(false);
                 if (defeatGoons.compassElement != null)
                     defeatGoons.compassElement.Visible = false;
                 if (breakInAction != null)
@@ -414,14 +366,13 @@ namespace CartelEnforcer
             breakIn.onComplete.AddListener(breakInAction);
 
             defeatGoons.SetEntryTitle("Defeat the Manor Goons");
-            defeatGoons.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            defeatGoons.PoILocation.name = "DefeatGoonsEntry_POI";
-            defeatGoons.PoILocation.transform.SetParent(defeatGoons.transform);
-            defeatGoons.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            defeatGoons.AutoUpdatePoILocation = true;
-            defeatGoons.SetState(EQuestState.Inactive, false);
             defeatGoons.ParentQuest = this;
             defeatGoons.CompleteParentQuest = false;
+            defeatGoons.PoILocation = new GameObject("DefeatGoonsEntry_POI").transform;
+            defeatGoons.PoILocation.transform.SetParent(defeatGoons.transform);
+            defeatGoons.AutoCreatePoI = false;
+            defeatGoons.SetState(EQuestState.Inactive, false);
+
             UnityEngine.Events.UnityAction defeatGoonsAction = null;
             void OnDefeatGoonsComplete()
             {
@@ -429,10 +380,7 @@ namespace CartelEnforcer
                 if (searchResidence == null) return;
 
                 searchResidence.Begin();
-                searchResidence.CreateCompassElement();
-                searchResidence.PoI.gameObject.SetActive(true);
-                if (searchResidence.compassElement != null)
-                    searchResidence.compassElement.Visible = true;
+                UpdateQuestMapLogo(searchResidence);
                 searchResidence.SetPoILocation(roomsPositions.Keys.FirstOrDefault());
 
                 if (defeatGoonsAction != null)
@@ -445,14 +393,12 @@ namespace CartelEnforcer
             defeatGoons.onComplete.AddListener(defeatGoonsAction);
 
             searchResidence.SetEntryTitle("Investigate the upstairs rooms (0/4)");
-            searchResidence.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            searchResidence.PoILocation.name = "SearchResidenceEntry_POI";
-            searchResidence.PoILocation.transform.SetParent(searchResidence.transform);
-            searchResidence.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            searchResidence.AutoUpdatePoILocation = true;
-            searchResidence.SetState(EQuestState.Inactive, false);
             searchResidence.ParentQuest = this;
             searchResidence.CompleteParentQuest = false;
+            searchResidence.PoILocation = new GameObject("SearchResidenceEntry_POI").transform;
+            searchResidence.PoILocation.transform.SetParent(searchResidence.transform);
+            searchResidence.AutoUpdatePoILocation = true;
+            searchResidence.SetState(EQuestState.Inactive, false);
             UnityEngine.Events.UnityAction searchResidenceAction = null;
             void OnSearchResidenceComplete()
             {
@@ -460,7 +406,6 @@ namespace CartelEnforcer
                 if (escapeManor == null) return;
                 Log("Escape Begin");
                 escapeManor.Begin();
-                escapeManor.PoI.gameObject.SetActive(false);
                 if (escapeManor.compassElement != null)
                     escapeManor.compassElement.Visible = false;
                 Player.Local.CrimeData.SetPursuitLevel(PlayerCrimeData.EPursuitLevel.Investigating);
@@ -490,14 +435,12 @@ namespace CartelEnforcer
             searchResidence.onComplete.AddListener(searchResidenceAction);
 
             escapeManor.SetEntryTitle("Escape the Manor before the Police arrive");
-            escapeManor.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            escapeManor.PoILocation.name = "EscapeManorEntry_POI";
-            escapeManor.PoILocation.transform.SetParent(escapeManor.transform);
-            escapeManor.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            escapeManor.AutoUpdatePoILocation = true;
-            escapeManor.SetState(EQuestState.Inactive, false);
             escapeManor.ParentQuest = this;
             escapeManor.CompleteParentQuest = false;
+            escapeManor.AutoCreatePoI = false;
+            escapeManor.PoILocation = new GameObject("EscapeManorEntry_POI").transform;
+            escapeManor.PoILocation.transform.SetParent(escapeManor.transform);
+            escapeManor.SetState(EQuestState.Inactive, false);
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
             var action = (Action)OnMinPass;
@@ -514,8 +457,6 @@ namespace CartelEnforcer
 
         private void StartQuestDetail()
         {
-            if (this.IconPrefab == null)
-                this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
             SetupHUDUI();
 
             if (hudUI != null)
@@ -525,18 +466,10 @@ namespace CartelEnforcer
                 this.hudUI.gameObject.SetActive(true);
             }
 
-            if (QuestEntry_InvestigateWoods != null)
-            {
-                QuestEntry_InvestigateWoods.CreateCompassElement();
-                if (QuestEntry_InvestigateWoods.compassElement != null)
-                    QuestEntry_InvestigateWoods.compassElement.Visible = true;
-
-                if (QuestEntry_InvestigateWoods.PoI != null)
-                    QuestEntry_InvestigateWoods.PoI.gameObject.SetActive(true);
-            }
-
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
+
+            UpdateQuestMapLogo(QuestEntry_InvestigateWoods);
             return;
         }
 

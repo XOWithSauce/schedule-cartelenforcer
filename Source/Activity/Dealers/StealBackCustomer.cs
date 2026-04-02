@@ -56,6 +56,7 @@ namespace CartelEnforcer
         public static void OnDayPassTrySteal()
         {
             if (!currentConfig.stealBackCustomers) return;
+            Log("OnDayPassTrySteal");
             coros.Add(MelonCoroutines.Start(WaitSleepEndTrySteal()));
         }
         public static IEnumerator WaitSleepEndTrySteal()
@@ -82,6 +83,7 @@ namespace CartelEnforcer
                 allInfluence += data.Influence;
             }
             float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
+            Log("Stealback influence norm: " + allInfluenceNormalized);
 
             // 0.00 - 0.66 around midgame-late, tue wed fri sun
             if (allInfluenceNormalized > 0f && allInfluenceNormalized <= 0.66f)
@@ -137,16 +139,14 @@ namespace CartelEnforcer
                 Customer customer = unlocked[i];
                 if (CanStealCustomer(customer.NPC, cartelInfluence))
                 {
-                    if (region1StolenFrom == EMapRegion.Northtown)
-                    {
-                        // Store the first region npc reg
-                        region1StolenFrom = customer.NPC.Region;
-                    }
-                    else if (region1StolenFrom != customer.NPC.Region)
+                    if (region1StolenFrom != customer.NPC.Region)
                     {
                         // Checked that another customer wasnt stolen in the same region as previous
                         StealCustomer(customer.NPC);
                         currentStolen++;
+
+                        // Store region so that no other customers will be stolen this day from it
+                        region1StolenFrom = customer.NPC.Region;
                     }
                     else
                     {
@@ -213,7 +213,6 @@ namespace CartelEnforcer
                     return false;
                 }
             }
-
             return true;
         }
 

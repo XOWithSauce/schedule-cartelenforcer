@@ -9,6 +9,7 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.AlliedExtension;
 
 #if MONO
+using ScheduleOne.Dragging;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Interaction;
 using ScheduleOne.ItemFramework;
@@ -34,6 +35,7 @@ using FishNet.Object;
 using FishNet;
 using TMPro;
 #else
+using Il2CppScheduleOne.Dragging;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.ItemFramework;
@@ -236,9 +238,13 @@ namespace CartelEnforcer
 
             if (location.Type == ESupplyType.Barrel)
             {
-                Log("Spawn Supply Barrel");
+                Log("Spawn Supply Barrel, in list objects: " + location.BarrelObjects.Count);
                 foreach (GameObject go in location.BarrelObjects)
                 {
+                    // Because otherwise they wont be interactable
+                    if (location.ID == "SUPPLY_DOCKS")
+                        RemoveDragInteraction(go);
+                    yield return Wait01;
                     SetBarrelInteractable(
                         target: go,
                         item: barrelLoot[UnityEngine.Random.Range(0, barrelLoot.Count)],
@@ -333,10 +339,8 @@ namespace CartelEnforcer
                 if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
                     randomItem.Quantity -= 1;
                 rewardStorage.ItemSlots[i].InsertItem(randomItem);
+                Log($"Generated Supply Reward: {randomItem.ID} x {randomItem.Quantity}");
             }
-
-            // Reward storage on closed checks if its empty and
-            // completes quest entry, it doesnt always work on first try?
 #if MONO
             System.Action onClosedAction = null;
 #else
@@ -351,6 +355,7 @@ namespace CartelEnforcer
                 {
                     if (rewardStorage.ItemCount == 0)
                     {
+                        activeAlliedSupplies.QuestEntry_GatherSupplies.Complete();
                         activeAlliedSupplies.Complete(false);
                     }
                 }
@@ -361,22 +366,38 @@ namespace CartelEnforcer
             onClosedAction = (Il2CppSystem.Action)CloseTrigger;
 #endif
 
-            rewardStorage.Close();
             rewardStorage.onClosed += onClosedAction;
             rewardStorage.StorageEntitySubtitle = "Cartel Supply Delivery";
 
             yield return null;
         }
 
+        // Because Docks spawned barrels have drag interaction this function prevents that
+        // Also when seconds interactableObject component is added ontop of the existing component, it wont work
+        // until previous component is removed from the obj
+        public static void RemoveDragInteraction(GameObject target)
+        {
+            InteractableObject dragInt = target.GetComponent<InteractableObject>();
+            Rigidbody dragRb = target.GetComponent<Rigidbody>();
+            Draggable draggableComp = target.GetComponent<Draggable>();
+
+            // todo make this not permanently remove the drag interaction how?
+            // requires save reload to be draggable again
+            if (draggableComp != null)
+                UnityEngine.Object.Destroy(draggableComp);
+            if (dragInt != null)
+                UnityEngine.Object.Destroy(dragInt);
+            if (dragRb != null)
+                dragRb.isKinematic = true;
+        }
+
         public static void SetBarrelInteractable(GameObject target, ItemInstance item, int capacity)
         {
-            GameObject interactable = new GameObject("CE_SUPPLY");
-            interactable.transform.SetParent(target.transform);
-            interactable.transform.localPosition = new Vector3(0f, 0.9f, 0f);
+            GameObject barrelMarker = new GameObject("CE_SUPPLY");
+            barrelMarker.transform.SetParent(target.transform);
             InteractableObject intObj = target.AddComponent<InteractableObject>();
             intObj.message = $"Take 5 x {item.Name}";
             intObj.SetInteractableState(InteractableObject.EInteractableState.Default);
-            // How to get rid of the interactable object if not cconsumed
             int remainingCapacity = capacity;
             UnityEngine.Events.UnityAction barrelInteracted = null;
             void OnBarrelInteracted()
@@ -395,16 +416,14 @@ namespace CartelEnforcer
 
                 if (remainingCapacity <= 0)
                 {
-                    if (interactable != null)
-                        GameObject.Destroy(interactable);
-
+                    UnityEngine.Object.Destroy(barrelMarker);
                     if (intObj != null)
                         UnityEngine.Object.Destroy(intObj);
                 }
             }
             barrelInteracted = (UnityEngine.Events.UnityAction)OnBarrelInteracted;
             intObj.onInteractStart.AddListener(barrelInteracted);
-
+            Log("Barrel interactable added");
             return;
         }
 
@@ -467,6 +486,7 @@ namespace CartelEnforcer
             goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.55f));
 
             // create dialogue choice
+             
             DialogueController controller = goonGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
             string text = "Relax buddy, the boss sent me.";
@@ -489,7 +509,7 @@ namespace CartelEnforcer
                 }
             }
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)ReplyChosen);
-            guardChoiceIndex = controller.AddDialogueChoice(choice);
+            guardChoiceIndex = controller.AddDialogueChoice(choice); 
 
             alliedGuard = goonGuard;
 

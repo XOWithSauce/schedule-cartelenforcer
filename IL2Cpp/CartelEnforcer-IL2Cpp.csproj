@@ -34,8 +34,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.8.4.0</FileVersion>
-		<Version>1.8.4</Version>
+		<FileVersion>1.8.5.0</FileVersion>
+		<Version>1.8.5</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -67,6 +67,9 @@
 	<ItemGroup>
 		<Reference Include="Assembly-CSharp">
 			<HintPath>libs-il2cpp\Assembly-CSharp.dll</HintPath>
+		</Reference>
+		<Reference Include="Il2CppScheduleOne.Core">
+			<HintPath>libs-il2cpp\Il2CppScheduleOne.Core.dll</HintPath>
 		</Reference>
 		<Reference Include="Il2Cppmscorlib">
 			<HintPath>libs-il2cpp\Il2Cppmscorlib.dll</HintPath>

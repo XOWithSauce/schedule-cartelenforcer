@@ -1144,21 +1144,11 @@ namespace CartelEnforcer
         {
             if (location.Type == ESupplyType.Barrel)
             {
-                Transform currentBarrel;
                 foreach (GameObject go in location.BarrelObjects)
                 {
-                    currentBarrel = go.transform.Find("CE_SUPPLY"); // find the interactable child object
-                    if (currentBarrel == null)
-                    {
-                        continue;
-                    }
-                    else
-                    {
-                        GameObject.Destroy(currentBarrel.gameObject);
-                        InteractableObject intObj = go.GetComponent<InteractableObject>();
-                        if (intObj != null)
-                            UnityEngine.Object.Destroy(intObj);
-                    }
+                    InteractableObject intObj = go.GetComponent<InteractableObject>();
+                    if (intObj != null)
+                        UnityEngine.Object.Destroy(intObj);
                 }
             }
             yield return Wait30;
@@ -1180,6 +1170,7 @@ namespace CartelEnforcer
 
                 alliedGuard.Behaviour.CombatBehaviour.Disable_Networked(null);
                 alliedGuard.Behaviour.ScheduleManager.EnableSchedule();
+                alliedGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true); // set stayinside enable
                 alliedGuard.Movement.SpeedController.RemoveSpeedControl("combat");
                 alliedGuard.Despawn();
                 alliedGuard = null;
@@ -1233,66 +1224,48 @@ namespace CartelEnforcer
 
         // Shared UI related code
         #region Quest UI prefabs
+        public static void UpdateQuestMapLogo(QuestEntry entry)
+        {
+            coros.Add(MelonCoroutines.Start(WaitQuestUI(entry)));
+        }
+
+        public static IEnumerator WaitQuestUI(QuestEntry entry)
+        {
+            // Wait the UI to init to avoid null ref errors and get rid of bug where shade doesnt remove on 1st entry
+            bool EntryPoIExists() { return entry.PoI != null && entry.PoI.IconContainer != null && entry.PoI.UISetup; }
+#if MONO
+            yield return new WaitUntil(EntryPoIExists);
+#else
+            yield return new WaitUntil((Il2CppSystem.Func<bool>)(EntryPoIExists));
+#endif
+            // instantiate icon prefab on quest entry begin since it shows in UnityExplorer getting destroyed
+            if (entry.PoIIcon == null)
+            {
+                entry.PoIIcon = UnityEngine.Object.Instantiate(entry.ParentQuest.IconPrefab.gameObject, entry.PoI.IconContainer).GetComponent<RectTransform>();
+                entry.PoIIcon.sizeDelta = new Vector2(20f, 20f);
+            }
+            // Remove the background shade for icon background
+            if (entry.PoI != null && entry.PoI.IconContainer != null)
+            {
+                Transform shadeTr = entry.PoI.IconContainer.Find("Shade");
+                if (shadeTr)
+                    shadeTr.gameObject.SetActive(false);
+            }
+
+        }
         public static RectTransform MakeIcon(Transform parent)
         {
             GameObject logo = new("BenziesLogoQuest");
+            RectTransform rt = logo.AddComponent<RectTransform>();
             Image imgComp = logo.AddComponent<Image>();
             imgComp.sprite = benziesLogo;
-            RectTransform rt = logo.AddComponent<RectTransform>();
-            logo.AddComponent<CanvasRenderer>();
-            logo.transform.SetParent(parent);
+            logo.transform.SetParent(parent, worldPositionStays: false);
             return rt;
         }
-        public static GameObject MakeUIPrefab(Transform parent)
+
+        public static GameObject MakePOI()
         {
-            GameObject go = new("CartelEnforcerLogo");
-            GameObject IconContainer = new("IconContainer");
-            GameObject MainLabel = new("MainLabel");
-            IconContainer.transform.parent = go.transform;
-            MainLabel.transform.parent = go.transform;
-
-            RectTransform rtr1 = go.AddComponent<RectTransform>();
-            rtr1.anchoredPosition = new Vector2(0f, 0f);
-            rtr1.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr1.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr1.offsetMax = new Vector2(25f, 25f);
-            rtr1.offsetMin = new Vector2(-25f, -25f);
-            rtr1.pivot = new Vector2(0.5f, 0.5f);
-            rtr1.sizeDelta = new Vector2(50f, 50f);
-
-            go.AddComponent<Image>();
-
-            RectTransform rtr2 = IconContainer.AddComponent<RectTransform>();
-            rtr2.sizeDelta = new Vector2(50f, 50f);
-            Image logo = IconContainer.AddComponent<Image>();
-            logo.sprite = benziesLogo;
-
-            RectTransform rtr3 = MainLabel.AddComponent<RectTransform>();
-            rtr3.anchoredPosition = new Vector2(0f, -46f);
-            rtr3.anchorMax = new Vector2(0.5f, 0.5f);
-            rtr3.anchorMin = new Vector2(0.5f, 0.5f);
-            rtr3.offsetMax = new Vector2(250f, 14f);
-            rtr3.offsetMin = new Vector2(-250f, -106f);
-            rtr3.pivot = new Vector2(-250f, -106f);
-            rtr3.sizeDelta = new Vector2(500f, 120f);
-            MainLabel.AddComponent<CanvasRenderer>();
-            MainLabel.AddComponent<Text>();
-            go.transform.parent = parent;
-            return go;
-        }
-        public static GameObject MakePOI(Transform parent, GameObject UiPrefab)
-        {
-            GameObject poiPrefabObject = new GameObject($"CartelEnforcer_POI");
-            poiPrefabObject.transform.SetParent(parent);
-            POI poi = poiPrefabObject.AddComponent<POI>();
-            poi.enabled = false;
-            poi.UIPrefab = UiPrefab;
-            poi.AutoUpdatePosition = true;
-            poi.MainText = "Test";
-            poi.DefaultMainText = "TestText";
-            poi.MainTextVisibility = POI.TextShowMode.Off;
-            poi.enabled = true;
-            return poiPrefabObject;
+            return Quest.Quests[0].PoIPrefab;
         }
 
         #endregion

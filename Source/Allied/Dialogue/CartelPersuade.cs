@@ -331,10 +331,11 @@ namespace CartelEnforcer
 
         public static float CalculateThreathenProbability()
         {
-            int prev = PlayerSingleton<PlayerInventory>.Instance.PreviousEquippedSlotIndex - 1;
+            int prev = PlayerSingleton<PlayerInventory>.Instance.PriorEquippedSlotIndex - 1;
             string id = "";
             if (prev != -1 && prev < 8)
             {
+                
                 ItemInstance item = Player.Local.Inventory[prev].ItemInstance;
                 if (item != null)
                     id = item.ID;
@@ -383,6 +384,8 @@ namespace CartelEnforcer
         public static float CalculateRumourProbability()
         {
             float probability = ExpCurve(SPREAD_RUMOURS_BASE_CHANCE, SPREAD_RUMOURS_MAX_CHANCE, (float)alliedQuests.timesPersuaded / 10f);
+            if (currentConfig.debugMode)
+                probability = 0.99f;
             return probability;
         }
         #endregion

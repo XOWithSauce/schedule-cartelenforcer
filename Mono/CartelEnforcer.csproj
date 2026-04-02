@@ -33,8 +33,8 @@
 		<TargetFramework>net48</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.8.4.0</FileVersion>
-		<Version>1.8.4</Version>
+		<FileVersion>1.8.5.0</FileVersion>
+		<Version>1.8.5</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -67,6 +67,9 @@
 	<ItemGroup>
 		<Reference Include="Assembly-CSharp" Publicize="true">
 			<HintPath>libs-mono\Assembly-CSharp.dll</HintPath>
+		</Reference>
+		<Reference Include="ScheduleOne.Core">
+			<HintPath>libs-mono\ScheduleOne.Core.dll</HintPath>
 		</Reference>
 		<Reference Include="FishNet.Runtime">
 			<HintPath>libs-mono\FishNet.Runtime.dll</HintPath>

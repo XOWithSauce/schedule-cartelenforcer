@@ -1,3 +1,23 @@
+# Version 1.8.5
+- Ensured that mod is compatible with game version 0.4.5f1 (Anniversary Update)
+- Added more debug logging as always to the DEBUG builds (logs not visible in debugMode=true) to help with developing and troubleshooting in future
+- Added debug probability of 99% to Rumour spreading for persuading cartel dealers whenever debugMode is enabled 
+- Refactored the mod added quests codes to simplify the instantiation of Point-of-Interest objects and also the Map indicators, subsequently adding the text on-hover effects when hovering over map indicators that get generated with the quests
+- Removed redundant code regions from the mod added quests that were left behind by previous mod versions troubleshooting 
+- Fixed a bug in the Infiltrate Manor end game quest where the Small safe prefab would not exist causing the quest to not spawn any safe, now spawns scaled down Big Safe
+- Fixed a bug in the Infiltrate Manor end game quest where if the extra rare room spawns upstairs, it would not correctly despawn everything after quest ends
+- Fixed a bug in the Infiltrate Manor end game quest where if the extra rare room spawns upstairs in IL2CPP backend, it would cause a null reference error due to improper assembly stripping
+- Fixed a bug in the Infiltrate Manor end game quest where after leaving manor the game would throw an error related to the Jukebox
+- Fixed a bug where previous mod update caused the Cartels stolen items to not be saved as intended
+- Fixed a bug where the Cartel Dealer could walk away even when player is talking with them or managing inventory
+- Fixed a bug where previous mod update caused the intercept deals events checks to fail causing the intercepted contract to be not completed even when cartel dealer completes it
+- Fixed a bug where previous mod update caused the StealBackCustomers feature to not correctly steal a maximum of 1 customer per region, instead the code checked for 1 customer each region, causing the steal back feature to be far less common as intended
+- Fixed a bug where the during persuasion of Cartel Dealers in Allied Extensions, the weapon threathening would not use correct inventory slot index when checking which weapon player was holding before talking
+- Fixed a bug in the Allied intro quests in AlliedExtensions where a quest entry would be incorrectly instantiated into wrong parent object
+- Fixed a bug in the Allied Supplies quest in AlliedExtensions where the blue barrels at the docks would not be interactable as intended due to addition of Draggable component
+- Fixed a bug in the Allied Supplies quest where after it despawns, the defender goon will not have its Stay Inside behaviour reverted to enabled as intended
+- Removed borderline redundant code from debug hotkeys
+
 # Version 1.8.4
 - Added support for using MelonLoader Preferences alongside the previous .json file implementation. The basic mod features can now be toggled through the preferences and hot reloaded while playing and the preferences will sync with the main config.json file.
 - Added support for installing the mod through Thunderstore Mod Manager alongside the manual installation methods

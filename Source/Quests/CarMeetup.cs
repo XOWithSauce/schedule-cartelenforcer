@@ -70,9 +70,6 @@ namespace CartelEnforcer
             => ClassInjector.DerivedConstructorBody(this);
 #endif
 
-        private GameObject UiPrefab = null;
-        private RectTransform rtIcon;
-
         private float questDifficultyScalar = 1f;
 
         private readonly List<Vector3> pileBasePos = new()
@@ -188,37 +185,6 @@ namespace CartelEnforcer
 
         #endregion
 
-
-
-#if IL2CPP
-        // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries
-        // il2cpp system ienumerable but expecting system ienumerable?
-        public new int ActiveEntryCount
-        {
-            get
-            {
-                if (this.Entries == null)
-                {
-                    return 0;
-                }
-
-                int count = 0;
-                foreach (QuestEntry entry in this.Entries)
-                {
-                    if (entry == null)
-                    {
-                        MelonLogger.Warning("Quest Entry got GC'd");
-                    }
-                    if (entry.State == EQuestState.Active)
-                    {
-                        count++;
-                    }
-                }
-                return count;
-            }
-        }
-#endif
-
         public void SetupSelf()
         {
             Log("SetupSelfStart");
@@ -259,11 +225,8 @@ namespace CartelEnforcer
             }
 
             // UI related code and the benzies logo
-            RectTransform rt = MakeIcon(this.transform);
-            rtIcon = rt;
-            this.IconPrefab = rt;
-            UiPrefab = MakeUIPrefab(this.transform);
-            PoIPrefab = MakePOI(this.transform, UiPrefab);
+            base.IconPrefab = MakeIcon(this.transform);
+            base.PoIPrefab = MakePOI();
 
             // Create the QuestEntry GameObjects and parent them.
             GameObject talkTojeremyObject = new GameObject("QuestEntry_TalkToJeremy");
@@ -298,15 +261,12 @@ namespace CartelEnforcer
             Log("Config Entries");
 
             talkToJeremy.SetEntryTitle("Ask Jeremy about the cars at their home after curfew");
-            talkToJeremy.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            talkToJeremy.PoILocation.name = "TalkToJeremyEntry_POI";
-            talkToJeremy.PoILocation.transform.SetParent(talkToJeremy.transform);
-            talkToJeremy.PoILocation.transform.position = new Vector3(69.00f, 5.93f, -119.09f);
-            //investigate.CreatePoI();
-            talkToJeremy.AutoUpdatePoILocation = true;
-            talkToJeremy.SetState(EQuestState.Active, true);
             talkToJeremy.ParentQuest = this;
             talkToJeremy.CompleteParentQuest = false;
+            talkToJeremy.PoILocation = new GameObject("TalkToJeremyEntry_POI").transform;
+            talkToJeremy.PoILocation.transform.SetParent(talkToJeremy.transform);
+            talkToJeremy.PoILocation.transform.position = new Vector3(69.00f, 5.93f, -119.09f);
+            talkToJeremy.SetState(EQuestState.Active, true);
             UnityEngine.Events.UnityAction talkToJeremyAction = null;
             void OnTalkToJeremyComplete()
             {
@@ -314,12 +274,7 @@ namespace CartelEnforcer
                 if (stopMeetup == null) return;
 
                 stopMeetup.Begin();
-                if (stopMeetup.PoI != null && stopMeetup.PoI.gameObject != null)
-                    stopMeetup.PoI.gameObject.SetActive(true);
-
-                if (stopMeetup.compassElement == null)
-                    stopMeetup.CreateCompassElement();
-                stopMeetup.compassElement.Visible = true;
+                UpdateQuestMapLogo(stopMeetup);
 
                 coros.Add(MelonCoroutines.Start(SpawnCarMeetup()));
 
@@ -333,14 +288,13 @@ namespace CartelEnforcer
             talkToJeremy.onComplete.AddListener(talkToJeremyAction);
 
             stopMeetup.SetEntryTitle("• Stop the Benzies from transporting cocaine\n• Avoid police attention");
-            stopMeetup.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            stopMeetup.PoILocation.name = "StopCarMeetupEntry_POI";
-            stopMeetup.PoILocation.transform.SetParent(stopMeetup.transform);
-            stopMeetup.PoILocation.transform.position = new Vector3(-32.68f, -2.54f, 168.73f);
-            stopMeetup.AutoUpdatePoILocation = true;
-            stopMeetup.SetState(EQuestState.Inactive, false);
             stopMeetup.ParentQuest = this;
             stopMeetup.CompleteParentQuest = false;
+            stopMeetup.PoILocation = new GameObject("StopCarMeetupEntry_POI").transform;
+            stopMeetup.PoILocation.transform.SetParent(stopMeetup.transform);
+            stopMeetup.PoILocation.transform.position = new Vector3(-32.68f, -2.54f, 168.73f);
+            stopMeetup.SetState(EQuestState.Inactive, false);
+
             UnityEngine.Events.UnityAction stopMeetupAction = null;
             void OnStopMeetupComplete()
             {
@@ -349,8 +303,6 @@ namespace CartelEnforcer
                 coros.Add(MelonCoroutines.Start(StartLateInvestigation()));
                 rewardStorage.AccessSettings = StorageEntity.EAccessSettings.Full;
                 escape.Begin();
-                if (escape.PoI != null)
-                    escape.PoI.gameObject.SetActive(false);
                 if (escape.compassElement != null)
                     escape.compassElement.Visible = false;
 
@@ -364,20 +316,16 @@ namespace CartelEnforcer
             stopMeetup.onComplete.AddListener(stopMeetupAction);
 
             escape.SetEntryTitle("• Steal Cocaine from the SUV\n• Escape before police arrive");
-            escape.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            escape.PoILocation.name = "EscapeEntry_POI";
-            escape.PoILocation.transform.SetParent(escape.transform);
-            escape.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            escape.AutoUpdatePoILocation = true;
-            escape.SetState(EQuestState.Inactive, false);
             escape.ParentQuest = this;
             escape.CompleteParentQuest = false;
+            escape.AutoCreatePoI = false;
+            escape.PoILocation = new GameObject("EscapeEntry_POI").transform;
+            escape.PoILocation.transform.SetParent(escape.transform);
+            escape.SetState(EQuestState.Inactive, false);
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-
             var action = (Action)OnMinPass;
-
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
             instance.onMinutePass.Add(action);
@@ -390,8 +338,6 @@ namespace CartelEnforcer
 
         private void StartQuestDetail()
         {
-            if (this.IconPrefab == null)
-                this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
             SetupHUDUI();
 
             if (hudUI != null)
@@ -401,19 +347,10 @@ namespace CartelEnforcer
                 this.hudUI.gameObject.SetActive(true);
             }
 
-            if (QuestEntry_TalkToJeremy != null)
-            {
-                QuestEntry_TalkToJeremy.CreateCompassElement();
-                if (QuestEntry_TalkToJeremy.compassElement != null)
-                    QuestEntry_TalkToJeremy.compassElement.Visible = true;
-
-                if (QuestEntry_TalkToJeremy.PoI != null)
-                    QuestEntry_TalkToJeremy.PoI.gameObject.SetActive(true);
-            }
-
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
 
+            UpdateQuestMapLogo(QuestEntry_TalkToJeremy);
             return;
         }
 

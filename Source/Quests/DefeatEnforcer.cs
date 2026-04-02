@@ -66,10 +66,7 @@ namespace CartelEnforcer
         public Quest_DefeatEnforcer() : base(ClassInjector.DerivedConstructorPointer<Quest_DefeatEnforcer>())
             => ClassInjector.DerivedConstructorBody(this);
 #endif
-
-        private GameObject UiPrefab = null;
         private bool contactMade = false;
-        private RectTransform rtIcon;
         private bool bossCombatBegun = false;
         private bool rageStageStarted = false;
         private int fightElapsed = 0;
@@ -162,34 +159,6 @@ namespace CartelEnforcer
         }
         #endregion
 
-#if IL2CPP
-        // Because by default the property uses this.Entries in Enumberable.Count, which probably causes the bug when the this.entries is il2cpp system ienumerable but expecting system ienumerable?
-        public new int ActiveEntryCount
-        {
-            get
-            {
-                if (this.Entries == null)
-                {
-                    return 0;
-                }
-
-                int count = 0;
-                foreach (QuestEntry entry in this.Entries)
-                {
-                    if (entry == null)
-                    {
-                        MelonLogger.Warning("Quest Entry got GC'd");
-                    }
-                    if (entry.State == EQuestState.Active)
-                    {
-                        count++;
-                    }
-                }
-                return count;
-            }
-        }
-#endif
-
         public void SetupSelf()
         {
             Log("SetupSelfStart");
@@ -230,11 +199,8 @@ namespace CartelEnforcer
             }
 
             // UI related code and the benzies logo
-            RectTransform rt = MakeIcon(this.transform);
-            rtIcon = rt;
-            this.IconPrefab = rt;
-            UiPrefab = MakeUIPrefab(this.transform);
-            PoIPrefab = MakePOI(this.transform, UiPrefab);
+            base.IconPrefab = MakeIcon(this.transform);
+            base.PoIPrefab = MakePOI();
 
             // Create the QuestEntry GameObjects and parent them.
             GameObject investigateObject = new GameObject("QuestEntry_Investigate");
@@ -254,29 +220,22 @@ namespace CartelEnforcer
             this.QuestEntry_Investigate = investigate;
             this.QuestEntry_WaitForContact = contact;
             this.QuestEntry_DefeatBoss = defeat;
-#if MONO
-            this.Entries = new()
-                {
-                    investigate, contact, defeat
-                };
-#else
+
             this.Entries = new();
             this.Entries.Add(investigate);
             this.Entries.Add(contact);
             this.Entries.Add(defeat);
-#endif
+
             Log("Config Entries");
 
             investigate.SetEntryTitle("• Intercept Cartel Dead Drops (0/2)\nOR\n• Defeat Cartel Gatherings (0/1)");
-            investigate.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            investigate.PoILocation.name = "InvestigateEntry_POI";
-            investigate.PoILocation.transform.SetParent(investigate.transform);
-            investigate.PoILocation.transform.position = new Vector3(0f, 0f, 0f);
-            //investigate.CreatePoI();
-            investigate.AutoUpdatePoILocation = true;
-            investigate.SetState(EQuestState.Active, true);
             investigate.ParentQuest = this;
             investigate.CompleteParentQuest = false;
+            investigate.PoILocation = new GameObject("InvestigateEntry_POI").transform;
+            investigate.PoILocation.transform.SetParent(investigate.transform);
+            investigate.AutoCreatePoI = false;
+            investigate.SetState(EQuestState.Active, true);
+
             UnityEngine.Events.UnityAction investigateAction = null;
             void OnInvestigateComplete()
             {
@@ -284,8 +243,9 @@ namespace CartelEnforcer
                 if (contact == null) return;
 
                 contact.Begin();
-                if (contact.PoI != null && contact.PoI.gameObject != null)
-                    contact.PoI.gameObject.SetActive(false);
+                UpdateQuestMapLogo(contact);
+                if (contact.PoI != null && contact.PoI.UI != null)
+                    contact.PoI.UI.gameObject.SetActive(false);
                 if (contact.compassElement != null)
                     contact.compassElement.Visible = false;
                 if (investigateAction != null)
@@ -298,14 +258,12 @@ namespace CartelEnforcer
             investigate.onComplete.AddListener(investigateAction);
 
             contact.SetEntryTitle("Wait for Manny to contact you");
-            contact.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            contact.PoILocation.name = "ContactEntry_POI";
-            contact.PoILocation.transform.SetParent(contact.transform);
-            contact.PoILocation.transform.position = new Vector3(128.27f, 1.56f, 88.96f);
-            contact.AutoUpdatePoILocation = true;
-            contact.SetState(EQuestState.Inactive, false);
             contact.ParentQuest = this;
             contact.CompleteParentQuest = false;
+            contact.PoILocation = new GameObject("ContactEntry_POI").transform;
+            contact.PoILocation.transform.SetParent(contact.transform);
+            contact.PoILocation.transform.position = new Vector3(128.27f, 1.56f, 88.96f);
+            contact.SetState(EQuestState.Inactive, false);
             UnityEngine.Events.UnityAction contactAction = null;
             void OnContactComplete()
             {
@@ -313,10 +271,7 @@ namespace CartelEnforcer
                 if (defeat == null) return;
 
                 defeat.Begin();
-                if (defeat.PoI != null)
-                    defeat.PoI.gameObject.SetActive(false);
-                if (defeat.compassElement != null)
-                    defeat.compassElement.Visible = false;
+                UpdateQuestMapLogo(defeat);
                 if (contactAction != null)
                 {
                     contact.onComplete.RemoveListener(contactAction);
@@ -327,14 +282,12 @@ namespace CartelEnforcer
             contact.onComplete.AddListener(contactAction);
 
             defeat.SetEntryTitle("Defeat the Cartel Brute");
-            defeat.PoILocation = UnityEngine.Object.Instantiate(PoIPrefab).transform;
-            defeat.PoILocation.name = "DefeatEntry_POI";
-            defeat.PoILocation.transform.SetParent(defeat.transform);
-            defeat.PoILocation.transform.position = new Vector3(156.38f, 6.70f, 123.95f);
-            defeat.AutoUpdatePoILocation = true;
-            defeat.SetState(EQuestState.Inactive, false);
             defeat.ParentQuest = this;
             defeat.CompleteParentQuest = false;
+            defeat.PoILocation = new GameObject("DefeatEntry_POI").transform;
+            defeat.PoILocation.transform.SetParent(defeat.transform);
+            defeat.PoILocation.transform.position = new Vector3(156.38f, 6.70f, 123.95f);
+            defeat.SetState(EQuestState.Inactive, false);
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
@@ -352,8 +305,6 @@ namespace CartelEnforcer
 
         private void StartQuestDetail()
         {
-            if (this.IconPrefab == null)
-                this.IconPrefab = this.transform.Find("BenziesLogoQuest").GetComponent<RectTransform>();
             SetupHUDUI();
 
             if (hudUI != null)
@@ -363,18 +314,19 @@ namespace CartelEnforcer
                 this.hudUI.gameObject.SetActive(true);
             }
 
-            if (QuestEntry_Investigate != null)
-            {
-                QuestEntry_Investigate.CreateCompassElement();
-                if (QuestEntry_Investigate.compassElement != null)
-                    QuestEntry_Investigate.compassElement.Visible = false;
-
-                if (QuestEntry_Investigate.PoI != null)
-                    QuestEntry_Investigate.PoI.gameObject.SetActive(false);
-            }
-
             SetIsTracked(true);
             SetQuestState(EQuestState.Active);
+
+            if (QuestEntry_Investigate != null)
+            {
+                if (QuestEntry_Investigate.compassElement != null)
+                    QuestEntry_Investigate.compassElement.Visible = false;
+                else
+                {
+                    QuestEntry_Investigate.CreateCompassElement();
+                    QuestEntry_Investigate.compassElement.Visible = false;
+                }
+            }
 
             return;
         }
@@ -547,9 +499,6 @@ namespace CartelEnforcer
             Log("Send Message");
             fixer.MSGConversation.SendMessage(new Message("I set up a meeting for you. He is waiting near the church until 4am.", Message.ESenderType.Other, true, -1), true, true);
 
-            Log("Set Waypoint");
-            QuestEntry_WaitForContact.CreateCompassElement();
-
             contactNPC = myNpc;
 
             yield return null;
@@ -705,7 +654,7 @@ namespace CartelEnforcer
             {
                 completed = true;
                 MelonCoroutines.Start(QuestReward(bossGoon));
-                this.Complete(true);
+                this.Complete();
 
                 if (bossDiedAction != null)
                 {
@@ -876,12 +825,6 @@ namespace CartelEnforcer
             }
             if (QuestEntry_Investigate != null && QuestEntry_Investigate.State == EQuestState.Active && !completed)
             {
-                if (QuestEntry_Investigate.compassElement != null && QuestEntry_Investigate.compassElement.Visible)
-                    QuestEntry_Investigate.compassElement.Visible = false;
-
-                if (QuestEntry_Investigate.PoI != null && QuestEntry_Investigate.PoI.gameObject.activeSelf)
-                    QuestEntry_Investigate.PoI.gameObject.SetActive(false);
-
                 if (QuestEntry_Investigate != null && QuestEntry_Investigate.entryUI != null && this.hudUIExists)
                     QuestEntry_Investigate.SetEntryTitle($"• Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\n• Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
 
@@ -987,22 +930,19 @@ namespace CartelEnforcer
                     if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 0 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 100)
                     {
                         contactMade = true;
-
-                        if (QuestEntry_WaitForContact != null)
+                        try
                         {
-                            try
-                            {
+                            Log("Set Waypoint");
+                            if (QuestEntry_WaitForContact.PoI != null && QuestEntry_WaitForContact.PoI.UI != null)
+                                QuestEntry_WaitForContact.PoI.UI.gameObject.SetActive(true);
+                            if (QuestEntry_WaitForContact.compassElement != null)
                                 QuestEntry_WaitForContact.compassElement.Visible = true;
-                                QuestEntry_WaitForContact.PoI.gameObject.SetActive(true);
-                                QuestEntry_WaitForContact.SetEntryTitle($"Read Manny's text message.");
-                            }
-                            catch (NullReferenceException ex)
-                            {
-                                MelonLogger.Warning("Quest Entry encountered an error: " + ex);
-                            }
+                            QuestEntry_WaitForContact.SetEntryTitle($"Read Manny's text message.");
                         }
-                        else
-                            MelonLogger.Warning("Quest Entry got GC'd");
+                        catch (NullReferenceException ex)
+                        {
+                            MelonLogger.Warning("Quest Entry encountered an error: " + ex);
+                        }
                         coros.Add(MelonCoroutines.Start(ContactSpawn()));
                     }
                 }
@@ -1022,9 +962,7 @@ namespace CartelEnforcer
                 {
                     Log("Wait For Player To Arrive To NPC and initiate dialogue");
                 }
-
             }
-
         }
 
         private void ResetGoonBoss()
@@ -1055,9 +993,7 @@ namespace CartelEnforcer
         }
 
         public QuestEntry QuestEntry_Investigate;
-
         public QuestEntry QuestEntry_WaitForContact;
-
         public QuestEntry QuestEntry_DefeatBoss;
 
     }

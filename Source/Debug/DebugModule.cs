@@ -41,8 +41,6 @@ namespace CartelEnforcer
 {
     public static class DebugModule
     {
-        public static bool debounce = false; // Keyboard Input
-
         // Coordinate ui elements for debug
         public static TextMeshProUGUI _positionText;
         public static Transform _playerTransform;
@@ -57,9 +55,7 @@ namespace CartelEnforcer
         public static IEnumerator OnInputGenerateManorQuest()
         {
             Log("Generating Manor Quest");
-            yield return Wait2;
             coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
-            debounce = false;
             Log("Generating Quest Done");
             yield return null;
         }
@@ -67,7 +63,6 @@ namespace CartelEnforcer
         public static IEnumerator OnInputGenerateEndQuest()
         {
             Log("Generating Quest");
-            yield return Wait2;
             coros.Add(MelonCoroutines.Start(GenDialogOption()));
             Log("Generating Quest Done");
             yield return null;
@@ -76,20 +71,17 @@ namespace CartelEnforcer
         public static IEnumerator OnInputGenerateAlliedIntroQuest()
         {
             Log("Generating Allied Intro Quest");
-            yield return Wait2;
             if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null)
             {
                 coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
                 Log("Generating Quest Done");
             }
-            debounce = false;
             yield return null;
         }
 
         public static IEnumerator OnInputGenerateAlliedSupplyQuest()
         {
             Log("Generating Allied Supply Quest");
-            yield return Wait2;
             // if the quest is not been activated
             if (activeAlliedSupplies == null && !alliedSuppliesActive)
             {
@@ -102,7 +94,6 @@ namespace CartelEnforcer
                 Log("  Re Enable Supply");
                 activeAlliedSupplies.ResetSelf();
             }
-            debounce = false;
             yield return null;
         }
 
@@ -127,17 +118,12 @@ namespace CartelEnforcer
             Log($"Distance: {Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition)}");
             Log($"In Radius: {Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius}");
             coros.Add(MelonCoroutines.Start(BeginDriveBy(trig)));
-            yield return Wait05;
-            debounce = false;
             yield break;
         }
         // Debug mode try to rob nearest dealer to test functionality
         public static IEnumerator OnInputStartRob()
         {
             Log("TestTryRob");
-            yield return Wait025;
-            debounce = false;
-
             Transform playerLocal = Player.Local.transform;
             Dealer[] allDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(true);
             Dealer nearest = null;
@@ -172,8 +158,6 @@ namespace CartelEnforcer
                     InitMiniQuestDialogue(random);
                 }
             }
-            yield return Wait2;
-            debounce = false;
             yield return null;
         }
 
@@ -254,27 +238,19 @@ namespace CartelEnforcer
             Log("---------------\n\n\n");
             yield return Wait05;
 
-            debounce = false;
         }
 
         // Start Cartel Intercept Contract
         public static IEnumerator OnInputInterceptContract()
         {
             MelonCoroutines.Start(StartInterceptDeal());
-            yield return Wait05;
-            debounce = false;
             yield return null;
         }
 
         // plant bomb at nearest business to player location
         public static IEnumerator OnInputStartSabotage()
         {
-            yield return Wait05;
-            debounce = false;
-
-            if (!registered) yield break;
-            if (sabotageEventActive) yield break;
-
+            sabotageEventActive = true;
             SabotageEventLocation selected = null;
             float distance = 500f;
             foreach (SabotageEventLocation loc in locations)
@@ -290,7 +266,6 @@ namespace CartelEnforcer
             yield return Wait10;
             if (!registered) yield break;
             
-            sabotageEventActive = true;
             coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
             yield return null;
         }
@@ -312,9 +287,6 @@ namespace CartelEnforcer
 
             Log($"Stealing {nearest.NPC.fullName}");
             StealCustomer(nearest.NPC);
-
-            yield return Wait05;
-            debounce = false;
 
             yield return null;
         }

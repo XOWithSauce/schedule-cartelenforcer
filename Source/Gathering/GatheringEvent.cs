@@ -11,6 +11,7 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.AmbushOverrides;
 
 #if MONO
+using ScheduleOne.Core.Items.Framework;
 using ScheduleOne.Quests;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
@@ -24,6 +25,7 @@ using ScheduleOne.NPCs.Other;
 using ScheduleOne.Combat;
 using ScheduleOne.VoiceOver;
 #else
+using Il2CppScheduleOne.Core.Items.Framework;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Cartel;
@@ -315,12 +317,8 @@ namespace CartelEnforcer
                 spawnedGatherGoons[1].Behaviour.CombatBehaviour.onBegin.AddListener(endSmokeAction);
             }
 
-
             Log("Gathering Spawned at: " + location.position.ToString());
-            if (activeTruceIntro != null && activeTruceIntro.QuestEntry_GreetGoons != null && activeTruceIntro.QuestEntry_GreetGoons.State != EQuestState.Active)
-            {
-                activeTruceIntro.QuestEntry_GreetGoons.Begin();
-            }
+            
             coros.Add(MelonCoroutines.Start(EvaluateCurrentGathering(location)));
 
             yield break;

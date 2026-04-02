@@ -792,6 +792,7 @@ namespace CartelEnforcer
             if (d.Health.IsDead || d.Health.IsKnockedOut) return false;
             if (!(TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart)) return false;
             if (d.Behaviour.GetBehaviour("Smoke Break") != null && d.Behaviour.GetBehaviour("Smoke Break").Active) return false;
+            if (d.Behaviour.activeBehaviour != null && d.Behaviour.activeBehaviour == d.Behaviour.GenericDialogueBehaviour && d.Behaviour.GenericDialogueBehaviour.targetPlayer != null) return false;
 
             return true;
         }
@@ -1121,11 +1122,22 @@ namespace CartelEnforcer
             public static bool Prefix(Customer __instance, HandoverScreen.EHandoverOutcome outcome, Contract contract, Il2CppSystem.Collections.Generic.List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
 #endif
             {
-                if (handoverByPlayer) return true;
-                if (contract.Dealer == null) return true;
+                Log("Process Handover");
+                if (handoverByPlayer)
+                {
+                    Log("Handover by player true return");
+                    return true;
+                }
+                if (contract.Dealer == null)
+                {
+                    Log($"Contract dealer is null check intercept: {contract.title} {contract.Description}");
+                    // Process Intercept contract
+                    CheckIntercept(__instance, contract, outcome, handoverByPlayer);
+                    return true;
+                }
+                Log("Process Handover Proceed");
+                // I need 2 functions
                 CheckPlayerDealerStolen(__instance, contract, outcome);
-                // Process Intercept contract
-                CheckIntercept(__instance, contract, outcome, handoverByPlayer);
                 return true; // after all this run original????
             }
 
@@ -1203,14 +1215,28 @@ namespace CartelEnforcer
 
             public static void CheckIntercept(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome, bool handoverByPlayer)
             {
-                if (!currentConfig.interceptDeals) return;
+                if (!currentConfig.interceptDeals) 
+                {
+                    Log("Intercept deals not active");
+                    return;
+                }
                 string guid = contract.GUID.ToString();
-                if (!contractGuids.ContainsKey(guid)) return;
+                if (!contractGuids.ContainsKey(guid))
+                {
+                    Log($"Contract GUID is not tracked: {contract.Title} {contract.Description}");
+                    return;
+                }
                 // mark as complete
                 if (handoverByPlayer)
+                {
+                    Log("Intercept completed by player");
                     contractGuids[guid].CompletedByPlayer = true;
+                }
                 else
+                {
+                    Log("Intercept completed by cartel");
                     contractGuids[guid].CompletedByCartel = true;
+                }
             }
 
         }

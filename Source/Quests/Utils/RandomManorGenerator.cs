@@ -5,7 +5,6 @@ using UnityEngine;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
-
 #if MONO
 using ScheduleOne;
 using ScheduleOne.Audio;
@@ -69,11 +68,10 @@ namespace CartelEnforcer
         // Additional safe spawn spots (not in room decor)
         public static readonly List<SafeSpawnSpot> lootSafeSpawns = new()
         {
-            new SafeSpawnSpot(new Vector3(153.63f, 14.24f, -56.13f), new Vector3(0f, 0f, 0f)),
-            new SafeSpawnSpot(new Vector3(159.43f, 14.24f, -57.73f), new Vector3(0f, 90f, 0f)),
-            new SafeSpawnSpot(new Vector3(173.43f, 14.24f, -57.89f), new Vector3(0f, 180f, 0f)),
-            new SafeSpawnSpot(new Vector3(166.56f, 14.24f, -51.41f), new Vector3(0f, 75f, 0f)),
-            new SafeSpawnSpot(new Vector3(153.46f, 15.28f, -54.77f), new Vector3(0f, 335f, 0f)),
+            new SafeSpawnSpot(new Vector3(153.63f, 14.42f, -56.13f), new Vector3(0f, 0f, 0f)),
+            new SafeSpawnSpot(new Vector3(159.43f, 14.42f, -57.73f), new Vector3(0f, 90f, 0f)),
+            new SafeSpawnSpot(new Vector3(173.43f, 14.42f, -57.89f), new Vector3(0f, 180f, 0f)),
+            new SafeSpawnSpot(new Vector3(166.56f, 14.42f, -51.41f), new Vector3(0f, 75f, 0f)),
         };
 
         // Check spawnable item name contains this
@@ -100,7 +98,8 @@ namespace CartelEnforcer
         private static GameObject sofaObj = null;
 
         // During quest needs to track safe
-        public static Safe questSafe = null;
+        // public static Safe questSafe = null; // would this be now just a general storage class instead so no extra class component? -> test instantiate
+        public static StorageEntity questSafe = null;
         public static Action onSafeBuilt; 
 
         // During quest needs to track to enable song
@@ -309,6 +308,23 @@ namespace CartelEnforcer
                         sofaObj = interior.Find("Double Sofa").gameObject;
                     }
                 }
+                // Check for the big safe prefab
+                else if (name.Contains("Safe_Built"))
+                {
+                    // Instantiate new from it ->
+                    // set scale 0.5 and rot 0 0 90 (similiar scale to small safe and rot so it works without additional work)
+                    NetworkObject newSafe = UnityEngine.Object.Instantiate<NetworkObject>(prefab);
+                    newSafe.gameObject.SetActive(false);
+                    newSafe.transform.localScale = new Vector3(0.5f, 0.5f, 0.5f);
+                    newSafe.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+                    // THen assign it to the small safe key
+                    if (buildablesMap["Small Safe"] == null)
+                    {
+                        buildablesMap["Small Safe"] = newSafe;
+                    }
+                    keys.Remove("Small Safe");
+
+                }
                 else
                 {
                     // If the prefab name contains the wanted string assign it in the dictionary
@@ -329,7 +345,14 @@ namespace CartelEnforcer
                 }
             }
 
+            
+
             Log("Finished initializing manor items");
+
+            foreach (KeyValuePair<string, NetworkObject> kvp in buildablesMap) 
+            {
+                Log($"ITEM: {kvp.Key} - Is assigned: {kvp.Value != null}");
+            }
             yield break;
         }
 
@@ -354,6 +377,7 @@ namespace CartelEnforcer
             // Safe spawn spot must be pre determined
             // 25% chance to use the original spawn positions
             // and 75% to use the ones assigned to upstair rooms
+
             bool useRoomSafeSpawn = false;
             bool useUpstairLivingSafe = false;
             if (UnityEngine.Random.Range(0f, 1f) < 0.75f)
@@ -363,6 +387,7 @@ namespace CartelEnforcer
                 if (UnityEngine.Random.Range(0f, 1f) < 0.5f)
                     useUpstairLivingSafe = true;
             }
+            
 
             // Generate Downstairs rooms
             DownstairsKitchenRoom kitchen = new();
@@ -441,12 +466,16 @@ namespace CartelEnforcer
                 // spawn random pos from the list of safespawnspots
                 int index = UnityEngine.Random.Range(0, lootSafeSpawns.Count);
                 NetworkObject nob = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["Small Safe"]);
-                questSafe = nob.GetComponent<Safe>();
+                questSafe = nob.GetComponent<StorageEntity>();
                 nob.transform.position = lootSafeSpawns[index].spawnSpot;
-                nob.transform.rotation = Quaternion.Euler(lootSafeSpawns[index].eulerAngles);
+                nob.transform.rotation = Quaternion.Euler(lootSafeSpawns[index].eulerAngles.x, lootSafeSpawns[index].eulerAngles.y, 90f);
+
                 nonRoomObjects.Add(nob.gameObject);
                 yield return Wait05;
                 nob.gameObject.SetActive(true);
+                yield return Wait05;
+                nob.gameObject.SetActive(true);
+
                 if (onSafeBuilt != null)
                     onSafeBuilt.Invoke();
             }
@@ -467,13 +496,6 @@ namespace CartelEnforcer
         {
             Log("Prepare Safe");
             onSafeBuilt = null;
-
-            StorageDoorAnimation doorAnim = questSafe.GetComponent<StorageDoorAnimation>();
-            doorAnim.Open();
-            yield return Wait05;
-            if (!registered) yield break;
-
-            doorAnim.Close();
 
 #if MONO
             System.Action onOpenedAction = null;
@@ -806,8 +828,9 @@ namespace CartelEnforcer
 
         public static IEnumerator OnDoorFirstEntered()
         {
-            if (Singleton<MusicPlayer>.Instance.IsPlaying)
-                Singleton<MusicPlayer>.Instance.StopAndDisableTracks();
+            // Remove ambient track if exists
+            if (Singleton<MusicManager>.Instance.IsAnyTrackPlaying)
+                Singleton<MusicManager>.Instance.StopAndDisableTracks();
 
             Log("Starting jukebox");
             if (activeJukebox == null)
@@ -850,15 +873,8 @@ namespace CartelEnforcer
                 Log("Jukebox is unassigned!");
                 return;
             }
-            Jukebox.JukeboxState newState = new();
-            newState.CurrentTrackTime = 0f;
-            newState.CurrentVolume = 0;
-            newState.IsPlaying = false;
-            newState.Sync = false;
-            newState.RepeatMode = Jukebox.ERepeatMode.None;
-            newState.Shuffle = false;
-            activeJukebox.SetJukeboxState(newState, false);
-            Log("Finished jukebox disable");
+
+            activeJukebox.SetVolume(0, false);
             return;
         }
 
@@ -962,7 +978,7 @@ namespace CartelEnforcer
             private readonly Vector3 displayCabinetPos = new Vector3(0.9627f, 0.85f, -1.2836f);
             private readonly Vector3 displayCabinetRot = Vector3.zero;
 
-            private readonly Vector3 safePos = new Vector3(0.7f, 2.37f, -1.23f);
+            private readonly Vector3 safePos = new Vector3(0.7f, 2.535f, -1.4f);
             private readonly Vector3 safeRot = new Vector3(0f, 270f, 0f);
 
             public override IEnumerator SpawnDesign()
@@ -991,12 +1007,19 @@ namespace CartelEnforcer
                 if (this.canGenerateSafe)
                 {
                     base.SpawnItemOut("Small Safe", out NetworkObject safe);
-                    questSafe = safe.GetComponent<Safe>();
+                    questSafe = safe.GetComponent<StorageEntity>();
                     safe.transform.localPosition = safePos;
-                    safe.transform.localRotation = Quaternion.Euler(safeRot);
+
+                    safe.transform.rotation = Quaternion.Euler(safeRot.x, safeRot.y, 90f); // and why is this 0?
                     yield return waitInstantiateEach;
                     if (!registered) yield break;
                     safe.gameObject.SetActive(true);
+                    
+                    // because the nob resets itself inactive it seems
+                    yield return waitInstantiateEach;
+                    if (!registered) yield break;
+                    safe.gameObject.SetActive(true);
+     
 
                     if (onSafeBuilt != null)
                         onSafeBuilt.Invoke();
@@ -1019,8 +1042,8 @@ namespace CartelEnforcer
             private readonly Vector3 woodTablePos = new Vector3(-0.7872f, 0f, -0.7836f);
             private readonly Vector3 woodTableRot = Vector3.zero;
 
-            private readonly Vector3 safePos = new Vector3(-0.74f, 0f, -0.76f);
-            private readonly Vector3 safeRot = Vector3.zero;
+            private readonly Vector3 safePos = new Vector3(-0.74f, 0.175f, -0.76f);
+            private readonly Vector3 safeRot = new Vector3(0f, 90f, 0f);
             
             public override IEnumerator SpawnDesign()
             {
@@ -1048,13 +1071,17 @@ namespace CartelEnforcer
                 if (this.canGenerateSafe)
                 {
                     base.SpawnItemOut("Small Safe", out NetworkObject safe);
-                    questSafe = safe.GetComponent<Safe>();
+                    questSafe = safe.GetComponent<StorageEntity>();
                     safe.transform.localPosition = safePos;
-                    safe.transform.localRotation = Quaternion.Euler(safeRot);
+                    safe.transform.rotation = Quaternion.Euler(safeRot.x, safeRot.y, 90f); // and why is this 0?
+
                     yield return waitInstantiateEach;
                     if (!registered) yield break;
-
                     safe.gameObject.SetActive(true);
+                    yield return waitInstantiateEach;
+                    if (!registered) yield break;
+                    safe.gameObject.SetActive(true);
+
                     if (onSafeBuilt != null)
                         onSafeBuilt.Invoke();
                 }
@@ -1224,7 +1251,9 @@ namespace CartelEnforcer
 #if MONO
                 main.loop = true;
 #else
-                particleSystem.loop = true;
+                // Thomas cant take a poo on the toilet apparently in il2cpp
+                // in il2cpp system because the il2cpp assemblies dont contain MainModule.set_loop(Boolean) and main.loop is inaccessible
+                // particleSystem.loop = true;
 #endif
 
                 main.startColor = new Color(0.4129f, 0.2529f, 0.1529f, 1f);
@@ -1241,6 +1270,7 @@ namespace CartelEnforcer
                 if (!registered) yield break;
 
                 thomas.gameObject.SetActive(true);
+                nonRoomObjects.Add(thomas.gameObject);
                 thomasNpc.Movement.SetSeat(toiletSeat);
                 thomasNpc.Avatar.LookController.AutoLookAtPlayer = true;
 

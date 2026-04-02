@@ -74,7 +74,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.4";
+        public const string Version = "1.8.5";
         public const string DownloadLink = null;
     }
 
@@ -159,6 +159,7 @@ namespace CartelEnforcer
         }
 
         #region Unity Methods
+
         public override void OnUpdate()
         {
             if (!registered || currentConfig == null)
@@ -171,7 +172,6 @@ namespace CartelEnforcer
                     string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
                     _positionText.text = formattedPosition;
                 }
-
                 if (Input.GetKey(KeyCode.LeftControl))
                 {
                     // SEE Debug #region in code for InputFunctions
@@ -179,120 +179,71 @@ namespace CartelEnforcer
                     // Left CTRL + R to Start Rob Dealer Function to nearest
                     if (Input.GetKeyDown(KeyCode.R))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputStartRob());
-                        }
+                        MelonCoroutines.Start(OnInputStartRob());
                     }
                     // Left CTRL + G to Start Drive By Instant 
                     else if (Input.GetKeyDown(KeyCode.G))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputStartDriveBy());
-                        }
+                        MelonCoroutines.Start(OnInputStartDriveBy());
                     }
                     // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
                     else if (Input.GetKeyDown(KeyCode.H))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputGiveMiniQuest());
-                        }
+                        MelonCoroutines.Start(OnInputGiveMiniQuest());
                     }
                     // Left CTRL + L to Log Big Blop of info
                     else if (Input.GetKeyDown(KeyCode.L))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputInternalLog());
-                        }
+                        MelonCoroutines.Start(OnInputInternalLog());
                     }
 
                     // Left CTRL + T Intercept random deal
                     else if (Input.GetKeyDown(KeyCode.T))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputInterceptContract());
-                        }
+                        MelonCoroutines.Start(OnInputInterceptContract());
                     }
 
                     // Left CTRL + Y Gen End quest
                     else if (Input.GetKeyDown(KeyCode.Y))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputGenerateEndQuest());
-                        }
+                        MelonCoroutines.Start(OnInputGenerateEndQuest());
                     }
 
                     // Left CTRL + U Gen Manor quest
                     else if (Input.GetKeyDown(KeyCode.U))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            MelonCoroutines.Start(OnInputGenerateManorQuest());
-                        }
+                        MelonCoroutines.Start(OnInputGenerateManorQuest());
                     }
 
                     // Left CTRL + P Gathering Spawn
                     else if (Input.GetKeyDown(KeyCode.P))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            hoursUntilNextGathering = 1;
-                            MelonCoroutines.Start(TryStartGathering());
-                            debounce = false;
-                        }
+                        hoursUntilNextGathering = 1;
+                        MelonCoroutines.Start(TryStartGathering());
                     }
 
                     // Left CTRL + N Start sabotage event
                     else if (Input.GetKeyDown(KeyCode.N))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            coros.Add(MelonCoroutines.Start(OnInputStartSabotage()));
-                        }
+                        coros.Add(MelonCoroutines.Start(OnInputStartSabotage()));
                     }
 
                     // Left CTRL + O Steal back customer
                     else if (Input.GetKeyDown(KeyCode.O))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            coros.Add(MelonCoroutines.Start(OnInputStealNearestCustomer()));
-                        }
+                        coros.Add(MelonCoroutines.Start(OnInputStealNearestCustomer()));
                     }
 
                     // Left CTRL + I Start the Allied Intro Quest
                     else if (Input.GetKeyDown(KeyCode.I))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedIntroQuest()));
-                        }
+                        coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedIntroQuest()));
                     }
 
                     // Left CTRL + K Start the Allied Supplies Quest
                     else if (Input.GetKeyDown(KeyCode.K))
                     {
-                        if (!debounce)
-                        {
-                            debounce = true;
-                            coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedSupplyQuest()));
-                        }
+                        coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedSupplyQuest()));
                     }
 
                 }
@@ -740,10 +691,7 @@ namespace CartelEnforcer
                 if (!isSaving)
                 {
                     isSaving = true;
-                    lock (cartelItemLock)
-                    {
-                        ConfigLoader.Save(cartelStolenItems);
-                    }
+                    ConfigLoader.Save(cartelStolenItems);
                     if (currentConfig.alliedExtensions)
                         ConfigLoader.Save(alliedQuests);
 
@@ -762,6 +710,7 @@ namespace CartelEnforcer
                     SabotageEvent.locations.ForEach(x => currentCooldowns.SabotageCooldowns.Add(x.business.PropertyName, x.hoursUntilEnabled));
 
                     ConfigLoader.Save(currentCooldowns);
+                    Log("Saved");
                 }
                 isSaving = false;
                 return true;

@@ -8,6 +8,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.FrequencyOverrides;
 
 #if MONO
+using ScheduleOne.Core.Audio;
 using ScheduleOne.Interaction;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Property;
@@ -26,6 +27,7 @@ using ScheduleOne.VoiceOver;
 using ScheduleOne.Persistence;
 using FishNet;
 #else
+using Il2CppScheduleOne.Core.Audio;
 using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Property;
@@ -274,7 +276,7 @@ namespace CartelEnforcer
             if (voObj == null)
                 Log("Could not find police chatter vo");
             else
-                bombSound.clip = voObj.StartEndBeep.AudioSource.clip;
+                bombSound.clip = voObj.StartEndBeep._audioSource.clip;
 
             Log("Instantiated gameobjects for event");
 
@@ -324,6 +326,7 @@ namespace CartelEnforcer
                         }
                     }
 
+                    // TODO: Change Readme to be appropriate this is not lifetime launder but active, atleast half of cap must be in the operation
                     if (location.business.LaunderingOperations.Count != 0 && location.business.currentLaunderTotal > location.business.appliedLaunderLimit * 0.5f)
                     {
                         Log("Selected by active launder operation and launder threshold met");
@@ -622,7 +625,7 @@ namespace CartelEnforcer
                 }
                 else if (distance <= maxConcussionDistance)
                 {
-                    npc.SetPanicked();
+                    npc.SetPanicked_Server();
                 }
             }
 
@@ -654,7 +657,7 @@ namespace CartelEnforcer
                     npc.Behaviour.FleeBehaviour.Disable_Networked(null);
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.33f)
-                    npc.SetPanicked();
+                    npc.SetPanicked_Server();
             }
             npcsFleeing.Clear();
 

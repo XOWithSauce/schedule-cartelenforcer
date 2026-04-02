@@ -388,10 +388,23 @@ namespace CartelEnforcer
 
             void OnQuestEndEvaluateResult(EQuestState state) 
             {
+                Log("On intercept end");
                 if (runOnce) return;
                 runOnce = true;
-                if (!contractGuids.ContainsKey(cGuid)) return;
-                contract.onQuestEnd.RemoveListener(cb);
+                if (!contractGuids.ContainsKey(cGuid)) 
+                {
+                    Log("Contract ID is not tracked, return");
+                    return;
+                }
+                if (cb != null)
+                {
+                    contract.onQuestEnd.RemoveListener(cb);
+                }
+                else
+                {
+                    Log("Callback is null cant remove listener");
+                }
+                Log("Check contract state");
                 // Check first for failed contract if true return
                 if (state == EQuestState.Failed && (dealer.Health.IsDead || dealer.Health.IsKnockedOut))
                 {
@@ -460,11 +473,13 @@ namespace CartelEnforcer
 
         public static IEnumerator WaitForContractState(CartelDealer dealer, Contract contract, Customer customer, EMapRegion region, string cGuid, bool changeInfluence, int originalXP)
         {
+            Log("Wait for complete...");
 #if MONO
             yield return new WaitUntil(() => contractGuids[cGuid].CompletedByPlayer || contractGuids[cGuid].CompletedByCartel || !registered);
 #else
             yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => contractGuids[cGuid].CompletedByPlayer || contractGuids[cGuid].CompletedByCartel || !registered));
 #endif
+            if (!registered) yield break;
 
             if (contractGuids[cGuid].CompletedByPlayer)
             {

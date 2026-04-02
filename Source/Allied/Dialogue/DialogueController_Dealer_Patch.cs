@@ -122,7 +122,7 @@ namespace CartelEnforcer
 
             if (choiceLabel == "THREATEN_CARTEL")
             {
-                __instance.Dealer.SetPanicked();
+                __instance.Dealer.SetPanicked_Server();
                 __instance.npc.PlayVO(EVOLineType.Scared, false);
             }
             else
