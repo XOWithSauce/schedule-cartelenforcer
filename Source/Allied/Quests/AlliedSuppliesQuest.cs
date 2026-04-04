@@ -40,11 +40,17 @@ namespace CartelEnforcer
 
         public Quest_AlliedSupplies() : base(ClassInjector.DerivedConstructorPointer<Quest_AlliedSupplies>())
             => ClassInjector.DerivedConstructorBody(this);
+
+        // Below members required in IL2CPP class if title is updated (Issues#19)
+        // Title known to get GCd -> use after free -> bug
+        // Subtitle has same potential so just in case declare the override on both
+        public new string title;
+        public new string Subtitle;
+
 #endif
         public RectTransform groupRt;
 
         public SupplyLocation location;
-
         public bool playerNoticed = false;
         public bool playerInterrogated = false;
         public bool interrogatingPlayer = false;
