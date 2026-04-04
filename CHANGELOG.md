@@ -1,3 +1,6 @@
+# Version 1.8.6
+- Fixed a bug in the IL2CPP version of mod where the Allied Supplies quest would cause use after free errors
+
 # Version 1.8.5
 - Ensured that mod is compatible with game version 0.4.5f1 (Anniversary Update)
 - Added more debug logging as always to the DEBUG builds (logs not visible in debugMode=true) to help with developing and troubleshooting in future
