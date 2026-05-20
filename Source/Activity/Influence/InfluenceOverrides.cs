@@ -270,6 +270,7 @@ namespace CartelEnforcer
     {
         public static bool Prefix(Customer __instance, NPCRelationData.EUnlockType unlockType, bool notify)
         {
+            Log("Unlock invoke", "OnCustomerUnlocked");
             // based on source the influence is guarded as follows
             if (!notify || !NetworkSingleton<Cartel>.InstanceExists) return true;
 
@@ -290,49 +291,51 @@ namespace CartelEnforcer
             }
             else
                 return true;
-
-#if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
-#else
-            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Hostile)
-#endif
-            {
-                return true;
-            }
-
+            Log("Unlock pass", "OnCustomerUnlocked");
             // original function is guaranteed to change influence, prefix overrides that change
-
-            // Since customers can be unlocked and locked with the steal back customer feature
-            // the influence awarded from re unlocking is half that of config customerUnlockInfluenceChange
-            // note: doesnt persist
-            if (currentConfig.stealBackCustomers) // config value to enable steal back is true
+            if (isHostile)
             {
-                List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
-                StealBackCustomer.StolenNPC stolen = null;
-                for (int i = 0; i < currentStolen.Count; i++)
+                // Since customers can be unlocked and locked with the steal back customer feature
+                // the influence awarded from re unlocking is half that of config customerUnlockInfluenceChange
+                if (currentConfig.stealBackCustomers) // config value to enable steal back is true
                 {
-                    if (currentStolen[i].npc == __instance.NPC)
+                    List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
+                    StealBackCustomer.StolenNPC stolen = null;
+                    for (int i = 0; i < currentStolen.Count; i++)
                     {
-                        stolen = currentStolen[i];
-                        break;
+                        if (currentStolen[i].npc == __instance.NPC)
+                        {
+                            stolen = currentStolen[i];
+                            break;
+                        }
+                    }
+                    if (stolen != null)
+                    {
+
+                        float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange * 0.5f;
+                        if (change != 0f && __instance.NPC.Region != EMapRegion.Northtown)
+                            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
                     }
                 }
-                if (stolen != null) 
+                else // Unlocked customer for the first time
                 {
-
-                    float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange * 0.5f;
+                    Log("First time unloock", "OnCustomerUnlocked");
+                    // flip the original influence and apply the mod one
+                    float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange;
                     if (change != 0f && __instance.NPC.Region != EMapRegion.Northtown)
                         NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
                 }
             }
-            else // Unlocked customer for the first time (this session)
+            // Original function doesnt change influence so just apply the config
+            else if (isTruced)
             {
-                // flip the original influence and apply the mod one
-                float change = -(Customer.CUSTOMER_UNLOCKED_CARTEL_INFLUENCE_CHANGE) + influenceConfig.customerUnlockInfluenceChange;
-                if (change != 0f && __instance.NPC.Region != EMapRegion.Northtown)
-                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, change);
+                Log("First time unloock truce", "OnCustomerUnlocked");
+                if (__instance.NPC.Region != EMapRegion.Northtown)
+                    NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, influenceConfig.customerUnlockInfluenceChange);
             }
-            
+
+
+
             return true;
         }
     }

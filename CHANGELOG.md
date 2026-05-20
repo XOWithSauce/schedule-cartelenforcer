@@ -1,3 +1,30 @@
+# Version 1.9.0
+- Added 1 new end game quest "True Brothers" to the Allied Extension that only happens when working with the cartel (more in readme)
+- Added console command support for toggling mod events
+- Added persistence mechanic Steal Back customers feature to track sample count
+    - Saves data into "StolenCustomers" directory in the mod data folder for each save in .json format
+- Added persistence data "daysPassedSinceEncounter" for "True Brothers" quest which generates into the Allied/QuestData for each save
+- Added a feature that sets regional cartel influence to 0, when the player Hires Cartel Dealers
+    - Note: This was supposed to be the intended behaviour after version 1.8.0, but there was no code for it, only readme documentation
+- Added a feature that gives hired Cartel Dealers Map PoI Markers to show where they are after being hired
+- Lowered the minimum contract time left from 120 -> 60 ingame minutes for when the Cartel Dealers try to steal Player dealers active contracts
+    - Note: This change increases the mod default amount of contracts stolen from player hired dealers
+- Changed the Cartel Dealers to not clear out inventory each night, in order to prevent players dealers stolen items from being cleared out
+- Changed the Player hired dealers to NOT notify player of Cartel Dealers deals, only if the Cartel Dealer is hired during truce and allied extensions is enabled
+- Removed the feature which tracked the player dealers stolen items instances within cartel dealer inventories because it didnt work consistently
+- Removed debug hotkey keybinds to toggle mod events (replaced by the console support)
+- Removed unnecessary MelonLogger.Warning log level messages
+- Simplified weapon casting related code between il2cpp and mono
+- Fixed a bug where killing Cartel dealers after they stole Player hired dealers contracts, would cause the Cartel dealer to invoke CheckAttend in a loop and cause nearby dealers to infinitely notify player of impending cartel deal
+- Fixed a bug in code where Cartel dealers contracts that were stolen from player hired dealers, would not be correctly completed by Cartel Dealers even if they made it to the customer first
+- Fixed a bug where after exitting to menu after playing mod end game quests, the next save load would not generate end game quests
+- Fixed a bug where the stolen back customers would increment sample success chance by spamming the item slot with product
+- Fixed a bug where in Allied Extensions the Cartel Dealers were not hireable in same session after choosing truce with cartel and required save reload
+- Fixed a bug where in Allied Extensions the Cartel Dealers Signing fees and Cuts were not assigned from config values in same session after choosing truce with cartel and required save reload
+- Fixed a bug where in the Four Wheels quest, the IL2CPP version of mod was counting Suburbia customers into prerequirements instead of Docks
+- Fixed a bug where SmokeBreak behaviour would cause null reference exceptions
+- Fixed a bug where during Truce, Unlocking new customers would not reduce regional influence
+
 # Version 1.8.6
 - Fixed a bug in the IL2CPP version of mod where the Allied Supplies quest would cause use after free errors
 

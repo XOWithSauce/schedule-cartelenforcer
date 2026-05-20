@@ -7,13 +7,18 @@ using UnityEngine;
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DriveByEvent;
 using static CartelEnforcer.ModDataPaths;
+using static CartelEnforcer.StealBackCustomer;
 
 #if MONO
+using ScheduleOne.NPCs;
+using ScheduleOne.Economy;
 using ScheduleOne.Cartel;
 using ScheduleOne.Levelling;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Persistence;
 #else
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.ItemFramework;
@@ -550,7 +555,7 @@ namespace CartelEnforcer
         {
             StolenItemsList itemsList = new();
             itemsList.items = new();
-            lock (cartelItemLock)
+            lock (cartelItemLock) 
             {
                 foreach (QualityItemInstance item in stolenItems)
                 {
@@ -577,7 +582,82 @@ namespace CartelEnforcer
                 }
             }
 
+        }
+        #endregion
 
+        #region Persistence for Steal Back Customers
+        public static List<StolenNPC> LoadStolenCustomers()
+        {
+            SerializedStolenNPCs serializedCustomers = new();
+            List<StolenNPC> stolenCustomers = new();
+            string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+            int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+            string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+            string filePath = GetPathTo(Path.Combine(pathStolenCustomers, fileName));
+            if (File.Exists(filePath))
+            {
+                try
+                {
+                    string json = File.ReadAllText(filePath);
+                    serializedCustomers = JsonConvert.DeserializeObject<SerializedStolenNPCs>(json);
+                }
+                catch (JsonSerializationException ex)
+                {
+                    serializedCustomers = new();
+                    serializedCustomers.stolenCustomers = new();
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer stolen customer data: " + ex.Message);
+                }
+                catch (Exception ex)
+                {
+                    serializedCustomers = new();
+                    serializedCustomers.stolenCustomers = new();
+                    MelonLogger.Warning("Failed to read CartelEnforcer stolen customer data: " + ex);
+                }
+            }
+            else
+            {
+                MelonLogger.Warning("Missing CartelEnforcer stolen customer data, creating directory and template.");
+                serializedCustomers = new();
+                serializedCustomers.stolenCustomers = new();
+                Save(serializedCustomers);
+            }
+
+            if (serializedCustomers != null && serializedCustomers.stolenCustomers.Count != 0)
+            {
+                Dictionary<string, int> idSampleDict = new();
+                serializedCustomers.stolenCustomers.ForEach(x => idSampleDict.Add(x.npcID, x.sampleChancesProcessed));
+
+                foreach(Customer c in Customer.LockedCustomers)
+                {
+                    if (idSampleDict.ContainsKey(c.NPC.ID))
+                    {
+                        StolenNPC stolenNPC = new();
+                        stolenNPC.sampleChancesProcessed = Mathf.Clamp(idSampleDict[c.NPC.ID], 1, 9);
+                        stolenNPC.npc = c.NPC;
+                        stolenCustomers.Add(stolenNPC);
+                    }
+                }
+            }
+
+            return stolenCustomers;
+        }
+
+        public static void Save(SerializedStolenNPCs stolenCustomers)
+        {
+            try
+            {
+                string orgName = LoadManager.Instance.ActiveSaveInfo.OrganisationName;
+                int slotNumber = LoadManager.Instance.ActiveSaveInfo.SaveSlotNumber;
+                string fileName = $"{slotNumber}_{SanitizeAndFormatName(orgName)}";
+                string filePath = GetPathTo(Path.Combine(pathStolenCustomers, fileName));
+                string json = JsonConvert.SerializeObject(stolenCustomers, Formatting.Indented);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                File.WriteAllText(filePath, json);
+            }
+            catch (Exception ex)
+            {
+                MelonLogger.Warning("Failed to save CartelEnforcer stolen customer data: " + ex);
+            }
         }
         #endregion
 
@@ -814,6 +894,7 @@ namespace CartelEnforcer
             public bool alliedIntroCompleted = false;
             public int timesPersuaded = 0;
             public int hoursUntilNextSupplies = 48;
+            public int daysPassedSinceEncounter = 0; // Tracks true brothers quest starting encounter
         }
 
         public static CartelAlliedQuests LoadAlliedQuests() 

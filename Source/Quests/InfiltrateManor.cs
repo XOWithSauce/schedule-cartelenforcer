@@ -561,8 +561,13 @@ namespace CartelEnforcer
             goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
             if (goon.Behaviour.CombatBehaviour.currentWeapon != null)
             {
+                AvatarRangedWeapon wep = null;
 #if MONO
-                if (goon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+                wep = goon.Behaviour.CombatBehaviour.currentWeapon as AvatarRangedWeapon;
+#else
+                wep = goon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
+#endif
+                if (wep != null)
                 {
                     float dmgMin = 26f;
                     float dmgMax = 45f;
@@ -579,44 +584,7 @@ namespace CartelEnforcer
                     wep.MinUseRange = 0.1f;
                     wep.CooldownDuration = Mathf.Lerp(0.7f, 1.2f, t);
                     wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
-
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
                 }
-#else
-                AvatarRangedWeapon wep = null;
-                try
-                {
-                    wep = goon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
-                } 
-                catch (InvalidCastException ex)
-                {
-                    MelonLogger.Warning("Failed to Cast Manor Goon Weapon Instance: " + ex);
-                }
-
-                if (wep != null)
-                {
-                    float dmgMin = 26f;
-                    float dmgMax = 45f;
-                    float t = Mathf.Clamp01(questDifficultyScalar - 1f);
-                    wep.CanShootWhileMoving = true;
-                    wep.AimTime_Max = 0.3f;
-                    wep.AimTime_Min = 0.1f;
-                    wep.HitChance_MaxRange = 65f;
-                    wep.HitChance_MinRange = 85f;
-                    wep.MaxFireRate = Mathf.Round(Mathf.Lerp(0.7f, 1.2f, t));
-                    wep.MaxMovingShotsBeforeReposition = 3;
-                    wep.MaxStationaryShotsBeforeReposition = 1;
-                    wep.MaxUseRange = 7f;
-                    wep.MinUseRange = 0.1f;
-                    wep.CooldownDuration = Mathf.Round(Mathf.Lerp(0.7f, 1.2f, t));
-                    wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
-
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
-                }
-#endif
-
                 if (goon.Behaviour.CombatBehaviour.currentWeapon != null && goon.Behaviour.CombatBehaviour.DefaultWeapon == null)
                     goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
 
@@ -646,10 +614,16 @@ namespace CartelEnforcer
             goon.Health.Health = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
 
             goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
+
             if (goon.Behaviour.CombatBehaviour.currentWeapon != null)
             {
+                AvatarMeleeWeapon wep = null;
 #if MONO
-                if (goon.Behaviour.CombatBehaviour.currentWeapon is AvatarMeleeWeapon wep)
+                wep = goon.Behaviour.CombatBehaviour.currentWeapon as AvatarMeleeWeapon;
+#else
+                wep = goon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarMeleeWeapon>();
+#endif
+                if (wep != null)
                 {
                     float dmgMin = 66f;
                     float dmgMax = 87f;
@@ -660,37 +634,8 @@ namespace CartelEnforcer
                     wep.AttackRange = Mathf.Lerp(2.3f, 3.2f, t);
                     wep.CooldownDuration = Mathf.Lerp(0.6f, 1.2f, t);
                     wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
-
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
-                }
-#else
-                AvatarMeleeWeapon wep = null;
-                try
-                {
-                    wep = goon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarMeleeWeapon>();
-                } 
-                catch (InvalidCastException ex)
-                {
-                    MelonLogger.Warning("Failed to Cast Manor Goon Weapon Instance: " + ex);
                 }
 
-                if (wep != null)
-                {
-                    float dmgMin = 66f;
-                    float dmgMax = 87f;
-                    float t = Mathf.Clamp01(questDifficultyScalar - 1f);
-                    wep.MaxUseRange = 2.7f;
-                    wep.MinUseRange = 0.2f;
-                    wep.AttackRadius = Mathf.Lerp(2.3f, 3.7f, t);
-                    wep.AttackRange = Mathf.Lerp(2.3f, 3.7f, t);
-                    wep.CooldownDuration = Mathf.Lerp(0.6f, 1.2f, t);
-                    wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
-
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
-                }
-#endif
                 if (goon.Behaviour.CombatBehaviour.currentWeapon != null && goon.Behaviour.CombatBehaviour.DefaultWeapon == null)
                     goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
             }

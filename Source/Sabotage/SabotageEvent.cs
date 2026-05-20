@@ -326,7 +326,6 @@ namespace CartelEnforcer
                         }
                     }
 
-                    // TODO: Change Readme to be appropriate this is not lifetime launder but active, atleast half of cap must be in the operation
                     if (location.business.LaunderingOperations.Count != 0 && location.business.currentLaunderTotal > location.business.appliedLaunderLimit * 0.5f)
                     {
                         Log("Selected by active launder operation and launder threshold met");
@@ -607,7 +606,7 @@ namespace CartelEnforcer
                     IDamageable damageableNpc = npc.GetComponent<IDamageable>();
                     if (damageableNpc == null)
                     {
-                        MelonLogger.Warning("Explosion recipient does not have IDamageable interface");
+                        Log("Explosion recipient does not have IDamageable interface");
                     }
                     else
                     {

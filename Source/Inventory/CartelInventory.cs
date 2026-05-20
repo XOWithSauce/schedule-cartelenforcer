@@ -173,7 +173,6 @@ namespace CartelEnforcer
                 for (int i = 0; i < items.Count; i++)
                 {
                     int realQty = 1;
-
                     QualityItemInstance tempQt = items[i].TryCast<QualityItemInstance>();
 
                     if (tempQt != null)
@@ -528,7 +527,7 @@ namespace CartelEnforcer
 
         public static void FulfillContractItems(Contract contract, CartelDealer dealer)
         {
-            // todo logic from intercept, then reuse in intercept + dealer activity
+            
             List<ItemInstance> fromPool = new();
             foreach (ProductList.Entry entry in contract.ProductList.entries)
             {

@@ -11,6 +11,8 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.AlliedExtension;
+using static CartelEnforcer.RandomManorGenerator;
+using static CartelEnforcer.Quest_TrueBrothers;
 
 #if MONO
 using ScheduleOne.Law;
@@ -31,10 +33,17 @@ using ScheduleOne.Dialogue;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.VoiceOver;
+using ScheduleOne.UI;
+using ScheduleOne.UI.Handover;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.Persistence;
+using ScheduleOne.Storage;
+using ScheduleOne.Police;
+using ScheduleOne.Vehicles;
+using ScheduleOne.Messaging;
 using FishNet;
 using FishNet.Object;
+using FishNet.Managing;
 #else
 using Il2CppScheduleOne.Law;
 using Il2CppScheduleOne.PlayerScripts;
@@ -50,14 +59,21 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.CharacterClasses;
 using Il2CppScheduleOne.VoiceOver;
+using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.UI.Handover;
 using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.Storage;
+using Il2CppScheduleOne.Police;
+using Il2CppScheduleOne.Vehicles;
+using Il2CppScheduleOne.Messaging;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
+using Il2CppFishNet.Managing;
 #endif
 
 namespace CartelEnforcer
@@ -120,6 +136,59 @@ namespace CartelEnforcer
 
     public static class EndGameQuest
     {
+
+        #region End Game Quest start eval
+        public static bool hasGeneratedDefeatEnforcerQuest = false;
+        public static bool hasGeneratedManorQuest = false;
+        public static bool hasGeneratedCarQuest = false;
+        public static IEnumerator InitializeEndGameQuest()
+        {
+            yield return Wait10;
+            if (!registered) yield break;
+
+            coros.Add(MelonCoroutines.Start(InitManorItemRef()));
+
+            Log("Evaluating End Game Quest Creation");
+
+            DialogueController frankController;
+            while (registered)
+            {
+                yield return Wait30;
+                if (!registered) yield break;
+                if (!currentConfig.endGameQuest) continue;
+
+                if (PreRequirementsMet() && !completed && !hasGeneratedDefeatEnforcerQuest && activeQuest == null)
+                {
+                    hasGeneratedDefeatEnforcerQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenDialogOption()));
+                }
+                if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest && activeManorQuest == null)
+                {
+                    hasGeneratedManorQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
+                }
+
+                bool inTimeWindowForCarQuest = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1559 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1801);
+                if (CarQuestPreRequirementsMet() && !carMeetupCompleted && !hasGeneratedCarQuest && frankDiagIndex == -1 && inTimeWindowForCarQuest && activeCarMeetupQuest == null)
+                {
+                    // Gen quest opt in time window
+                    Log("Car Quest opt generated");
+                    hasGeneratedCarQuest = true;
+                    coros.Add(MelonCoroutines.Start(GenFrankOption()));
+                }
+                else if (hasGeneratedCarQuest && !carMeetupCompleted && frankDiagIndex != -1 && !inTimeWindowForCarQuest && crankyFrank != null && activeCarMeetupQuest == null)
+                {
+                    Log("Car Quest opt removed");
+                    hasGeneratedCarQuest = false;
+                    frankController = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
+                    // Del quest opt out of time window when it exists and quest not generated
+                    coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
+                }
+            }
+
+            yield break;
+        }
+        #endregion
 
         #region End Game Quest Unexpected Alliances
         public static bool completed = false;
@@ -363,7 +432,7 @@ namespace CartelEnforcer
 
             yield return null;
         }
-        private static IEnumerator GenerateQuestState()
+        public static IEnumerator GenerateQuestState()
         {
             Log("Starting");
             GameObject newQuestObject = new GameObject();
@@ -487,6 +556,7 @@ namespace CartelEnforcer
             string text = "What can you tell me about the owner of that manor?";
             choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-$2500</color>)";
             choice.Enabled = true;
+            
 #if MONO
             choice.onChoosen.AddListener(() => { OnManorQuestChosen(controller); });
 #else
@@ -610,7 +680,7 @@ namespace CartelEnforcer
 
             yield return null;
         }
-        private static IEnumerator GenerateManorQuestState()
+        public static IEnumerator GenerateManorQuestState()
         {
             Log("Starting");
             GameObject newQuestObject = new GameObject();
@@ -813,7 +883,7 @@ namespace CartelEnforcer
 #else
             for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
             {
-                if (Customer.UnlockedCustomers[i].NPC.Region == EMapRegion.Suburbia)
+                if (Customer.UnlockedCustomers[i].NPC.Region == EMapRegion.Docks)
                 {
                     numUnlocked++;
                 }
@@ -954,7 +1024,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-        private static IEnumerator GenerateCarQuestState()
+        public static IEnumerator GenerateCarQuestState()
         {
             Log("Starting");
             GameObject newQuestObject = new GameObject();
@@ -1123,6 +1193,413 @@ namespace CartelEnforcer
 
         #endregion
 
+        #region Allied True Brothers Quest
+        public static Quest_TrueBrothers activeTrueBrothersQuest = null;
+        public static bool trueBrothersCompleted = false;
+        public static bool encounterActive = false;
+
+        public static IEnumerator SetupTrueBrothersQuest(CartelGoon spawnedGoon)
+        {
+            Log("Generate True brothers quest");
+            GameObject newQuestObject = new GameObject();
+            activeTrueBrothersQuest = newQuestObject.AddComponent<Quest_TrueBrothers>();
+            activeTrueBrothersQuest.startGoon = spawnedGoon;
+            newQuestObject.SetActive(true);
+            
+            activeTrueBrothersQuest.enabled = true;
+            activeTrueBrothersQuest.SetupSelf();
+
+            if (encounterActive)
+                encounterActive = false;
+            yield break;
+        }
+
+        // todo set somewhere?
+        public static bool TrueBrothersQuestPreRequirementsMet()
+        {
+            if (!InstanceFinder.IsServer)
+                return false;
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                return false;
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+                return false;
+#endif
+
+            // Suburbia region, has to have atleast 4 customer unlocked
+            int numUnlocked = 0;
+#if MONO
+            using (List<Customer>.Enumerator enumerator = Customer.UnlockedCustomers.GetEnumerator())
+            {
+                while (enumerator.MoveNext())
+                {
+                    if (enumerator.Current.NPC.Region == EMapRegion.Suburbia)
+                    {
+                        numUnlocked++;
+                    }
+                }
+            }
+
+#else
+            for (int i = 0; i < Customer.UnlockedCustomers.Count; i++)
+            {
+                if (Customer.UnlockedCustomers[i].NPC.Region == EMapRegion.Suburbia)
+                {
+                    numUnlocked++;
+                }
+            }
+#endif
+
+            if (numUnlocked < 4)
+                return false;
+
+            return true;
+        }
+
+        public static bool CanStartConversate()
+        {
+            return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0;
+        }
+
+        public static IEnumerator SummonConversateGoon()
+        {
+
+            // if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 2) return;
+
+            Vector3 randomDirection;
+            Vector3 randomPoint = Vector3.zero;
+            float randomRadius;
+            int maxAttempts = 8;
+            int i = 0;
+            do
+            {
+                if (!registered) yield break;
+                if (i == maxAttempts) break; // just send it
+
+                randomDirection = UnityEngine.Random.onUnitSphere;
+                randomDirection.y = 0f;
+                randomDirection.Normalize();
+                randomRadius = UnityEngine.Random.Range(20f, 32f);
+                randomPoint = Player.Local.CenterPointTransform.position + randomDirection * randomRadius;
+                i++;
+
+            } while (Player.Local.IsPointVisibleToPlayer(randomPoint));
+
+            if (randomPoint == Vector3.zero) yield break;
+
+            CartelGoon spawnedGoon = null;
+
+            // Spawn the goon
+            encounterActive = true;
+            spawnedGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
+            spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
+            spawnedGoon.Behaviour.ScheduleManager.DisableSchedule();
+            spawnedGoon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, Quest_TrueBrothers.startGoonMoveSpeed));
+
+            // create dialogue choices
+
+            DialogueController controller = spawnedGoon.DialogueHandler.gameObject.GetComponent<DialogueController>();
+
+            DialogueController.GreetingOverride greeting = new();
+            greeting.ShouldShow = true;
+            greeting.Greeting = "We need your help at the northern waterfront!";
+            greeting.VOType = EVOLineType.Greeting;
+            greeting.PlayVO = true;
+            controller.AddGreetingOverride(greeting);
+
+            DialogueController.DialogueChoice choiceAccept = new();
+            string acceptText = "Accept Quest";
+            choiceAccept.ChoiceText = $"{acceptText}";
+            choiceAccept.Enabled = true;
+
+            DialogueController.DialogueChoice choiceRefuse = new();
+            string refuseText = "Refuse Quest";
+            choiceRefuse.ChoiceText = $"{refuseText}";
+            choiceRefuse.Enabled = true;
+
+
+            bool accepted = false;
+            bool refused = false;
+
+            void AcceptChosen()
+            {
+                controller.npc.PlayVO(EVOLineType.Acknowledge);
+                controller.handler.WorldspaceRend.ShowText("Follow me", 6f);
+                controller.handler.ContinueSubmitted();
+
+                accepted = true;
+                coros.Add(MelonCoroutines.Start(SetupTrueBrothersQuest(spawnedGoon)));
+
+                //Remove Choices
+                controller.Choices = new();
+                if (controller.GreetingOverrides.Contains(greeting))
+                    controller.GreetingOverrides.Remove(greeting);
+            }
+            choiceAccept.onChoosen.AddListener((UnityEngine.Events.UnityAction)AcceptChosen);
+            controller.AddDialogueChoice(choiceAccept);
+
+            void RefuseChosen()
+            {
+                controller.npc.PlayVO(EVOLineType.Annoyed);
+                controller.handler.WorldspaceRend.ShowText("God damnit!", 6f);
+                controller.handler.ContinueSubmitted();
+
+                refused = true;
+                // Remove choices
+                controller.Choices = new();
+                if (controller.GreetingOverrides.Contains(greeting))
+                    controller.GreetingOverrides.Remove(greeting);
+            }
+            choiceRefuse.onChoosen.AddListener((UnityEngine.Events.UnityAction)RefuseChosen);
+            controller.AddDialogueChoice(choiceRefuse);
+
+            // Set destination to player
+            int maxTraverseTime = 60;
+            int traverseTime = 0;
+            bool playerConversated = false;
+            for (; ; )
+            {
+                // While traversing to player (check proximity and conversate OR interrupt -> cancel despawn)
+                yield return Wait1;
+                if (!registered) yield break;
+
+                Log($"Goon Pos: {spawnedGoon.transform.position.x} {spawnedGoon.transform.position.y} {spawnedGoon.transform.position.z}");
+
+                if (traverseTime >= maxTraverseTime)
+                {
+                    Log("Traverse time out");
+                    break;
+                }
+
+                traverseTime++;
+
+                if (spawnedGoon == null || spawnedGoon.Health.IsDead || spawnedGoon.Health.IsKnockedOut || spawnedGoon.Behaviour.activeBehaviour == spawnedGoon.Behaviour.CombatBehaviour)
+                    break;
+
+                if (playerConversated)
+                {
+                    spawnedGoon.Movement.EndSetDestination(NPCMovement.WalkResult.Success);
+                    spawnedGoon.Movement.FacePoint(Player.Local.CenterPointTransform.position);
+                    spawnedGoon.Movement.PauseMovement();
+                    controller.StartGenericDialogue(false);
+                    Log("Start Conversate");
+                    break;
+                }
+
+                float distFromPlayer = Vector3.Distance(Player.Local.CenterPointTransform.position, spawnedGoon.CenterPoint);
+                if (distFromPlayer < 3f)
+                {
+                    // start dialogue when possible
+                    Log("Wait conversate");
+#if MONO
+                    yield return new WaitUntil(CanStartConversate);
+#else
+                    yield return new WaitUntil((Il2CppSystem.Func<bool>)CanStartConversate);
+#endif
+                    Log("Can start conversate");
+                    playerConversated = true;
+                    continue;
+                }
+                else
+                {
+                    Log("Traverse to player");
+                    if (!spawnedGoon.Movement.HasDestination)
+                    {
+                        spawnedGoon.Movement.SetDestination(Player.Local.CenterPointTransform);
+                    }
+                    if (spawnedGoon.Movement.IsPaused)
+                        spawnedGoon.Movement.ResumeMovement();
+                }
+            }
+
+            // After loop ends check how the loop ended
+            bool shouldDespawn = false;
+
+            if (traverseTime >= maxTraverseTime)
+            {
+                Log("max traverse despawn");
+                // If player was not conversated remove the greeting and choices
+                controller.Choices = new();
+                if (controller.GreetingOverrides.Contains(greeting))
+                    controller.GreetingOverrides.Remove(greeting);
+                spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                yield return Wait10;
+                if (!registered) yield break;
+
+                // Decrease the chance to encounter, but not reset the value since player never saw/interacted with the npc
+                if (!isSaving)
+                    alliedQuests.daysPassedSinceEncounter = Mathf.Clamp(alliedQuests.daysPassedSinceEncounter - 2, 0, 7);
+
+                shouldDespawn = true;
+            }
+            else if (playerConversated)
+            {
+                // Wait until player made a decision
+#if MONO
+                yield return new WaitUntil(() => (accepted || refused));
+#else
+                yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => (accepted || refused)));
+#endif
+                if (!registered) yield break;
+
+                // if the player accepted -> quest starts and handles rest of the logic
+                if (accepted)
+                {
+                    spawnedGoon.Movement.SetDestination(Quest_TrueBrothers.followDestination);
+                    spawnedGoon.Movement.ResumeMovement();
+                    controller.handler.WorldspaceRend.ShowText("Follow me", 6f);
+                }
+                // if refused -> wait and despawn
+                if (refused)
+                {
+                    Log("refused despawn");
+                    spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                    yield return Wait10;
+                    if (!registered) yield break;
+
+                    shouldDespawn = true;
+                }
+
+                // Reset the chance for encounter
+                if (!isSaving)
+                    alliedQuests.daysPassedSinceEncounter = 0;
+
+            }
+            else if (spawnedGoon == null || spawnedGoon.Health.IsDead || spawnedGoon.Health.IsKnockedOut || spawnedGoon.Behaviour.activeBehaviour == spawnedGoon.Behaviour.CombatBehaviour)
+            {
+                Log("Dead or in combat despawn");
+                // If player was not conversated remove the greeting and choices
+                controller.Choices = new();
+                if (controller.GreetingOverrides.Contains(greeting))
+                    controller.GreetingOverrides.Remove(greeting);
+
+                yield return Wait10;
+                if (!registered) yield break;
+
+                // Reset the chance for encounter
+                if (!isSaving)
+                    alliedQuests.daysPassedSinceEncounter = 0;
+
+                shouldDespawn = true;
+            }
+            
+            if (shouldDespawn)
+            {
+                if (spawnedGoon.Health.IsDead || spawnedGoon.Health.IsKnockedOut)
+                    spawnedGoon.Health.Revive();
+
+                // if in combat disable
+                if (spawnedGoon.Behaviour.activeBehaviour != null && spawnedGoon.Behaviour.activeBehaviour == spawnedGoon.Behaviour.CombatBehaviour)
+                    spawnedGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
+
+                spawnedGoon.Behaviour.ScheduleManager.EnableSchedule();
+                if (!spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.activeSelf)
+                    spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true); // set stayinside enable
+                spawnedGoon.Despawn();
+                spawnedGoon = null;
+                encounterActive = false;
+            }
+            yield break;
+        }
+
+        public static IEnumerator CleanupTrueBrothersQuest()
+        {
+            yield return Wait10;
+            if (activeTrueBrothersQuest.State == EQuestState.Completed)
+                coros.Add(MelonCoroutines.Start(RewardTrueBrothersQuest()));
+
+            yield return Wait30;
+            if (!registered) yield break;
+
+            // Reset the quest goons
+            foreach (CartelGoon goon in activeTrueBrothersQuest.alliedGoons)
+            {
+                goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+                goon.Behaviour.ScheduleManager.EnableSchedule();
+                goon.Movement.SpeedController.RemoveSpeedControl("combat");
+
+                if (goon.Health.IsDead || goon.Health.IsKnockedOut)
+                    goon.Health.Revive();
+
+                goon.Despawn();
+            }
+
+            // Remove quest related instantiated items
+            foreach (GameObject go in activeTrueBrothersQuest.spawnedDecor)
+            {
+                yield return Wait05;
+                if (!registered) yield break;
+
+                if (go != null)
+                    UnityEngine.Object.Destroy(go);
+            }
+
+            NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
+            // Despawn cops
+            foreach (PoliceOfficer offc in activeTrueBrothersQuest.ambushCops)
+            {
+                NPCManager.NPCRegistry.Remove(offc);
+#if MONO
+                netManager.ServerManager.Despawn(offc.NetworkObject, DespawnType.Destroy);
+#else
+                // For some reason in IL2CPP thhe Despawn type must be marked as Nullable IL2cpp system type
+                Il2CppSystem.Nullable<DespawnType> type = new(DespawnType.Destroy);
+                netManager.ServerManager.Despawn(offc.NetworkObject, type);
+#endif
+            }
+
+            // Despawn the land vehicle
+            if (activeTrueBrothersQuest.spawnedVehicle != null)
+#if MONO
+                netManager.ServerManager.Despawn(activeTrueBrothersQuest.spawnedVehicle.NetworkObject, DespawnType.Destroy);
+#else
+            {
+                // For some reason in IL2CPP thhe Despawn type must be marked as Nullable IL2cpp system type
+                Il2CppSystem.Nullable<DespawnType> type = new(DespawnType.Destroy);
+                netManager.ServerManager.Despawn(activeTrueBrothersQuest.spawnedVehicle.NetworkObject, type);
+            }
+#endif
+
+            // Reset quest values
+            activeTrueBrothersQuest.startGoon = null;
+            activeTrueBrothersQuest.destinationStorage = null;
+            activeTrueBrothersQuest.spawnedVehicle = null;
+            activeTrueBrothersQuest.brickBase = null;
+            activeTrueBrothersQuest.alliedGoons.Clear();
+            activeTrueBrothersQuest.ambushCops.Clear();
+            activeTrueBrothersQuest.spawnedDecor.Clear();
+            activeTrueBrothersQuest.spawnedBrickPiles.Clear();
+            yield break;
+        }
+
+        public static IEnumerator RewardTrueBrothersQuest()
+        {
+            // SEnd 30k
+            NetworkSingleton<MoneyManager>.Instance.CreateOnlineTransaction("Business Investment", 30000f, 1f, string.Empty);
+
+            yield return Wait2;
+            // MSG Player inform unlocked new feature (TODO STILL)
+
+            string msg = $"Your help has been very valuable. If you need to launder some cash, I can help with bigger batches. But for now, I've wired you $30000 for your trouble.";
+            Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
+            if (thomas == null)
+            {
+                Log("Failed to find thomas obj");
+                yield break;
+            }
+
+            thomas.MSGConversation.SendMessage(
+                new Message(msg,
+                Message.ESenderType.Other,
+                true),
+                notify: true,
+                network: true);
+
+            yield break;
+        }
+#endregion
+
         #region Allied Supplies Quest
         public static Quest_AlliedSupplies activeAlliedSupplies = null;
         public static bool alliedSuppliesActive = false;
@@ -1161,7 +1638,7 @@ namespace CartelEnforcer
                     UnityEngine.Object.Destroy(alliedVanObject.gameObject);
                 alliedVanObject = null;
             }
-            
+
             // despawn goon
             if (alliedGuard != null)
             {
@@ -1220,7 +1697,7 @@ namespace CartelEnforcer
             yield return null;
         }
 
-#endregion
+        #endregion
 
         // Shared UI related code
         #region Quest UI prefabs

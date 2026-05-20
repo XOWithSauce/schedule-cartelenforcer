@@ -677,9 +677,14 @@ namespace CartelEnforcer
 
             if (bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
             {
+                AvatarRangedWeapon wep = null;
 
 #if MONO
-                if (bossGoon.Behaviour.CombatBehaviour.currentWeapon is AvatarRangedWeapon wep)
+                wep = bossGoon.Behaviour.CombatBehaviour.currentWeapon as AvatarRangedWeapon;
+#else
+                wep = bossGoon.Behaviour.CombatBehaviour.currentWeapon.TryCast<AvatarRangedWeapon>();
+#endif
+                if (wep != null)
                 {
 
                     wep.MaxUseRange = Mathf.Round(25f * questDifficultyScalar);
@@ -695,44 +700,12 @@ namespace CartelEnforcer
                     wep.AimTime_Max = 1.2f;
                     wep.RepositionAfterHit = true;
                     wep.CanShootWhileMoving = true;
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
                 }
-#else
-                AvatarRangedWeapon wep = null;
-                try
-                {
-                    wep = bossGoon.Behaviour.CombatBehaviour.currentWeapon.Cast<AvatarRangedWeapon>();
-                } 
-                catch (InvalidCastException ex)
-                {
-                    MelonLogger.Warning("Failed to Cast Gun Weapon Instance: " + ex);
-                }
-
-                if (wep != null)
-                {
-                    wep.MaxUseRange = Mathf.Round(25f * questDifficultyScalar);
-                    wep.MinUseRange = 0.4f;
-                    wep.HitChance_MaxRange = Mathf.Lerp(0.08f, 0.15f, questDifficultyScalar - 1f);
-                    wep.HitChance_MinRange = Mathf.Lerp(0.65f, 0.85f, questDifficultyScalar - 1f);
-                    wep.MaxFireRate = 2.6f - (questDifficultyScalar-1f);
-                    wep.CooldownDuration = 0.8f;
-                    wep.Damage = 55f;
-                    wep.ReloadTime = 2.3f;
-                    wep.RaiseTime = 1.3f;
-                    wep.ImpactForce = 28f;
-                    wep.AimTime_Max = 1.2f;
-                    wep.RepositionAfterHit = true;
-                    wep.CanShootWhileMoving = true;
-                    if (currentConfig.debugMode)
-                        wep.Damage = 0f;
-                }
-#endif
             }
 
             if (bossGoon.Behaviour.CombatBehaviour.DefaultWeapon == null && bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
                 bossGoon.Behaviour.CombatBehaviour.DefaultWeapon = bossGoon.Behaviour.CombatBehaviour.currentWeapon;
-            #endregion
+#endregion
             Log("Setup Boss Weapon");
         }
 
@@ -941,7 +914,7 @@ namespace CartelEnforcer
                         }
                         catch (NullReferenceException ex)
                         {
-                            MelonLogger.Warning("Quest Entry encountered an error: " + ex);
+                            Log("Quest Entry encountered an error: " + ex);
                         }
                         coros.Add(MelonCoroutines.Start(ContactSpawn()));
                     }

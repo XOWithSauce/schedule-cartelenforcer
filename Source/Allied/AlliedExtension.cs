@@ -26,6 +26,7 @@ using ScheduleOne.UI.Handover;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI.Phone.ContactsApp;
 using ScheduleOne.Persistence;
+using FishNet.Connection;
 #else
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Quests;
@@ -40,6 +41,9 @@ using Il2CppScheduleOne.UI.Handover;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI.Phone.ContactsApp;
 using Il2CppScheduleOne.Persistence;
+using Il2Cpp;
+using Il2CppScheduleOne.NPCs.CharacterClasses;
+using Il2CppFishNet.Connection;
 #endif
 
 namespace CartelEnforcer
@@ -51,6 +55,33 @@ namespace CartelEnforcer
         public static CartelAlliedQuests alliedQuests;
         public static DialogueContainer persuadeContainer;
         public static DialogueNodeData entryNode;
+
+        // Save dealers by region to map out connections 
+        // whenever player goes from undecided to truced 
+        public static Dictionary<EMapRegion, CartelDealer> dealersByRegion;
+
+
+        //Map markers for hired dealers
+        public static void MakeMapPoI(Dealer dealer) 
+        {
+            NPCManager manager = NetworkSingleton<NPCManager>.Instance;
+            NPCPoI prefab = manager.NPCPoIPrefab;
+
+            GameObject newPoI = UnityEngine.Object.Instantiate(prefab.gameObject);
+            newPoI.transform.parent = dealer.transform;
+            newPoI.transform.localPosition = Vector3.zero;
+            newPoI.transform.rotation = Quaternion.identity;
+
+            NPCPoI poiComponent = newPoI.GetComponent<NPCPoI>();
+            poiComponent.NPC = dealer;
+            poiComponent.MainText = $"Cartel Dealer ({dealer.Region})";
+
+            poiComponent.InitializeUI();
+            dealer.DealerPoI = poiComponent;
+            return;
+        }
+
+
 
         // If this truce quest gets started right when the state changes it bugs out and throws a jumpscare?
         // maybe its the active dialogue with thomas that triggers it
@@ -71,8 +102,65 @@ namespace CartelEnforcer
             {
                 Log("Status Change: adding truce dialogue");
                 // Player accepted truce with cartel
+
+                // Assign the connections for each dealer since
+                // they dont exist yet -> only after save load they get assigned normally
+                // SAme with the cuts and sign fee config values
+                NPC molly = null;
+                foreach (Dealer d in Dealer.AllPlayerDealers)
+                    if (d.ID == "molly_presley")
+                        molly = d;
                 foreach (CartelDealer d in DealerActivity.allCartelDealers)
                 {
+                    // Assign cuts
+                    switch (d.Region)
+                    {
+                        case EMapRegion.Westville:
+                            d.Cut = alliedConfig.WestvilleCartelDealerCut;
+                            d.SigningFee = alliedConfig.WestvilleCartelSigningFee;
+                            break;
+
+                        case EMapRegion.Downtown:
+                            d.Cut = alliedConfig.DowntownCartelDealerCut;
+                            d.SigningFee = alliedConfig.DowntownCartelSigningFee;
+                            break;
+
+                        case EMapRegion.Docks:
+                            d.Cut = alliedConfig.DocksCartelDealerCut;
+                            d.SigningFee = alliedConfig.DocksCartelSigningFee;
+                            break;
+
+                        case EMapRegion.Suburbia:
+                            d.Cut = alliedConfig.SuburbiaCartelDealerCut;
+                            d.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
+                            break;
+
+                        case EMapRegion.Uptown:
+                            d.Cut = alliedConfig.UptownCartelDealerCut;
+                            d.SigningFee = alliedConfig.UptownCartelSigningFee;
+                            break;
+
+                        default:
+                            d.Cut = 99f;
+                            d.SigningFee = 9999f;
+                            break;
+                    }
+
+                    // Assign connections
+                    foreach (var kvp in dealersByRegion)
+                    {
+                        // Westville must have molly unlocked
+                        if (kvp.Key == EMapRegion.Westville)
+                        {
+                            dealersByRegion[kvp.Key].RelationData.Connections.Add(molly);
+                        }
+                        else // must have previous dealer unlocked
+                        {
+                            EMapRegion prev = (EMapRegion)((int)kvp.Key - 1);
+                            dealersByRegion[kvp.Key].RelationData.Connections.Add(dealersByRegion[prev]);
+                        }
+                    }
+
                     AddPersuadeDialogue(d);
                 }
                 // the mod still tracks the quest need to revert that in config manually it seems
@@ -160,8 +248,16 @@ namespace CartelEnforcer
             timeInstance.onMinutePass.Add(new Action(ReduceCooldown));
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassEvaluateSupply;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTrySpawnEncounter;
 #else
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassEvaluateSupply;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTrySpawnEncounter;
+#endif
+            // Increase chance of trying to spawn encounter after sleep end daily+1
+#if MONO
+            NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnSleepEndIncreaseEncounterChance;
+#else
+            NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnSleepEndIncreaseEncounterChance;
 #endif
             // So when the status is still unknown, or truced here it should add the listener to the delegates?
             // To manage state change whenever it goes from unknown to truced or truced to hostile
@@ -195,7 +291,7 @@ namespace CartelEnforcer
                 if (d.ID == "molly_presley")
                     molly = d;
 
-            Dictionary<EMapRegion, CartelDealer> dealersByRegion = new();
+            dealersByRegion = new();
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced && currentConfig.alliedExtensions)
 #else
@@ -288,6 +384,14 @@ namespace CartelEnforcer
                     {
                         kvp.Value.SetUpDialogue();
                     }
+
+                    // For recruited cartel dealers, when game loads it needs
+                    // to manually make poi, otherwise at runtime it will generate
+                    // when recruited first time
+                    if (kvp.Value.IsRecruited)
+                    {
+                        MakeMapPoI(kvp.Value);
+                    }
                 }
 
                 // If the allied intro quest not yet completed and cartel truced and first dealer not yet recruited
@@ -308,6 +412,51 @@ namespace CartelEnforcer
 #else
             return (NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced || currentConfig.debugMode);
 #endif
+        }
+
+        // True brothers quest try to spawn the encounter
+        public static void OnHourPassTrySpawnEncounter()
+        {
+            // play 1 time per session only
+            if (trueBrothersCompleted) return;
+            // Only when not active
+            if (activeTrueBrothersQuest != null) return;
+            // Only when the goon is not already active
+            if (encounterActive) return;
+
+            // From 11am - 11pm
+            bool inTimeWindow = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1100 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 2300);
+            if (!inTimeWindow) return;
+            Log("InTimeWindow for True Brothers");
+
+            if (Player.Local.CurrentProperty != null) return;
+            if (!TrueBrothersQuestPreRequirementsMet())
+            {
+                Log("Prerequirements not met for True Brothers");
+                return;
+            }
+            Log("Prerequirements met for True Brothers");
+            // 7 day cycle increases chance towards the end of cycle
+            float chance = UnityEngine.Random.Range(0f, 1f);
+            float threshold = Mathf.Lerp(0.98f, 0.70f, Mathf.Clamp01((float)alliedQuests.daysPassedSinceEncounter/7f));
+            Log("Threshold: " + threshold);
+            if (chance < threshold)
+            {
+                Log("Chance doesnt hit");
+                return;
+            }
+            Log("Chance Hits Spawning encounter");
+
+            // Prerequirements passed
+            coros.Add(MelonCoroutines.Start(SummonConversateGoon()));
+        }
+
+        // True brothers quest tracks days passed since last quest (after prereqs)
+        // 7 day cycle until max chance
+        public static void OnSleepEndIncreaseEncounterChance()
+        {
+            if (!TrueBrothersQuestPreRequirementsMet()) return;
+            alliedQuests.daysPassedSinceEncounter++;
         }
     }
     
@@ -530,6 +679,33 @@ namespace CartelEnforcer
                 __instance.Begin(true);
             }
 
+            return true;
+        }
+    }
+
+    // When the player hires a cartel dealer whenever the allied extensions is enabled
+    // Set the region influence to 0
+    [HarmonyPatch(typeof(Dealer), "SetIsRecruited")]
+    public static class Dealer_SetIsRecruited_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(Dealer __instance, NetworkConnection conn)
+        {
+            // If Allied Extensions are not enabled in mod, dont patch
+            if (!currentConfig.alliedExtensions) return true;
+            // only cartel dealers
+            if (__instance.DealerType != EDealerType.CartelDealer) return true;
+
+            // Add truce check
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+#endif
+                return true;
+
+            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Region, -1f);
+            AlliedExtension.MakeMapPoI(__instance);
             return true;
         }
     }

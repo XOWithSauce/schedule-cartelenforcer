@@ -356,17 +356,12 @@ namespace CartelEnforcer
             {
                 if (dealer.Inventory.ItemSlots[i].ItemInstance == null)
                 {
+
                     List<ItemInstance> stolen = GetFromPool(1);
-                    if (stolen.Count > 0)
+                    if (stolen != null && stolen.Count > 0)
                     {
-                        dealer.Inventory.InsertItem(stolen[0], true);
-                        if (stolenInDealerInv.TryGetValue(dealer, out List<ItemInstance> listedLoot))
-                        {
-                            if (listedLoot == null)
-                                listedLoot = new();
-                            Log("Inserted extra stolen temp items");
-                            listedLoot.AddRange(stolen);
-                        }
+                        ItemInstance stolenItem = stolen[0];
+                        dealer.Inventory.ItemSlots[i].SetStoredItem(stolenItem);
                     }
                     break;
                 }

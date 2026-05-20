@@ -23,6 +23,8 @@ using ScheduleOne.Quests;
 using ScheduleOne.Product;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.UI.Handover;
+using ScheduleOne.NPCs.Other;
+using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
@@ -37,6 +39,8 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.UI.Handover;
+using Il2CppScheduleOne.NPCs.Other;
+using Il2CppFishNet;
 #endif
 
 namespace CartelEnforcer
@@ -72,8 +76,6 @@ namespace CartelEnforcer
         public static readonly object playerDealerStolenLock = new object();
         public static List<string> consumedGUIDs = new();
 
-        // track items in cartel dealer inventory that were awarded from stolen items inv
-        public static Dictionary<CartelDealer, List<ItemInstance>> stolenInDealerInv = new();
 
         public static IEnumerator EvaluateDealerState()
         {
@@ -322,12 +324,7 @@ namespace CartelEnforcer
             // The ambush logic pros:
             // - If new weapons are added, the user can simply just tap into the resource paths and add new ones without needing to update mod?
             //Cons:
-            // - The resource path is not validated by default, if some logic allows that then it would be better... Also forces user to go through game and kind of mod the game themselves...
-
-            // track the items that get stolen and put in dealer inventory, init lists with new() to not have them null
-            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
-                if (!stolenInDealerInv.ContainsKey(dealer))
-                    stolenInDealerInv.Add(dealer, new());
+            // - The resource path is not validated by default, if some logic allows that then it would be better... Also forces user to go through game and kind of mod the game themselves..
 
             Log("Setup inventory tracking stolen items");
             string resourcePath = "";
@@ -561,6 +558,12 @@ namespace CartelEnforcer
             missingAvatar = null;
             Log("Done checking Cartel Dealer avatar textures");
 
+            // To ensure it doesnt clear out the stolen temp items
+            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
+            {
+                dealer.Inventory.ClearInventoryEachNight = false;
+            }
+
             #endregion
 
         }
@@ -623,7 +626,7 @@ namespace CartelEnforcer
                     !validContracts.ContainsValue(contract) && // Not already in the list
                     !consumedGUIDs.Contains(guid) && // Not already consumed
                     !playerDealerStolen.ContainsKey(guid) && // Not already assigned to be stolen by other cartel dealers
-                    contract.GetMinsUntilExpiry() > 120) // More than 2h left
+                    contract.GetMinsUntilExpiry() > 60) // More than 1h left
                 {
                     EMapRegion reg = Map.Instance.GetRegionFromPosition(contract.DeliveryLocation.CustomerStandPoint.position);
                     if (!validContracts.ContainsKey(reg))
@@ -670,35 +673,40 @@ namespace CartelEnforcer
                     bool actionTaken = false;
 
                     // Pick player dealers active contract, treat the config value as likelihood and if its 0.0 then disabled
-                    if (validContracts.Count > 0 && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance && dealerConfig.StealDealerContractChance != 0.0f)
+                    if (validContracts.Count > 0 && validContracts.ContainsKey(d.Region) && UnityEngine.Random.Range(0.01f, 1f) < dealerConfig.StealDealerContractChance && dealerConfig.StealDealerContractChance != 0.0f)
                     {
                         Log($"Checking PlayerDealer active deal");
-                        if (validContracts.ContainsKey(d.Region))
-                        {
-                            contract = validContracts[d.Region];
-                        }
+                        contract = validContracts[d.Region];
 
-                        if (contract != null && !playerDealerStolen.ContainsKey(contract.GUID.ToString()) && !consumedGUIDs.Contains(contract.GUID.ToString()))
+                        // Ensure contract is still active and valid
+                        if (contract != null && contract.State == EQuestState.Active &&
+                            !playerDealerStolen.ContainsKey(contract.GUID.ToString()) &&
+                            !consumedGUIDs.Contains(contract.GUID.ToString()))
                         {
-                            
+
                             int originalXP = contract.CompletionXP;
                             contract.CompletionXP = 0;
                             contract.completedContractsIncremented = false;
 
                             Dealer originalDealer = contract.Dealer;
-                            lock(playerDealerStolenLock)
+                            lock (playerDealerStolenLock)
                             {
                                 playerDealerStolen.Add(contract.GUID.ToString(), new Tuple<Dealer, int>(originalDealer, originalXP));
                             }
+
                             d.AddContract(contract);
                             if (!d._attendDealBehaviour.Active)
                                 d.CheckAttendStart();
                             actionTaken = true;
-                            Log($"Stolen Contract");
+                            Log($"Stolen Player Dealer Contract {contract.Description}");
                         }
                         else
                         {
-                            Log("No valid deal found, Deal GUID already tracked or completed, skipping.");
+                            Log("Contract was not valid:");
+                            Log($"Is Null (false):{contract == null}");
+                            Log($"State (Active):{contract.State}");
+                            Log($"Consumed GUID (false):{consumedGUIDs.Contains(contract.GUID.ToString())}");
+                            Log($"Already stolen (false):{playerDealerStolen.ContainsKey(contract.GUID.ToString())}");
                         }
                     }
                     // Previous condition didnt pass another probability
@@ -1060,9 +1068,10 @@ namespace CartelEnforcer
             yield return null;
         }
 
-
         // Patch the OnUnconscious function to block Failing the stolen contracts for Cartel Dealers
         // Todo: could also add the quick revive reature later ussing this patch to IEnumerator -> sleep 30 -> respawn at hospital
+        // NOTE: during cartel stealing player dealers active deals, if the player dealer dies during this event e.g. Jane dies while Cartel has stolen theiir contract
+        //      -> This will fail the cartel dealers cooopy also? In theory its possible that it can happen but bug fixing is required anyway
 
         [HarmonyPatch(typeof(Dealer), "DealerUnconscious")]
         public static class Dealer_DealerUnconscious_Patch
@@ -1084,21 +1093,60 @@ namespace CartelEnforcer
                                 cartelDealerContracts.Add(__instance.ActiveContracts[i]);
                     }
 #endif
+                    
+                    List<Contract> normalContracts = new();
+                    List<Contract> stolenContracts = new();
                     foreach (Contract contract in cartelDealerContracts)
                     {
                         lock (playerDealerStolenLock)
                         {
-                            // todo: in future change the Player -> intercept events to also use this logic instead of relying on isDead/Unconscious states?
                             if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
                             {
-                                // player dealer contract being intercepted by cartel dealer
-                                // OR intercept deals event is active with the contract, it handles it with own mechanic
-                                // dont fail this contract since its duped to player hired dealer?
+                                stolenContracts.Add(contract);
                             }
                             else
                             {
-                                contract.Fail(true);
+                                normalContracts.Add(contract);
                             }
+                        }
+                    }
+
+                    if (normalContracts.Count > 0)
+                    {
+                        // By default the patched function runs just this
+                        foreach (Contract contract in normalContracts)
+                            contract.Fail();
+                    }
+
+                    // If contains stolen contract then that needs to be removed and customer assigned one dealer property reset
+                    if (stolenContracts.Count > 0)
+                    {
+                        foreach (Contract contract in stolenContracts)
+                        {
+                            Dealer originalPlayerDealer = null;
+                            int originalXP = 0;
+                            if (playerDealerStolen.TryGetValue(contract.GUID.ToString(), out var tuple))
+                            {
+                                originalPlayerDealer = tuple.Item1;
+                                originalXP = tuple.Item2;
+                            }
+
+                            // Reset dealer prooperty in customer copy of contract to be the original dealer
+                            Customer contractCustomer = contract.Customer.GetComponent<Customer>();
+                            if (contractCustomer != null && contractCustomer.CurrentContract != null)
+                            {
+                                if (contractCustomer.CurrentContract.Dealer != null && contractCustomer.CurrentContract.Dealer == __instance)
+                                    contractCustomer.CurrentContract.Dealer = originalPlayerDealer;
+
+                                contractCustomer.CurrentContract.CompletionXP = originalXP;
+                            }
+                            // Lastly remove it from tracking and Cartel Dealers active deals
+                            lock (playerDealerStolenLock)
+                            {
+                                playerDealerStolen.Remove(contract.GUID.ToString());
+                            }
+                            __instance.ActiveContracts.Remove(contract);
+                            __instance.currentContract = null;
                         }
                     }
 
@@ -1136,9 +1184,9 @@ namespace CartelEnforcer
                     return true;
                 }
                 Log("Process Handover Proceed");
-                // I need 2 functions
+
                 CheckPlayerDealerStolen(__instance, contract, outcome);
-                return true; // after all this run original????
+                return true;
             }
 
             public static void CheckPlayerDealerStolen(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome)
@@ -1160,8 +1208,8 @@ namespace CartelEnforcer
 
                 Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.fullName}", name);
                 Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}", name);
-                Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f}", name);
-                Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f}", name);
+                Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f} dist:{distanceToCartelDealer}", name);
+                Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f} dist:{distanceToPlayerDealer}", name);
 
                 // Player dealer completes contract
                 if (distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f)
@@ -1181,7 +1229,7 @@ namespace CartelEnforcer
 
                 }
                 // Cartel dealer completes contract
-                else if (distanceToCartelDealer < distanceToPlayerDealer && distanceToPlayerDealer < 2f)
+                else if (distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f)
                 {
                     // Remove it from Player dealer?
                     if (originalDealer.ActiveContracts.Count != 0 && originalDealer.ActiveContracts[0] == contract)
@@ -1213,6 +1261,7 @@ namespace CartelEnforcer
                 consumedGUIDs.Add(contract.GUID.ToString()); // beacuse it seems that it can be double checked later???
             }
 
+
             public static void CheckIntercept(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome, bool handoverByPlayer)
             {
                 if (!currentConfig.interceptDeals) 
@@ -1241,8 +1290,8 @@ namespace CartelEnforcer
 
         }
 
-        // Patch the CartelDealers randomize inventory function to allow for saving possibly stolen items back to inventory system before the inventory clears
-        // With this also the dealer inv can be now used to return stolen items
+        // Patch the CartelDealers randomize inventory to prevent clearing out cartel dealers inventory to reduce amount of stolen items being cleared out
+        // Only randomize whenever inventory has 0 items
         [HarmonyPatch(typeof(CartelDealer), "RandomizeInventory")]
         public static class CartelDealer_RandomizeInventory_Patch
         {
@@ -1258,44 +1307,63 @@ namespace CartelEnforcer
                     return false;
 #endif
 
-                if (stolenInDealerInv.TryGetValue(__instance, out List<ItemInstance> items))
+                bool hasItems = false;
+                foreach (ItemSlot slot in __instance.Inventory.ItemSlots)
                 {
-                    if (items == null || items.Count == 0)
-                    {
-                        // no items that were stolen from player originally
-                    }
-                    else
-                    {
-                        // Else there were items stolen, parse them for the dealer check
-                        // if they still exist??
-                        List<ItemInstance> returnable = new();
-                        for (int i = 0; i < items.Count; i++) 
-                        {
-                            for (int j = 0; j < __instance.Inventory.ItemSlots.Count; j++)
-                            {
-                                // Check if the item was untouched basically, this wont work if the dealer sold or got more of the item in inv...
-                                if (__instance.Inventory.ItemSlots[j].ItemInstance == items[i])
-                                {
-                                    returnable.Add(items[i]);
-                                }
-                            }
-                        }
-
-                        if (returnable.Count > 0)
-                        {
-                            CartelStealsItems(returnable);
-                            // Remove from List iteminstance tracking
-                            stolenInDealerInv[__instance].Clear();
-                        }
-                    }
-
-
+                    if (slot.ItemInstance != null)
+                        hasItems = true;
                 }
 
-                // Continue to randomize inventory (also clear now in the proceeding function)
-                return true;
+                if (hasItems)
+                    // Doont clear and randomize
+                    return false;
+                else
+                    // Continue to randomize inventory (also clear now in the proceeding function)
+                    return true;
             }
 
+        }
+
+
+        // Whenever SmokeBreak behaviour ends, the function for SmokeCigarette
+        // does not check that equipped item is not null, causing
+        // null reference exceptions in game logs
+        [HarmonyPatch(typeof(SmokeCigarette), "End")]
+        public static class SmokeCigarette_End_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(SmokeCigarette __instance)
+            {
+                if (!InstanceFinder.IsServer)
+                    return false;
+
+                // This null check needed and not in code otherwise the same function
+                if (__instance._equippedItem != null)
+                    __instance._npc.Unequip(__instance._equippedItem);
+
+                __instance._npc.Avatar.LookController.OverrideIKWeight(0.2f);
+                return false;
+            }
+        }
+
+
+        // Whenever the cartel is truced and benzies dealers are hired,
+        // player hired normal dealers will send messages regarding those deals disable that
+        [HarmonyPatch(typeof(Dealer), "CheckNotifyPlayerOfDeal")]
+        public static class Dealer_CheckNotifyPlayerOfDeal_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(Dealer __instance, Dealer cartelDealer, Contract contract)
+            {
+#if MONO
+                if (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced && cartelDealer.IsRecruited)
+                    return false;
+#else
+                if (currentConfig.alliedExtensions && NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Truced && cartelDealer.IsRecruited)
+                    return false;
+#endif
+                return true;
+            }
         }
 
     }

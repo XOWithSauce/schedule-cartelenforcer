@@ -5,6 +5,7 @@ using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
+using static CartelEnforcer.StealBackCustomer;
 
 #if MONO
 using ScheduleOne.Persistence;
@@ -15,6 +16,8 @@ using ScheduleOne.Economy;
 using ScheduleOne.GameTime;
 using ScheduleOne.NPCs;
 using ScheduleOne.UI;
+using ScheduleOne.UI.Handover;
+using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
 using FishNet;
 #else
@@ -26,6 +29,8 @@ using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.UI;
+using Il2CppScheduleOne.UI.Handover;
+using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
 using Il2CppFishNet;
 #endif
@@ -36,10 +41,23 @@ namespace CartelEnforcer
     {
         public static List<StolenNPC> stolenNPCs = new();
 
+        [Serializable]
+        public class StolenNPCSerialized
+        {
+            public string npcID;
+            public int sampleChancesProcessed;
+        }
+
+        [Serializable]
+        public class SerializedStolenNPCs
+        {
+            public List<StolenNPCSerialized> stolenCustomers;
+        }
+
         public class StolenNPC
         {
             public NPC npc = null;
-            public int sampleChancesProcessed = -1;
+            public int sampleChancesProcessed = -1; // After steal getts set to 1 as default
         }
 
         public static List<string> playerMessageTemplates = new()
@@ -147,6 +165,7 @@ namespace CartelEnforcer
 
                         // Store region so that no other customers will be stolen this day from it
                         region1StolenFrom = customer.NPC.Region;
+
                     }
                     else
                     {
@@ -213,6 +232,7 @@ namespace CartelEnforcer
                     return false;
                 }
             }
+            Log("Can steal: " + true);
             return true;
         }
 
@@ -242,6 +262,7 @@ namespace CartelEnforcer
 
             // notify popup
             // todo test how to make the popup not glitch ingame on first time unlock?
+            // Note: Still bugs out
             Singleton<NewCustomerPopup>.Instance.PlayPopup(c);
             Singleton<NewCustomerPopup>.Instance.Title.text = "Customer has been stolen by Cartel!";
 
@@ -277,9 +298,41 @@ namespace CartelEnforcer
         }
     }
 
-    // Controls the accept of dialogue choice, higher addiction provides higher chance to get them back with samples
-    // Also successive samples increment probability
-    // And after 3-5 its 100% again?
+
+    // Patch the Sample Consumed to increment customer sample counts
+    // return true runs the below patch for counting sample success chance
+    [HarmonyPatch(typeof(Customer), "SampleConsumed")]
+    public static class Customer_SampleConsumed_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(Customer __instance)
+        {
+            if (!currentConfig.stealBackCustomers) return true;
+
+            if (StealBackCustomer.stolenNPCs.Count == 0) return true;
+
+            List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
+            StealBackCustomer.StolenNPC stolen = null;
+
+            for (int i = 0; i < currentStolen.Count; i++)
+            {
+                if (currentStolen[i].npc == __instance.NPC)
+                {
+                    stolen = currentStolen[i];
+                    break;
+                }
+            }
+            if (stolen == null) return true;
+            stolen.sampleChancesProcessed++;
+            return true;
+        }
+    }
+
+
+    // Patch the GetSampleSuccess function to override the sample success calculation
+    // for stolen customers where sample success is based on incrementing quantity * addiction
+    // instead of quality and effects
+
     [HarmonyPatch(typeof(Customer), "GetSampleSuccess")]
     public static class Customer_GetSampleSuccess_Patch
     {
@@ -287,6 +340,7 @@ namespace CartelEnforcer
         public static void Postfix(Customer __instance, ref float __result)
         {
             if (!currentConfig.stealBackCustomers) return;
+            if (StealBackCustomer.stolenNPCs.Count == 0) return;
 
             List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
             StealBackCustomer.StolenNPC stolen = null;
@@ -310,11 +364,29 @@ namespace CartelEnforcer
                 {
                     __result = Mathf.Lerp(0.05f, 0.75f, Mathf.Clamp01(t * (1f + __instance.CurrentAddiction)));
                 }
-                stolen.sampleChancesProcessed++;
             }
         }
 
     }
 
+    // SampleWasSufficient check if instance is stolen npc and then remove from tracked
+    [HarmonyPatch(typeof(Customer), "SampleWasSufficient")]
+    public static class Customer_SampleWasSufficient_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(Customer __instance)
+        {
+            if (!currentConfig.stealBackCustomers) return true;
+
+            if (StealBackCustomer.stolenNPCs.Count == 0) return true;
+
+            StolenNPC stolen = StealBackCustomer.stolenNPCs.First(x => x.npc == __instance.NPC);
+            if (stolen != null)
+            {
+                StealBackCustomer.stolenNPCs.Remove(stolen);
+            }
+            return true;
+        }
+    }
 
 }

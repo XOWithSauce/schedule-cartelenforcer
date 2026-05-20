@@ -3,17 +3,17 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using MelonLoader;
 using UnityEngine;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
-using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DriveByEvent;
-using static CartelEnforcer.FrequencyOverrides;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.MiniQuest;
 using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.SabotageEvent;
 using static CartelEnforcer.StealBackCustomer;
 using static CartelEnforcer.AlliedExtension;
+using static CartelEnforcer.ConsoleModule;
 
 #if MONO
 using ScheduleOne.Cartel;
@@ -24,6 +24,7 @@ using ScheduleOne.Map;
 using ScheduleOne.NPCs;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI;
+using ConsoleType = ScheduleOne.Console;
 using TMPro;
 #else
 using Il2CppScheduleOne.Cartel;
@@ -35,6 +36,7 @@ using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI;
 using Il2CppTMPro;
+using ConsoleType = Il2CppScheduleOne.Console;
 #endif
 
 namespace CartelEnforcer
@@ -45,62 +47,140 @@ namespace CartelEnforcer
         public static TextMeshProUGUI _positionText;
         public static Transform _playerTransform;
 
-        [Conditional("DEBUG")]
+        [Conditional("DEBUG")] // Strips out of build the 30kb worth of strings from debug logging
         public static void Log(string msg, [CallerMemberName] string memberName = "")
         {
             if (currentConfig.debugMode)
                 MelonLogger.Msg($"[{memberName}] {msg}");
         }
 
-        public static IEnumerator OnInputGenerateManorQuest()
+        // Keep console related logging separate and contained within build string db
+        public static void LogRelease(string msg, [CallerMemberName] string memberName = "")
         {
-            Log("Generating Manor Quest");
-            coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
-            Log("Generating Quest Done");
-            yield return null;
+            MelonLogger.Msg($"[{memberName}] {msg}");
         }
 
-        public static IEnumerator OnInputGenerateEndQuest()
+        #region Console inputs and commands
+
+        public static Dictionary<string, ConsoleCommandBase> consoleTargets = new()
         {
-            Log("Generating Quest");
-            coros.Add(MelonCoroutines.Start(GenDialogOption()));
-            Log("Generating Quest Done");
-            yield return null;
+            // Events
+            { "robbery", new RobberyTarget() },
+            { "driveby", new DriveByTarget() },
+            { "miniquest", new MiniQuestTarget() },
+            { "intercept", new InterceptDealTarget() },
+            { "gathering", new GatheringTarget() },
+            { "sabotage", new SabotageTarget() },
+            { "stealback", new StealBackCustomerTarget() },
+
+            // Quests
+            { "alliedsupplies", new AlliedSuppliesTarget() },
+            { "alliedintro", new AlliedIntroTarget() },
+            { "truebrothers", new AlliedTrueBrothersTarget() },
+            { "unexpectedalliances", new UnexpectedAlliancesTarget() },
+            { "infiltratemanor", new InfiltrateManorTarget() },
+            { "fourwheels", new FourWheelsTarget() },
+        };
+        public static void RunCommand(List<string> args)
+        {
+            if (args.Count == 2 && args[1].ToLower() == "help")
+            {
+                Help();
+                return;
+            }
+
+            if (args.Count < 3)
+            {
+                LogRelease("Usage: cartelenforcer (action) (target)\n    Try: cartelenforcer help");
+                return;
+            }
+
+            string actionStr = args[1].ToLower();
+            string targetStr = args[2].ToLower();
+            // Try parse index
+
+            if (!consoleTargets.TryGetValue(targetStr, out ConsoleCommandBase target))
+            {
+                LogRelease($"Unknown command target '{targetStr}'");
+                return;
+            }
+
+            CommandSupport requestedMethod = actionStr switch
+            {
+                "list" => CommandSupport.List,
+                "start" => CommandSupport.Start,
+                _ => CommandSupport.None
+            };
+
+            if ((target.SupportedMethods & requestedMethod) == 0)
+            {
+                LogRelease($"Command target '{targetStr}' does not support requested method '{requestedMethod}'");
+                return;
+            }
+
+            switch (requestedMethod)
+            {
+                case CommandSupport.List:
+                    target.List();
+                    break;
+
+                case CommandSupport.Start:
+                    target.Start();
+                    break;
+
+            }
         }
+
+        public static void Help()
+        {
+            string listmessage = "";
+            listmessage += "\nSupported Commands:";
+
+            foreach (ConsoleCommandBase target in consoleTargets.Values)
+            {
+                listmessage += $"\n\n# {target.Name.ToUpper()}";
+                if (target.SupportedMethods.HasFlag(CommandSupport.List))
+                    listmessage += $"\ncartelenforcer list {target.Name}";
+                if (target.SupportedMethods.HasFlag(CommandSupport.Start))
+                    listmessage += $"\ncartelenforcer start {target.Name}";
+            }
+            LogRelease(listmessage);
+            return;
+        }
+        #endregion
+
+        #region Function inputs for triggering events
 
         public static IEnumerator OnInputGenerateAlliedIntroQuest()
         {
-            Log("Generating Allied Intro Quest");
             if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null)
             {
                 coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
-                Log("Generating Quest Done");
             }
-            yield return null;
+            Log("Generated Allied Intro Quest");
+            yield break;
         }
 
         public static IEnumerator OnInputGenerateAlliedSupplyQuest()
         {
-            Log("Generating Allied Supply Quest");
             // if the quest is not been activated
             if (activeAlliedSupplies == null && !alliedSuppliesActive)
             {
-                Log("  Enable Supply");
                 coros.Add(MelonCoroutines.Start(SetupTruceSuppliesQuest()));
             }
             // else quest already exists and can be reactivated
             else if (activeAlliedSupplies != null && !alliedSuppliesActive)
             {
-                Log("  Re Enable Supply");
                 activeAlliedSupplies.ResetSelf();
             }
-            yield return null;
+            LogRelease("Generated Allied Supply Quest");
+            yield break;
         }
 
         // Debug tool starts instant driveby on nearest and logs info
         public static IEnumerator OnInputStartDriveBy()
         {
-            Log("Starting Instant Drive By");
+            LogRelease("Starting Instant Drive By");
             Player.Local.Health.RecoverHealth(100f);
             float nearest = 150f;
             DriveByTrigger trig = null;
@@ -113,17 +193,12 @@ namespace CartelEnforcer
                     nearest = distanceTo;
                 }
             }
-
-            Log("Nearest Drive By Trigger");
-            Log($"Distance: {Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition)}");
-            Log($"In Radius: {Vector3.Distance(Player.Local.CenterPointTransform.position, trig.triggerPosition) <= trig.radius}");
             coros.Add(MelonCoroutines.Start(BeginDriveBy(trig)));
             yield break;
         }
-        // Debug mode try to rob nearest dealer to test functionality
+
         public static IEnumerator OnInputStartRob()
         {
-            Log("TestTryRob");
             Transform playerLocal = Player.Local.transform;
             Dealer[] allDealers = UnityEngine.Object.FindObjectsOfType<Dealer>(true);
             Dealer nearest = null;
@@ -142,9 +217,9 @@ namespace CartelEnforcer
                     nearest = d;
                 }
             }
-            Log("RunTryRob");
+            LogRelease("Starting robbery on nearest dealer");
             nearest.TryRobDealer();
-            yield return null;
+            yield break;
         }
         public static IEnumerator OnInputGiveMiniQuest()
         {
@@ -156,95 +231,22 @@ namespace CartelEnforcer
                 {
                     targetNPCs[random].HasActiveQuest = true;
                     InitMiniQuestDialogue(random);
+                    LogRelease($"Started Mini Quest for NPC: {random.fullName}");
                 }
-            }
-            yield return null;
-        }
-
-        // Log misc variables otherwise hidden
-        public static IEnumerator OnInputInternalLog()
-        {
-            string Map(int classIndex)
-            {
-                switch (classIndex)
+                else
                 {
-                    case 0:
-                        return "StealDeadDrop";
-                    case 1:
-                        return "CartelCustomerDeal";
-                    case 2:
-                        return "RobDealer";
-                    case 3:
-                        return "SprayGraffiti";
-                    default:
-                        return "Unknown";
+                    LogRelease($"Failed to give Mini Quest for NPC: {random.fullName}, try again");
                 }
             }
-
-            int hrsAmbush = NetworkSingleton<Cartel>.Instance.Activities.HoursUntilNextGlobalActivity;
-            Log($"\nAmbush Hours until next:{hrsAmbush}\n---------------");
-
-            Log("\nRegional Activity Cooldowns\n---------------");
-            CartelRegionActivities[] regInstanceActivies = NetworkSingleton<Cartel>.Instance.Activities.RegionalActivities;
-            foreach (CartelRegionActivities act in regInstanceActivies)
-            {
-                Log($"\n  Region: {act.Region}\n  HoursUntilNext: {act.HoursUntilNextActivity}\n******");
-            }
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
-            Log("\nActivity Hours Table Per Activity Type\n---------------");
-            foreach (CartelRegActivityHours rghrs in regActivityHours)
-            {
-                Log($"\n  Class: {Map(rghrs.cartelActivityClass)}\n  HoursUntil Enable: {rghrs.hoursUntilEnable}\n******");
-            }
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
-
-            Log("\nCartel Stolen Items\n---------------");
-            Log($"Balance: {CartelInventory.cartelCashAmount}");
-            foreach (QualityItemInstance itemInst in cartelStolenItems)
-            {
-                Log($"\n  Item: {itemInst.ID}\n  Quantity: {itemInst.Quantity}\n  Quality: {itemInst.Quality}\n******");
-            }
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
-            Log("\nMini Quest NPC Status\n---------------");
-            foreach (NPC npc in targetNPCs.Keys.ToList())
-            {
-                Log($"  Name: {npc.name}");
-                Log($"    Has Active Quest: {targetNPCs[npc].HasActiveQuest}");
-                Log($"    Has Asked Today: {targetNPCs[npc].HasAskedQuestToday}");
-            }
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
-            Log($"\nSabotage Event Status: {sabotageEventActive}\n---------------");
-            foreach (SabotageEventLocation loc in locations)
-            {
-                Log($"  Name: {loc.business.PropertyName}");
-                Log($"    HoursUntilEnable: {loc.hoursUntilEnabled}");
-            }
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
-            Log("\nOther cooldowns\n---------------");
-            Log($"\n DriveBy\n  HoursUntil Enable: {DriveByEvent.hoursUntilDriveBy}\n");
-            Log($"\n Intercept\n  HoursUntil Enable: {InterceptEvent.hoursUntilInterceptEvent}\n");
-            Log($"\n Gathering\n  HoursUntil Enable: {CartelGathering.hoursUntilNextGathering}\n");
-
-            Log("---------------\n\n\n");
-            yield return Wait05;
-
+            yield break;
         }
 
         // Start Cartel Intercept Contract
         public static IEnumerator OnInputInterceptContract()
         {
-            MelonCoroutines.Start(StartInterceptDeal());
-            yield return null;
+            coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
+            LogRelease("Started Intercept Deals event");
+            yield break;
         }
 
         // plant bomb at nearest business to player location
@@ -262,12 +264,12 @@ namespace CartelEnforcer
                 }
             }
 
-            Log($"Starting sabotage event in 10sec at: {selected.business.PropertyName}");
+            LogRelease($"Starting sabotage event in 10sec at: {selected.business.PropertyName}");
             yield return Wait10;
             if (!registered) yield break;
-            
+
             coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
-            yield return null;
+            yield break;
         }
 
         // test steal back feature
@@ -275,7 +277,7 @@ namespace CartelEnforcer
         {
             Customer nearest = null;
             float distance = 15f;
-            foreach(Customer c in Customer.UnlockedCustomers)
+            foreach (Customer c in Customer.UnlockedCustomers)
             {
                 if (Vector3.Distance(Player.Local.CenterPointTransform.position, c.NPC.CenterPoint) < distance)
                 {
@@ -285,11 +287,14 @@ namespace CartelEnforcer
             }
             if (nearest == null) yield break;
 
-            Log($"Stealing {nearest.NPC.fullName}");
+            LogRelease($"Stealing Nearest Customer: {nearest.NPC.fullName}");
             StealCustomer(nearest.NPC);
 
-            yield return null;
+            yield break;
         }
+
+
+        #endregion
 
         public static IEnumerator GodMode()
         {
@@ -452,6 +457,51 @@ namespace CartelEnforcer
                 default:
                     return Color.white;
             }
+        }
+    }
+
+    // Patch the Console Submit command functions to add the Debug commands
+#if MONO
+    [HarmonyPatch(typeof(ConsoleType), "SubmitCommand", new Type[] { typeof(List<string>) })]
+#else
+    [HarmonyPatch(typeof(ConsoleType), "SubmitCommand", new Type[] { typeof(Il2CppSystem.Collections.Generic.List<string>) })]
+#endif
+    public static class Console_SubmitCommand_ListString_Patch
+    {
+#if MONO
+        public static bool Prefix(ConsoleType __instance, List<string> args)
+        {
+#else
+        public static bool Prefix(ConsoleType __instance, Il2CppSystem.Collections.Generic.List<string> args)
+        {
+            List<string> managedArgs = new();
+            foreach (string arg in args) // convert from il2cpp list object to normal
+                managedArgs.Add(arg);
+#endif
+
+            if (args.Count == 0) return true;
+            if (args[0].ToLower() == "cartelenforcer")
+            {
+#if MONO
+                DebugModule.RunCommand(args);
+#else
+                DebugModule.RunCommand(managedArgs);
+#endif
+                return true;
+            }
+            return true;
+
+        }
+    }
+
+
+    // This because it needs to be patched for the above patch to work
+    [HarmonyPatch(typeof(ConsoleType), "SubmitCommand", new Type[] { typeof(string) })]
+    public static class Console_SubmitCommand_String_Patch
+    {
+        public static bool Prefix(ConsoleType __instance, string args)
+        {
+            return true;
         }
     }
 

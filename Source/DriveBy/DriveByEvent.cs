@@ -113,7 +113,7 @@ namespace CartelEnforcer
                     driveByParking = data; // Now we can use that parking lot to network the visibility + set static
                 }
                 else
-                    MelonLogger.Warning("Drive By Vehicle is null!");
+                    Log("Drive By Vehicle is null!");
 
                 if (driveByAgent != null)
                 {
@@ -127,7 +127,7 @@ namespace CartelEnforcer
                     driveByAgent.turnSpeedReductionMinRange = 6f;
                 }
                 else
-                    MelonLogger.Warning("Drive By Vehicle Agent is null!");
+                    Log("Drive By Vehicle Agent is null!");
 
                 // Then configure Thomas and weapon
                 if (thomasInstance != null)
@@ -154,7 +154,7 @@ namespace CartelEnforcer
                     } 
                     catch (InvalidCastException ex)
                     {
-                        MelonLogger.Warning("Failed to Cast Thomas Gun Weapon Instance: " + ex);
+                        Log("Failed to Cast Thomas Gun Weapon Instance: " + ex);
                     }
 
                     if (wep != null)
@@ -170,7 +170,7 @@ namespace CartelEnforcer
 #endif
                 }
                 else
-                    MelonLogger.Warning("Failed to configure Thomas Instance for Drive By events");
+                    Log("Failed to configure Thomas Instance for Drive By events");
 
                 // Lastly if the Game Object under it is inactive
                 Transform boxCar = thomasCar.Find("Box SUV");
@@ -181,7 +181,7 @@ namespace CartelEnforcer
                 Log("Finished Configuring Drive By Vehicle and Character");
             }
             else
-                MelonLogger.Warning("Failed to find Thomas Car Instance");
+                Log("Failed to find Thomas Car Instance");
 
             hoursUntilDriveBy = eventCooldowns.DriveByCooldown;
         }

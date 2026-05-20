@@ -43,6 +43,9 @@ namespace CartelEnforcer
         public static readonly string pathEventFrequency = Path.Combine("EventFrequency", "config.json");
         public static readonly string pathEventFrequencyPersist = Path.Combine("EventFrequency", "Cooldowns"); // Directory, Filename dynamic {saveslot num}_{organization}.json
 
+        // Steal back customers persistence
+        public static readonly string pathStolenCustomers = "StolenCustomers"; // Directory, Filenames dynamic {saveslot num}_{organization}.json
+
         private static bool hasCheckedInstallationPath = false;
         private static bool isModManagerInstallation = false;
 

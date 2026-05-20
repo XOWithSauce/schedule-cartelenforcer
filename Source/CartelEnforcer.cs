@@ -22,10 +22,8 @@ using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.AlliedCartelDialogue;
 using static CartelEnforcer.CartelInfluenceChangePopup_Show_Patch;
 using static CartelEnforcer.SuppliesModule;
-using static CartelEnforcer.RandomManorGenerator;
 
 #if MONO
-using ScheduleOne.Property;
 using ScheduleOne.Cartel;
 using ScheduleOne.NPCs;
 using ScheduleOne.DevUtilities;
@@ -33,7 +31,6 @@ using ScheduleOne.GameTime;
 using ScheduleOne.Persistence;
 using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
-using ScheduleOne.Dialogue;
 using FishNet.Managing.Object;
 using FishNet.Managing;
 using FishNet.Object;
@@ -44,9 +41,7 @@ using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
-using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Cartel;
-using Il2CppScheduleOne.Dialogue;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Object;
@@ -74,7 +69,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "1.8.6";
+        public const string Version = "1.9.0";
         public const string DownloadLink = null;
     }
 
@@ -172,83 +167,7 @@ namespace CartelEnforcer
                     string formattedPosition = $"X: {playerPos.x:F2}\nY: {playerPos.y:F2}\nZ: {playerPos.z:F2}";
                     _positionText.text = formattedPosition;
                 }
-                if (Input.GetKey(KeyCode.LeftControl))
-                {
-                    // SEE Debug #region in code for InputFunctions
-
-                    // Left CTRL + R to Start Rob Dealer Function to nearest
-                    if (Input.GetKeyDown(KeyCode.R))
-                    {
-                        MelonCoroutines.Start(OnInputStartRob());
-                    }
-                    // Left CTRL + G to Start Drive By Instant 
-                    else if (Input.GetKeyDown(KeyCode.G))
-                    {
-                        MelonCoroutines.Start(OnInputStartDriveBy());
-                    }
-                    // Left CTRL + H to Give Mini Quest Instantly to one of the NPCs 
-                    else if (Input.GetKeyDown(KeyCode.H))
-                    {
-                        MelonCoroutines.Start(OnInputGiveMiniQuest());
-                    }
-                    // Left CTRL + L to Log Big Blop of info
-                    else if (Input.GetKeyDown(KeyCode.L))
-                    {
-                        MelonCoroutines.Start(OnInputInternalLog());
-                    }
-
-                    // Left CTRL + T Intercept random deal
-                    else if (Input.GetKeyDown(KeyCode.T))
-                    {
-                        MelonCoroutines.Start(OnInputInterceptContract());
-                    }
-
-                    // Left CTRL + Y Gen End quest
-                    else if (Input.GetKeyDown(KeyCode.Y))
-                    {
-                        MelonCoroutines.Start(OnInputGenerateEndQuest());
-                    }
-
-                    // Left CTRL + U Gen Manor quest
-                    else if (Input.GetKeyDown(KeyCode.U))
-                    {
-                        MelonCoroutines.Start(OnInputGenerateManorQuest());
-                    }
-
-                    // Left CTRL + P Gathering Spawn
-                    else if (Input.GetKeyDown(KeyCode.P))
-                    {
-                        hoursUntilNextGathering = 1;
-                        MelonCoroutines.Start(TryStartGathering());
-                    }
-
-                    // Left CTRL + N Start sabotage event
-                    else if (Input.GetKeyDown(KeyCode.N))
-                    {
-                        coros.Add(MelonCoroutines.Start(OnInputStartSabotage()));
-                    }
-
-                    // Left CTRL + O Steal back customer
-                    else if (Input.GetKeyDown(KeyCode.O))
-                    {
-                        coros.Add(MelonCoroutines.Start(OnInputStealNearestCustomer()));
-                    }
-
-                    // Left CTRL + I Start the Allied Intro Quest
-                    else if (Input.GetKeyDown(KeyCode.I))
-                    {
-                        coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedIntroQuest()));
-                    }
-
-                    // Left CTRL + K Start the Allied Supplies Quest
-                    else if (Input.GetKeyDown(KeyCode.K))
-                    {
-                        coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedSupplyQuest()));
-                    }
-
-                }
             }
-
             return;
         }
 
@@ -301,6 +220,7 @@ namespace CartelEnforcer
             frequencyConfig = ConfigLoader.LoadEventFrequencyConfig();
             eventCooldowns = ConfigLoader.LoadPersistentCooldowns();
             dealerConfig = ConfigLoader.LoadDealerConfig();
+            stolenNPCs = ConfigLoader.LoadStolenCustomers();
 
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassChangePassive;
@@ -435,55 +355,7 @@ namespace CartelEnforcer
             yield break;
         }
 
-        public static IEnumerator InitializeEndGameQuest()
-        {
-            yield return Wait10;
-            if (!registered) yield break;
-
-            coros.Add(MelonCoroutines.Start(InitManorItemRef()));
-
-            Log("Evaluating End Game Quest Creation");
-            bool hasGeneratedQuest = false;
-            bool hasGeneratedManorQuest = false;
-            bool hasGeneratedCarQuest = false;
-            DialogueController frankController;
-            while (registered)
-            {
-                yield return Wait30;
-                if (!registered) yield break;
-                if (!currentConfig.endGameQuest) continue;
-
-                if (PreRequirementsMet() && !completed && !hasGeneratedQuest && activeQuest == null)
-                {
-                    hasGeneratedQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenDialogOption()));
-                }
-                if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest && activeManorQuest == null)
-                {
-                    hasGeneratedManorQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
-                }
-
-                bool inTimeWindowForCarQuest = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1559 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1801);
-                if (CarQuestPreRequirementsMet() && !carMeetupCompleted && !hasGeneratedCarQuest && frankDiagIndex == -1 && inTimeWindowForCarQuest && activeCarMeetupQuest == null)
-                {
-                    // Gen quest opt in time window
-                    Log("Car Quest opt generated");
-                    hasGeneratedCarQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenFrankOption()));
-                }
-                else if (hasGeneratedCarQuest && !carMeetupCompleted && frankDiagIndex != -1 && !inTimeWindowForCarQuest && crankyFrank != null && activeCarMeetupQuest == null)
-                {
-                    Log("Car Quest opt removed");
-                    hasGeneratedCarQuest = false;
-                    frankController = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
-                    // Del quest opt out of time window when it exists and quest not generated
-                    coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
-                }
-            }
-
-            yield break;
-        }
+       
 
         public static IEnumerator ExtendGoonPool()
         {
@@ -593,7 +465,6 @@ namespace CartelEnforcer
             locations.Clear();
             playerDealerStolen.Clear();
             consumedGUIDs.Clear();
-            stolenInDealerInv.Clear();
             stolenNPCs.Clear();
             supplyLocations.Clear();
             carLoot.Clear();
@@ -621,6 +492,10 @@ namespace CartelEnforcer
             activeCarMeetupQuest = null;
             carMeetupCompleted = false;
 
+            hasGeneratedDefeatEnforcerQuest = false;
+            hasGeneratedManorQuest = false;
+            hasGeneratedCarQuest = false;
+
             RandomManorGenerator.ResetManorItemRef();
 
             // allied quests
@@ -630,6 +505,10 @@ namespace CartelEnforcer
             alliedGuard = null;
             alliedVanObject = null;
             guardChoiceIndex = -1;
+
+            activeTrueBrothersQuest = null;
+            trueBrothersCompleted = false;
+            encounterActive = false;
 
             // quest npcs
             fixer = null;
@@ -694,6 +573,21 @@ namespace CartelEnforcer
                     ConfigLoader.Save(cartelStolenItems);
                     if (currentConfig.alliedExtensions)
                         ConfigLoader.Save(alliedQuests);
+
+                    if (currentConfig.stealBackCustomers)
+                    {
+                        SerializedStolenNPCs data = new();
+                        data.stolenCustomers = new();
+                        foreach(StolenNPC stolenNPC in stolenNPCs)
+                        {
+                            StolenNPCSerialized serialized = new();
+                            serialized.npcID = stolenNPC.npc.ID;
+                            serialized.sampleChancesProcessed = stolenNPC.sampleChancesProcessed;
+                            data.stolenCustomers.Add(serialized);
+                        }
+
+                        ConfigLoader.Save(data);
+                    }
 
                     CurrentEventCooldowns currentCooldowns = new();
 

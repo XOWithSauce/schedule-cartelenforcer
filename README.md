@@ -286,7 +286,7 @@ Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock
 - Customer stealing prefers recently unlocked customers more
 - Customer must have all of its connections unlocked to be valid for stealing
 - Customers that have been stolen are harder to re-unlock with free samples, with successive samples increasing probability of unlock.
-
+- Customer stealing related data gets saved for each save into `XO_WithSauce-CartelEnforcer/StolenCustomers/(save slot)_(save name).json`
 
 
 ---
@@ -294,7 +294,10 @@ Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock
 
 ## Allied Extensions
 
-Allied Extensions consists of multiple features that are added to the game while the Cartel is Truced. These features aim to provide new means of reducing influence even while Cartel is Truced in order to progress and complete the game. Additionally the Allied Extensions allow the player to Persude the Cartel Dealers to work for them!
+Allied Extensions consists of multiple features that are added to the game while the Cartel is Truced. These features aim to provide new means of reducing influence even while Cartel is Truced in order to progress and complete the game. 
+
+- Allows the player to persuade Cartel Dealers to work for them instead!
+- Adds 2 new quests: Allied Supplies & True Brothers
 
 - Allied Extensions features and cooldowns can be modified from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file
 
@@ -344,6 +347,7 @@ After player attends the meeting with Thomas and chooses Truce or loads into a s
 - Hire the Westville Cartel Dealer
 
 ---
+
 ### Allied Supplies
 
 When the Cartel is Truced an Allied Supplies Quest will periodically appear! Grab the Cartel supplies before they disappear.
@@ -367,6 +371,26 @@ When the Cartel is Truced an Allied Supplies Quest will periodically appear! Gra
     - Drying racks
     - Air pots
 
+
+---
+
+### True Brothers
+
+Help the cartel transport cocaine at the northern waterfront and fight off the police ambush! This Quest can be completed only once per session.
+
+> Completion XP: 1500
+
+- During daytime a Cartel Goon can spawn and invite you to partake in the quest
+- Follow the Cartel Goon to Northern Waterfront and help transport their cocaine
+- Fight off the police ambush with the help of your cartel friends
+
+- **Quest Prerequirements:**
+    1. Cartel must be Truced
+    2. Player must have atleast 4 customers unlocked from Suburbia region
+
+- **Rewards:**
+  - $30 000 in bank wire from Thomas
+  - Unlock feature to launder cash through the Cartel (NOT IMPLEMENTED YET)
 
 ---
 
@@ -754,7 +778,7 @@ You can add or modify custom ambush locations.
 
 ---
 
-#### Modifying Drive By Events
+### Modifying Drive By Events
 
 The Drive By events triggers and trigger radius' in addition to the driving routes can be configured from the **XO_WithSauce-CartelEnforcer/DriveBy/driveby.json**
 
@@ -822,11 +846,19 @@ Example of the .json file content:
 
 ---
 
-#### Modifying Cartel Stolen Items
+### Modifying Cartel Stolen Items
 
 1. Open `XO_WithSauce-CartelEnforcer/CartelItems/(slot number)_(organisation name).json`.
 2. You can modify the values here and change quantity of items as you wish or add new ones. Make sure the item ID is always a valid id. You can also change cartel stolen balance.
 3. If you want to reset the stolen items in the specific save, you can delete the file and it will get regenerated.
+
+---
+
+### Modifying Cartel Stolen Customers
+
+1. Open `XO_WithSauce-CartelEnforcer/StolenCustomers/(slot number)_(organisation name).json`.
+2. You can modify the *sampleChancesProcessed* value to increase success of getting back your customer. Make sure the NPC ID is always a valid id.
+3. If you want to reset the stolen customers data in the specific save, you can delete the file and it will get regenerated.
 
 ---
 
@@ -902,11 +934,9 @@ Note: Due to the way which the mod handles some of the influence changes, someti
     - Note: Must be an Integer without decimal point.
 
 
-### Debug Mode
+## Console Commands and Debug Mode
 
-In debug mode, you can see various visual cues and use keybinds to test features.
-
-> The Debug Mode does not log anything into console in version 1.4.0 and above for performance reasons. For Console Logs you need to build the dll file from source code using DEBUG configuration. See [GitHub BUILD.md](https://github.com/XOWithSauce/schedule-cartelenforcer/blob/main/.github/BUILD.md) for more info.
+In debug mode, you can see various visual cues and use console commands to test features.
 
 - **Cubes**: Visualize ambush positions. Their size corresponds to the detection radius and their color is based on the region. Standing under a cube will eventually trigger an ambush.
 - **Cyan Beams**: Visualize the four spawn points for each cube.
@@ -916,19 +946,22 @@ In debug mode, you can see various visual cues and use keybinds to test features
 
 <img src="https://i.imgur.com/7x5l97m.png">
 
-- **Keybinds:**
-    - `Left CTRL + R`: Trigger a Dealer Robbery at the nearest dealer.
-    - `Left CTRL + G`: Trigger an instant drive-by at the nearest location.
-    - `Left CTRL + H`: Give a mini-quest to one of the select NPCs.
-    - `Left CTRL + L`: Log internal mod data to the console. ( Only Debug Builds )
-    - `Left CTRL + T`: Trigger an Intercept Deal event.
-    - `Left CTRL + Y`: Generate the Unexpected Alliances Quest dialogue option for Manny, without checking prerequirements.
-    - `Left CTRL + U`: Generate the Infiltrate Manor Quest dialogue option for Ray, without checking prerequirements.
-    - `Left CTRL + P`: Instantly spawn a Cartel Gathering at a random location
-    - `Left CTRL + N`: Start a Sabotage Event at nearest supported business
-    - `Left CTRL + O`: Steal back the nearest customer to the player without checking prerequirements
-    - `Left CTRL + I`: Start the Allied Intro Quest (note: might cause errors or break the game if not truced)
-    - `Left CTRL + K`: Start the Allied Supplies Quest (note: might cause errors or break the game if not truced)
+- **COMMANDS:**
+  - **EVENTS**
+    - `cartelenforcer help`: Show in Melon Loader console all available commands
+    - `cartelenforcer start driveby`: Trigger an instant drive-by at the nearest location.
+    - `cartelenforcer start miniquest`: Give a mini-quest to one of the select NPCs
+    - `cartelenforcer start intercept`: Trigger an Intercept Deal event.
+    - `cartelenforcer start gathering`: Instantly spawn a Cartel Gathering at a random location
+    - `cartelenforcer start sabotage`: Start a Sabotage Event at nearest supported business
+    - `cartelenforcer start stealback`: Steal back the nearest customer to the player
+  - **QUESTS**
+    - `cartelenforcer start alliedintro`: (Truced) Start the Allied Intro Quest
+    - `cartelenforcer start alliedsupplies`: (Truced) Start the Allied Supplies Quest 
+    - `cartelenforcer start truebrothers`: (Truced) Start the True Brothers Quest 
+    - `cartelenforcer start unexpectedalliances`: (Hostile) Start the Unexpected Alliances Quest
+    - `cartelenforcer start infiltratemanor`: (Hostile) Start the Infiltrate Manor Quest
+    - `cartelenforcer start fourwheels`: (Hostile) Start the Four Wheels Quest
 
 ---
 
