@@ -8,6 +8,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 ### Table of Contents
 * [Features](#features)
 * [Installation](#installation)
+* [Config Files Locations](#config-files-locations)
 * [Configuration](#configuration)
 * [Events and Activities](#events-and-activities)
     * [Realistic Robberies](#realistic-robberies)
@@ -22,6 +23,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Greet the Gathering Goons](#greet-the-gathering-goons)
     * [Allied Intro](#allied-intro)
     * [Allied Supplies](#allied-supplies)
+    * [True Brothers Quest](#true-brothers)
 * [End Game Quests](#end-game-quests)
     * [Unexpected Alliances](#unexpected-alliances)
     * [Infiltrate Manor](#infiltrate-manor)
@@ -35,9 +37,10 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
         * [Modifying Ambush Settings](#modifying-ambush-settings)
     * [Modifying Drive By Events](#modifying-drive-by-events)
     * [Modifying Cartel Stolen Items](#modifying-cartel-stolen-items)
+    * [Modifying Cartel Stolen Customers](#modifying-cartel-stolen-customers)
     * [Modifying Influence Changing Events](#modifying-influence-changing-events)
     * [Modifying Allied Settings](#modifying-allied-settings)
-* [Debug Mode](#debug-mode)
+* [Console Commands & Debug Mode](#console-commands-and-debug-mode)
 * [In Multiplayer](#in-multiplayer)
 
 ---
