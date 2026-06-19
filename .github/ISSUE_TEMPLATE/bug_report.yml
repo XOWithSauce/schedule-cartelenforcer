@@ -1,0 +1,64 @@
+name: Bug report
+description: Create a bug or an error issues to help develop the project
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please complete the fields below. **Note: Issues containing Links/URLs and/or File attachments will be discarded.**
+
+  - type: checkboxes
+    id: backend-type
+    attributes:
+      label: Scripting Backend
+      options:
+        - label: IL2CPP
+        - label: MONO
+    validations:
+      required: true
+
+  - type: input
+    id: game-version
+    attributes:
+      label: Game version
+      placeholder: "e.g., 0.4.2f9"
+    validations:
+      required: true
+
+  - type: input
+    id: mod-version
+    attributes:
+      label: Mod version
+      placeholder: "e.g., 1.8.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the bug
+      description: "A clear and concise description of what the bug is, where it triggered or what happened"
+      placeholder: "I encountered error X while doing Y..."
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: To Reproduce
+      description: "Steps to reproduce (Can be empty if unclear)"
+      placeholder: "1. Load save, 2. Do X and Y, ..."
+      render: text
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Add any relevant logs in plaintext from the Melon Loader console AND / OR Latest.log (Can be empty if unclear)"
+      placeholder: "Plaintext logs here"
+      render: text
+    validations:
+      required: false

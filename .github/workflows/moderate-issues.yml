@@ -1,0 +1,158 @@
+name: Moderate Repository Issues and Comments
+on:
+  issues:
+    types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  issues: write
+
+jobs:
+  moderate-issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check Issuer
+        id: check_issuer
+        env:
+          ACTOR: ${{ github.actor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "OWNER=false" >> $GITHUB_ENV
+          echo "INVALID=false" >> $GITHUB_ENV
+          
+          if [ "$ACTOR" = "$OWNER" ]; then
+            echo "OWNER=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check Scheme
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+
+        run: |
+          if grep -E -i "([[:alnum:]]+://)" <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check Slash
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+        run: |
+          if grep -E -i "(\/\/[[:alnum:]])" <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check Domain Prefix
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+        run: |
+          if grep -E -i "www\." <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check MD Links
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+        run: |
+          if grep -E -i "\[[^]]+\]\([^)]+\)" <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check HTML Entities
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+        run: |
+          if grep -E -i "&(#x?)?[[:alnum:]]+;" <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Check HTML Tags
+        if: env.OWNER != 'true' && env.INVALID != 'true'
+        env:
+          ISSUE: |
+            ${{ github.event.issue.title || '' }}
+            ${{ github.event.issue.body || '' }}
+            ${{ github.event.comment.body || '' }}
+        run: |
+          if grep -E -i "<a[[:space:]]+href[[:space:]]*=" <<< "$ISSUE" > /dev/null; then
+            echo "INVALID=true" >> $GITHUB_ENV
+          fi
+
+      - name: Refuse Content
+        if: env.OWNER != 'true' && env.INVALID == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue_number = context.issue.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const comment = context.payload.comment;
+
+            if (comment) {
+              try {
+                await github.rest.issues.deleteComment({
+                  owner, repo, comment_id: comment.id
+                });
+              } catch (err) {
+                console.log("Failed to delete comment");
+              }
+            }
+
+            if (!comment) {
+              try {
+                await github.rest.issues.update({
+                  owner, repo, issue_number,
+                  title: "[AUTOMOD] Invalid issue",
+                  state: "closed"
+                });
+              } catch (err) {
+                console.log("Failed to update and close issue");
+              }
+            } else {
+              try {
+                await github.rest.issues.update({
+                  owner, repo, issue_number,
+                  state: "closed"
+                });
+              } catch (err) {
+                console.log("Failed to close issue");
+              }
+            }
+
+            try {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number,
+                body: "Invalid content auto removed"
+              });
+            } catch (err) {
+              console.log("Failed to create automod comment");
+            }
+            
+            try {
+              await github.rest.issues.lock({
+                owner, repo, issue_number,
+                lock_reason: "spam"
+              });
+            } catch (err) {
+              console.log("Failed to lock issue");
+            }
