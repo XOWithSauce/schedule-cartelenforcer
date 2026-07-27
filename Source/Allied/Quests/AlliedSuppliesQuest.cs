@@ -1,5 +1,3 @@
-
-
 using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
@@ -10,20 +8,22 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.SuppliesModule;
 
 #if MONO
+using ScheduleOne.Cartel;
+using ScheduleOne.PlayerScripts;
 using ScheduleOne.GameTime;
 using ScheduleOne.Quests;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Levelling;
 using ScheduleOne.Persistence;
-using ScheduleOne.Map;
 using FishNet;
 #else
+using Il2CppScheduleOne.Cartel;
+using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Persistence;
-using Il2CppScheduleOne.Map;
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.Injection;
 #endif
@@ -33,20 +33,24 @@ namespace CartelEnforcer
 #if IL2CPP
     [RegisterTypeInIl2Cpp]
 #endif
-    public class Quest_AlliedSupplies : Quest
+    public class Quest_AlliedSupplies : ModQuestBase
     {
-#if IL2CPP
-        public Quest_AlliedSupplies(IntPtr ptr) : base(ptr) { }
-
+        protected readonly QuestHelperBase<Quest_AlliedSupplies> _helper;
+#if MONO
+        public Quest_AlliedSupplies()
+        {
+            _helper = new QuestHelperBase<Quest_AlliedSupplies>(this);
+        }
+#else
+        public Quest_AlliedSupplies(IntPtr ptr) : base(ptr)
+        {
+            _helper = new QuestHelperBase<Quest_AlliedSupplies>(this);
+        }
         public Quest_AlliedSupplies() : base(ClassInjector.DerivedConstructorPointer<Quest_AlliedSupplies>())
             => ClassInjector.DerivedConstructorBody(this);
 
-        // Below members required in IL2CPP class if title is updated (Issues#19)
-        // Title known to get GCd -> use after free -> bug
-        // Subtitle has same potential so just in case declare the override on both
         public new string title;
         public new string Subtitle;
-
 #endif
         public RectTransform groupRt;
 
@@ -54,6 +58,11 @@ namespace CartelEnforcer
         public bool playerNoticed = false;
         public bool playerInterrogated = false;
         public bool interrogatingPlayer = false;
+
+        public QuestEntry QuestEntry_LocateSupplies;
+        private UnityAction _locateSuppliesAction;
+
+        public QuestEntry QuestEntry_GatherSupplies;
 
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
@@ -187,122 +196,29 @@ namespace CartelEnforcer
         {
             alliedSuppliesActive = true;
 
-            Log("QuestInit");
-            this.name = "Quest_AlliedSupplies";
-            Expires = true;
-            title = "Allied Supplies";
-            CompletionXP = 300;
-            Description = "Pick up Cartel supplies";
-            TrackOnBegin = false;
-            autoInitialize = false;
-            AutoCompleteOnAllEntriesComplete = false;
-            AutoStartFirstEntry = false;
-            ShouldSendExpiryReminder = true;
-
-            Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
-            if (target != null)
-            {
-                this.transform.SetParent(target);
-            }
-
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-            Expiry = new GameDateTime(_elapsedDays: instance.ElapsedDays + 1, _time: 401);
-            ExpiryVisibility = EExpiryVisibility.Always;
+            GameDateTime questExpiry = new GameDateTime(_elapsedDays: instance.ElapsedDays + 1, _time: 401);
+
+            _helper.InitializeQuest("Allied Supplies", xp: 300, expires: true, expiry: questExpiry, trackOnBegin: false);
+
             Subtitle = $"\n<color=#757575>{GetExpiryText()} until supplies vanish</color>";
 
-            onActiveState = new UnityEvent();
-            onComplete = new UnityEvent();
-            onInitialComplete = new UnityEvent();
-            onQuestBegin = new UnityEvent();
-            onQuestEnd = new UnityEvent<EQuestState>();
-            onTrackChange = new UnityEvent<bool>();
-#if MONO
-            this.SetGUID(Guid.NewGuid());
-#else
-            this.SetGUID(Il2CppSystem.Guid.NewGuid());
-#endif
             this.location = supplyLocations[UnityEngine.Random.Range(0, supplyLocations.Count)];
-            if (currentConfig.debugMode)
-            {
-                foreach (SupplyLocation loc in supplyLocations)
-                {
-                    if (loc.ID == "SUPPLY_DOCKS") // test barrels
-                    {
-                        this.location = loc;
-                        break;
-                    }
-                }
-            }
 
-            // UI related code and the benzies logo
-            base.IconPrefab = MakeIcon(this.transform);
-            base.PoIPrefab = MakePOI();
-            
-            // Create the QuestEntry GameObjects and parent them.
-            GameObject locateObject = new GameObject("QuestEntry_LocateSupplies");
-            locateObject.transform.SetParent(this.transform);
+            _locateSuppliesAction = (UnityAction)OnLocateSuppliesComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_LocateSupplies,
+                name: "LocateSupplies",
+                title: "Read Thomas' message and locate the Cartel supplies",
+                new PoIConfig(false, false, false),
+                _locateSuppliesAction);
 
-            GameObject gatherObject = new GameObject("QuestEntry_GatherSupplies");
-            gatherObject.transform.SetParent(this.transform);
+            Vector3 gatherSuppliesPoIPosition = this.location.Type == ESupplyType.Van ? this.location.CarPosition : this.location.BarrelObjects[0].transform.position;
+            _helper.InitializeQuestEntry(ref QuestEntry_GatherSupplies,
+                name: "GatherSupplies",
+                title: "Receive the Cartel supplies",
+                new PoIConfig(true, false, false, poiPosition: gatherSuppliesPoIPosition));
 
-            QuestEntry locateSupplies = locateObject.AddComponent<QuestEntry>();
-            QuestEntry gatherSupplies = gatherObject.AddComponent<QuestEntry>();
-
-            this.QuestEntry_LocateSupplies = locateSupplies;
-            this.QuestEntry_GatherSupplies = gatherSupplies;
-
-            base.Entries = new();
-            base.Entries.Add(this.QuestEntry_LocateSupplies);
-            base.Entries.Add(this.QuestEntry_GatherSupplies);
-
-            Log("Config Entries");
-
-            locateSupplies.SetEntryTitle("Read Thomas' message and locate the Cartel supplies");
-            locateSupplies.AutoCreatePoI = false;
-            locateSupplies.ParentQuest = this;
-            locateSupplies.CompleteParentQuest = false;
-            locateSupplies.PoILocation = new GameObject("LocateSuppliesEntry_POI").transform;
-            locateSupplies.PoILocation.transform.SetParent(locateSupplies.transform);
-            locateSupplies.SetState(EQuestState.Active, false);
-
-            UnityEngine.Events.UnityAction locateSuppliesAction = null;
-            void OnLocateSuppliesComplete()
-            {
-                if (locateSupplies != null && locateSupplies.State == EQuestState.Failed) return;
-                if (gatherSupplies == null) return;
-
-                gatherSupplies.Begin();
-                UpdateQuestMapLogo(gatherSupplies);
-
-                gatherSupplies.SetPoILocation(location: location.Type == ESupplyType.Van ? location.CarPosition : location.BarrelObjects[0].transform.position);
-            }
-            locateSuppliesAction = (UnityEngine.Events.UnityAction)OnLocateSuppliesComplete;
-            locateSupplies.onComplete.AddListener(locateSuppliesAction);
-
-            gatherSupplies.SetEntryTitle("Receive the Cartel supplies");
-            gatherSupplies.ParentQuest = this;
-            gatherSupplies.CompleteParentQuest = false;
-            gatherSupplies.PoILocation = new GameObject("GatherSuppliesEntry_POI").transform;
-            gatherSupplies.PoILocation.transform.position = this.location.Type == ESupplyType.Van ? this.location.CarPosition : this.location.BarrelObjects[0].transform.position;
-            gatherSupplies.PoILocation.transform.SetParent(gatherSupplies.transform);
-            gatherSupplies.SetState(EQuestState.Inactive, false);
-
-            StartQuestDetail();
-        }
-
-        private void StartQuestDetail() 
-        {
-            SetupHUDUI();
-
-            if (hudUI != null)
-            {
-                if (hudUI.MainLabel != null)
-                    this.hudUI.MainLabel.text = "Allied Supplies";
-                this.hudUI.gameObject.SetActive(true);
-            }
-
-            SetIsTracked(true);
-            SetQuestState(EQuestState.Active);
+            _helper.StartQuestFromEntry(QuestEntry_LocateSupplies);
 
             if (QuestEntry_LocateSupplies != null)
             {
@@ -315,17 +231,103 @@ namespace CartelEnforcer
                 }
             }
 
-            TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 #if MONO
-            instance.onMinutePass.Add(new Action(MinPassSupply));
+            instance.onMinutePass.Add(new Action(OnMinPass));
 #else
-            instance.onMinutePass += (Il2CppSystem.Action)MinPassSupply;
+            instance.onMinutePass += (Il2CppSystem.Action)OnMinPass;
 #endif
             coros.Add(MelonCoroutines.Start(SpawnSupply(this.location)));
-            return;
         }
 
-        public QuestEntry QuestEntry_LocateSupplies;
-        public QuestEntry QuestEntry_GatherSupplies;
+        public override void OnMinPass()
+        {
+            if (!registered || Singleton<SaveManager>.Instance.IsSaving || !alliedSuppliesActive || this.State != EQuestState.Active) return;
+            if (!InstanceFinder.IsServer)
+            {
+                Log("Not server instance");
+                return;
+            }
+
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+#endif
+            {
+                Fail();
+            }
+
+            Subtitle = $"\n<color=#757575>{GetExpiryText()} until supplies vanish</color>";
+#if MONO
+            base.OnMinPass();
+#else
+            UpdateQuestHUD();
+            CheckExpiry();
+            if (State != EQuestState.Active) return;
+#endif
+
+            if (QuestEntry_LocateSupplies != null && QuestEntry_LocateSupplies.State == EQuestState.Active)
+            {
+                if (Vector3.Distance(
+                    a: Player.Local.CenterPointTransform.position,
+                    b: this.location.Type == ESupplyType.Van ? this.location.CarPosition : this.location.BarrelObjects[0].transform.position
+                ) < 14f)
+                {
+                    QuestEntry_LocateSupplies.SetState(EQuestState.Completed, false);
+                    return;
+                }
+            }
+
+            if (QuestEntry_GatherSupplies != null && QuestEntry_GatherSupplies.State == EQuestState.Active)
+            {
+                // If barrel update barrel poi and compass pos
+                bool suppliesClaimed = false;
+                // Check unclaimed barrels, update poi
+                if (this.location.Type == ESupplyType.Barrel)
+                {
+                    Vector3 nextBarrel = Vector3.zero;
+                    Transform currentBarrel;
+                    int consumedBarrels = 0;
+                    foreach (GameObject go in this.location.BarrelObjects)
+                    {
+                        currentBarrel = go.transform.Find("CE_SUPPLY"); // find the interactable child object
+                        if (currentBarrel == null)
+                        {
+                            consumedBarrels++;
+                            continue;
+                        }
+                        else
+                        {
+                            nextBarrel = currentBarrel.position;
+                        }
+                    }
+
+                    if (consumedBarrels == this.location.BarrelObjects.Count)
+                    {
+                        suppliesClaimed = true;
+                    }
+                    else if (nextBarrel != Vector3.zero)
+                    {
+                        if (QuestEntry_GatherSupplies.PoI != null && QuestEntry_GatherSupplies.PoI.gameObject != null)
+                            QuestEntry_GatherSupplies.SetPoILocation(nextBarrel);
+                    }
+                }
+
+                if (suppliesClaimed)
+                    Complete(false);
+            }
+            return;
+        }
+        
+        public void OnLocateSuppliesComplete()
+        {
+            if (QuestEntry_LocateSupplies != null && QuestEntry_LocateSupplies.State == EQuestState.Failed) return;
+            if (QuestEntry_GatherSupplies == null) return;
+
+            QuestEntry_GatherSupplies.Begin();
+            UpdateQuestMapLogo(QuestEntry_GatherSupplies);
+
+            QuestEntry_GatherSupplies.SetPoILocation(location: location.Type == ESupplyType.Van ? location.CarPosition : location.BarrelObjects[0].transform.position);
+        }
     }
 }

@@ -16,8 +16,6 @@ using ScheduleOne.Economy;
 using ScheduleOne.GameTime;
 using ScheduleOne.NPCs;
 using ScheduleOne.UI;
-using ScheduleOne.UI.Handover;
-using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
 using FishNet;
 #else
@@ -29,8 +27,6 @@ using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.UI;
-using Il2CppScheduleOne.UI.Handover;
-using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
 using Il2CppFishNet;
 #endif
@@ -187,7 +183,7 @@ namespace CartelEnforcer
         {
             if (npc.Region == EMapRegion.Northtown) return false;
             if (!npc.RelationData.Unlocked) return false;
-            Log($"Evaluate {npc.Region} Customer: {npc.fullName}");
+            Log($"Evaluate {npc.Region} Customer: {npc.NPCData.BasicInfo.ID}");
 
             float chance = UnityEngine.Random.Range(0f, 1f);
 
@@ -266,7 +262,7 @@ namespace CartelEnforcer
             Singleton<NewCustomerPopup>.Instance.PlayPopup(c);
             Singleton<NewCustomerPopup>.Instance.Title.text = "Customer has been stolen by Cartel!";
 
-            Log($"Stole customer: {npc.fullName}");
+            Log($"Stole customer: {npc.NPCData.BasicInfo.ID}");
             Log($"RelationDelta: {npc.RelationData.RelationDelta}");
             coros.Add(MelonCoroutines.Start(LateSendMessage(npc)));
 

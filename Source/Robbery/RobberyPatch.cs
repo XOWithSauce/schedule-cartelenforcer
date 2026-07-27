@@ -281,7 +281,6 @@ namespace CartelEnforcer
             }
 
             dealer.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, false, -1), true, true);
-            goon.Behaviour.CombatBehaviour.DefaultWeapon = null;
 
             if (UnityEngine.Random.Range(0f, 1f) > 0.7f) // Random roll for using ranged weapons
             {
@@ -307,14 +306,20 @@ namespace CartelEnforcer
             else if (AmbushOverrides.MeleeWeapons != null && AmbushOverrides.MeleeWeapons.Length > 0)
             {
 
-                goon.Behaviour.CombatBehaviour.DefaultWeapon = AmbushOverrides.MeleeWeapons[UnityEngine.Random.Range(0, AmbushOverrides.MeleeWeapons.Length)];
+                goon.Behaviour.CombatBehaviour.SetDefaultWeapon(AmbushOverrides.MeleeWeapons[UnityEngine.Random.Range(0, AmbushOverrides.MeleeWeapons.Length)]);
+                AvatarMeleeWeapon wep = null;
                 // Also here the melee wep needs a little buff
+                if (goon.Behaviour.CombatBehaviour._defaultWeapon != null)
+                {
 #if MONO
-                if (goon.Behaviour.CombatBehaviour.DefaultWeapon is AvatarMeleeWeapon wep)
+                    if (goon.Behaviour.CombatBehaviour._defaultWeapon is AvatarMeleeWeapon)
+                        wep = goon.Behaviour.CombatBehaviour._defaultWeapon as AvatarMeleeWeapon;
 #else
-                AvatarMeleeWeapon wep = goon.Behaviour.CombatBehaviour.DefaultWeapon.TryCast<AvatarMeleeWeapon>();
-                if (wep != null)
+                    wep = goon.Behaviour.CombatBehaviour._defaultWeapon.TryCast<AvatarMeleeWeapon>();
 #endif
+                }
+
+                if (wep != null)
                 {
                     wep.AttackRadius = 2.8f;
                     wep.AttackRange = 3.5f;
@@ -331,7 +336,7 @@ namespace CartelEnforcer
             dealer.Behaviour.CombatBehaviour.SetTarget(goon.GetComponent<ICombatTargetable>().NetworkObject); 
             dealer.Behaviour.CombatBehaviour.Enable_Networked();
 
-            goon.Health.MaxHealth = 160f;
+            goon.NPCData.Health.MaxHealth = 160f;
             goon.Health.Health = 160f;
 #if MONO
             goon.AttackEntity(dealer);
@@ -368,7 +373,6 @@ namespace CartelEnforcer
                 Log("Dealer was defeated! Initiating partial robbery.");
                 goon.Inventory.Clear();
                 goon.Behaviour.ScheduleManager.DisableSchedule();
-                goon.Behaviour.ScheduleManager.ActionList[0].End();
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
 
                 yield return Wait2; // wait ragdoll
@@ -459,11 +463,8 @@ namespace CartelEnforcer
                     goon.Inventory.AddCash(qtyCashLoss);
                     goon.SetAnimationTrigger("GrabItem");
                 }
-                // Just incase
-                dealer.Inventory.InventoryContentsChanged();
-                goon.Inventory.InventoryContentsChanged();
 
-                Log("Finished Body Intercept]");
+                Log("Finished Body Intercept");
                 goon.Avatar.Animation.SetCrouched(false);
                 coros.Add(MelonCoroutines.Start(NavigateGoonEsacpe(goon, region, changeInfluence)));
             }
@@ -523,13 +524,11 @@ namespace CartelEnforcer
             if (goon.IsGoonSpawned)
                 goon.Despawn();
 
-            goon.Health.MaxHealth = 100f;
+            goon.NPCData.Health.MaxHealth = 100f;
             goon.Health.Health = 100f;
-            goon.Health.Revive();
-            goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+
             goon.Behaviour.ScheduleManager.EnableSchedule();
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-            goon.Behaviour.ScheduleManager.ActionList[0].Resume();
             yield return null;
         }
         public static IEnumerator NavigateGoonEsacpe(CartelGoon goon, EMapRegion region, bool changeInfluence)
@@ -611,7 +610,7 @@ namespace CartelEnforcer
             if (destination == Vector3.zero || !goon.Movement.CanGetTo(closest)) // If the destination look up fails or cant traverse to
             {
                 // Does this get prio overidden by stay inside schedule?
-                goon.Behaviour.FleeBehaviour.SetEntityToFlee(Player.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
+                goon.Behaviour.FleeBehaviour.SetEntityToFlee(PlayerManager.GetClosestPlayer(goon.CenterPointTransform.position, out float _).NetworkObject);
                 goon.Behaviour.FleeBehaviour.Enable_Networked();
                 isFleeing = true;
                 Log("Robber fleeing player");
@@ -728,8 +727,8 @@ namespace CartelEnforcer
         {
             float origWalk = goon.Movement.WalkSpeed;
             float origRun = goon.Movement.RunSpeed;
-            goon.Movement.WalkSpeed = goon.Movement.WalkSpeed * 3.5f;
-            goon.Movement.RunSpeed = goon.Movement.RunSpeed * 2.5f;
+            goon.NPCData.Movement.WalkSpeed = goon.Movement.WalkSpeed * 3.5f;
+            goon.NPCData.Movement.SprintSpeed = goon.Movement.RunSpeed * 2.5f;
             goon.Movement.MoveSpeedMultiplier = 1.4f;
             goon.Health.Health = Mathf.Round(Mathf.Lerp(goon.Health.Health, goon.Health.MaxHealth, 0.15f));
 
@@ -737,13 +736,13 @@ namespace CartelEnforcer
             {
                 yield return Wait05;
                 if (!registered) yield break;
-                goon.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origWalk, 0.025f);
-                goon.Movement.RunSpeed = Mathf.Lerp(goon.Movement.RunSpeed, origRun, 0.025f);
+                goon.NPCData.Movement.WalkSpeed = Mathf.Lerp(goon.Movement.WalkSpeed, origWalk, 0.025f);
+                goon.NPCData.Movement.SprintSpeed = Mathf.Lerp(goon.Movement.RunSpeed, origRun, 0.025f);
                 goon.Movement.MoveSpeedMultiplier = Mathf.Lerp(goon.Movement.MoveSpeedMultiplier, 1f, 0.025f);
             }
 
-            goon.Movement.WalkSpeed = origWalk;
-            goon.Movement.RunSpeed = origRun;
+            goon.NPCData.Movement.WalkSpeed = origWalk;
+            goon.NPCData.Movement.SprintSpeed = origRun;
             goon.Movement.MoveSpeedMultiplier = 1f;
         }
     }

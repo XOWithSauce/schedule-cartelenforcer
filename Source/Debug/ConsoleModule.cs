@@ -39,11 +39,6 @@ namespace CartelEnforcer
             public virtual void Start() => Log("Not implemented");
         }
 
-        // TODO:
-        // Stolen Items
-        // Event Cooldowns table
-        // anything else?
-
         #region Startable Mod Events
 
         public class RobberyTarget : ConsoleCommandBase
@@ -192,7 +187,7 @@ namespace CartelEnforcer
             public override void Start()
             {
                 hasGeneratedManorQuest = true;
-                NetworkSingleton<TimeManager>.Instance.SetTimeAndSync(1815);
+                NetworkSingleton<TimeManager>.Instance.SetTimeAndSync(1816);
 #if MONO
                 NPC npc = UnityEngine.Object.FindObjectOfType<ScheduleOne.NPCs.CharacterClasses.Ray>(true);
 #else
@@ -230,10 +225,7 @@ namespace CartelEnforcer
             }
         }
 
-
         #endregion
-
-
 
     }
 }

@@ -1,5 +1,3 @@
-
-
 using System.Collections;
 using MelonLoader;
 using UnityEngine;
@@ -10,45 +8,30 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
 
 #if MONO
-using ScheduleOne.Police;
 using ScheduleOne.PlayerScripts;
 using static ScheduleOne.AvatarFramework.AvatarSettings;
 using ScheduleOne.Combat;
 using ScheduleOne.AvatarFramework.Equipping;
-using ScheduleOne.Interaction;
 using ScheduleOne.Cartel;
 using ScheduleOne.GameTime;
 using ScheduleOne.Quests;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.NPCs.Other;
-using ScheduleOne.Messaging;
-using ScheduleOne.NPCs;
 using ScheduleOne.Levelling;
 using ScheduleOne.Persistence;
 using FishNet;
-using FishNet.Managing.Object;
-using FishNet.Object;
-using FishNet.Managing;
 #else
-using Il2CppScheduleOne.Police;
 using Il2CppScheduleOne.PlayerScripts;
 using static Il2CppScheduleOne.AvatarFramework.AvatarSettings;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
-using Il2CppScheduleOne.Interaction;
-using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
-using Il2CppScheduleOne.Messaging;
-using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Persistence;
 using Il2CppFishNet;
-using Il2CppFishNet.Managing.Object;
-using Il2CppFishNet.Object;
-using Il2CppFishNet.Managing;
 using Il2CppScheduleOne.NPCs.Other;
 using Il2CppInterop.Runtime.Injection;
 #endif
@@ -58,29 +41,57 @@ namespace CartelEnforcer
 #if IL2CPP
     [RegisterTypeInIl2Cpp]
 #endif
-    public class Quest_DefeatEnforcer : Quest
+    public class Quest_DefeatEnforcer : ModQuestBase
     {
-#if IL2CPP
-        public Quest_DefeatEnforcer(IntPtr ptr) : base(ptr) { }
+        protected readonly DefeatEnforcerHelper _helper;
+#if MONO
+        public Quest_DefeatEnforcer()
+        {
+            _helper = new DefeatEnforcerHelper(this);
+        }
+#else
+        public Quest_DefeatEnforcer(IntPtr ptr) : base(ptr) 
+        { 
+            _helper = new DefeatEnforcerHelper(this);
+        }
 
         public Quest_DefeatEnforcer() : base(ClassInjector.DerivedConstructorPointer<Quest_DefeatEnforcer>())
             => ClassInjector.DerivedConstructorBody(this);
-#endif
-        private bool contactMade = false;
-        private bool bossCombatBegun = false;
-        private bool rageStageStarted = false;
-        private int fightElapsed = 0;
-        private float questDifficultyScalar;
 
-        private NPC contactNPC = null;
+#endif
+        public bool bossHasSpawned = false;
+        public bool bossCombatBegun = false;
+        public bool rageStageStarted = false;
+        public int fightElapsed = 0;
+        public float questDifficultyScalar;
 
         // store the combat variables
-        private float GiveUpRange = 0f;
-        private int GiveUpAfterSuccessfulHits = 0;
-        private float DefaultSearchTime = 0f;
+        public bool hasSavedCombatVariables = false;
+        public float GiveUpRange = 0f;
+        public int GiveUpAfterSuccessfulHits = 0;
+        public float DefaultSearchTime = 0f;
 
-        // To remove it later in edge cases
-        UnityEngine.Events.UnityAction bossDiedAction = null;
+        public int mannyMessagesSent = 0;
+        public bool mannyMessageRead = false;
+        public bool isBossSpawning = false;
+
+        public QuestEntry QuestEntry_Investigate;
+        private UnityAction _investigateAction;
+
+        public QuestEntry QuestEntry_WaitForContact;
+        private UnityAction _contactAction;
+
+        public QuestEntry QuestEntry_DefeatBoss;
+        public UnityAction bossDiedAction = null;
+
+        public readonly List<Vector3> encounterPositions = new()
+        {
+            new Vector3(156.38f, 6.70f, 123.95f),
+            new Vector3(65.6153f, 3.0466f, -46.6993f),
+            new Vector3(29.5507f, 0.6506f, -69.1599f),
+            new Vector3(121.7651f, 1.4617f, -46.0731f),
+        };
+        public Vector3 bossSelectedPosition = Vector3.zero;
 
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
@@ -161,7 +172,6 @@ namespace CartelEnforcer
 
         public void SetupSelf()
         {
-            Log("SetupSelfStart");
             // calc difficulty scalar
             float allInfluence = 0f;
             foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
@@ -171,128 +181,31 @@ namespace CartelEnforcer
             float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
             questDifficultyScalar = 1f + allInfluenceNormalized;
 
-            Log("QuestInit");
-            this.name = "Quest_DefeatEnforcer";
-            Expires = false;
-            title = "Unexpected Alliances";
-            CompletionXP = Mathf.RoundToInt(850f * questDifficultyScalar);
-            Description = "Investigate and intercept Cartel Activity";
-            TrackOnBegin = true;
-            autoInitialize = false;
-            AutoCompleteOnAllEntriesComplete = false;
-            onActiveState = new UnityEvent();
-            onComplete = new UnityEvent();
-            onInitialComplete = new UnityEvent();
-            onQuestBegin = new UnityEvent();
-            onQuestEnd = new UnityEvent<EQuestState>();
-            onTrackChange = new UnityEvent<bool>();
+            bossSelectedPosition = encounterPositions[UnityEngine.Random.Range(0, encounterPositions.Count)];
 
-#if MONO
-            this.SetGUID(Guid.NewGuid());
-#else
-            this.SetGUID(Il2CppSystem.Guid.NewGuid());
-#endif
-            Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
-            if (target != null)
-            {
-                this.transform.SetParent(target);
-            }
+            _helper.InitializeQuest("Unexpected Alliances", xp: Mathf.RoundToInt(850f * questDifficultyScalar));
 
-            // UI related code and the benzies logo
-            base.IconPrefab = MakeIcon(this.transform);
-            base.PoIPrefab = MakePOI();
+            _investigateAction = (UnityAction)OnInvestigateComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_Investigate,
+                name: "Investigate",
+                title: "• Intercept Cartel Dead Drops (0/2)\nOR\n• Defeat Cartel Gatherings (0/1)",
+                new PoIConfig(false, false, false),
+                _investigateAction);
 
-            // Create the QuestEntry GameObjects and parent them.
-            GameObject investigateObject = new GameObject("QuestEntry_Investigate");
-            investigateObject.transform.SetParent(this.transform);
+            _contactAction = (UnityAction)OnContactComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_WaitForContact,
+                name: "Contact",
+                title: "Wait for Manny to contact you",
+                new PoIConfig(false, false, false),
+                _contactAction);
 
-            GameObject contactObject = new GameObject("QuestEntry_WaitForContact");
-            contactObject.transform.SetParent(this.transform);
-
-            GameObject defeatObject = new GameObject("QuestEntry_DefeatEnforcer");
-            defeatObject.transform.SetParent(this.transform);
-
-            QuestEntry investigate = investigateObject.AddComponent<QuestEntry>();
-            QuestEntry contact = contactObject.AddComponent<QuestEntry>();
-            QuestEntry defeat = defeatObject.AddComponent<QuestEntry>();
-
-            Log("Setting Entries");
-            this.QuestEntry_Investigate = investigate;
-            this.QuestEntry_WaitForContact = contact;
-            this.QuestEntry_DefeatBoss = defeat;
-
-            this.Entries = new();
-            this.Entries.Add(investigate);
-            this.Entries.Add(contact);
-            this.Entries.Add(defeat);
-
-            Log("Config Entries");
-
-            investigate.SetEntryTitle("â€¢ Intercept Cartel Dead Drops (0/2)\nOR\nâ€¢ Defeat Cartel Gatherings (0/1)");
-            investigate.ParentQuest = this;
-            investigate.CompleteParentQuest = false;
-            investigate.PoILocation = new GameObject("InvestigateEntry_POI").transform;
-            investigate.PoILocation.transform.SetParent(investigate.transform);
-            investigate.AutoCreatePoI = false;
-            investigate.SetState(EQuestState.Active, true);
-
-            UnityEngine.Events.UnityAction investigateAction = null;
-            void OnInvestigateComplete()
-            {
-                if (investigate != null && investigate.State == EQuestState.Failed) return;
-                if (contact == null) return;
-
-                contact.Begin();
-                UpdateQuestMapLogo(contact);
-                if (contact.PoI != null && contact.PoI.UI != null)
-                    contact.PoI.UI.gameObject.SetActive(false);
-                if (contact.compassElement != null)
-                    contact.compassElement.Visible = false;
-                if (investigateAction != null)
-                {
-                    investigate.onComplete.RemoveListener(investigateAction);
-                    investigateAction = null;
-                }
-            }
-            investigateAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
-            investigate.onComplete.AddListener(investigateAction);
-
-            contact.SetEntryTitle("Wait for Manny to contact you");
-            contact.ParentQuest = this;
-            contact.CompleteParentQuest = false;
-            contact.PoILocation = new GameObject("ContactEntry_POI").transform;
-            contact.PoILocation.transform.SetParent(contact.transform);
-            contact.PoILocation.transform.position = new Vector3(128.27f, 1.56f, 88.96f);
-            contact.SetState(EQuestState.Inactive, false);
-            UnityEngine.Events.UnityAction contactAction = null;
-            void OnContactComplete()
-            {
-                if (contact != null && contact.State == EQuestState.Failed) return;
-                if (defeat == null) return;
-
-                defeat.Begin();
-                UpdateQuestMapLogo(defeat);
-                if (contactAction != null)
-                {
-                    contact.onComplete.RemoveListener(contactAction);
-                    contactAction = null;
-                }
-            }
-            contactAction = (UnityEngine.Events.UnityAction)OnContactComplete;
-            contact.onComplete.AddListener(contactAction);
-
-            defeat.SetEntryTitle("Defeat the Cartel Brute");
-            defeat.ParentQuest = this;
-            defeat.CompleteParentQuest = false;
-            defeat.PoILocation = new GameObject("DefeatEntry_POI").transform;
-            defeat.PoILocation.transform.SetParent(defeat.transform);
-            defeat.PoILocation.transform.position = new Vector3(156.38f, 6.70f, 123.95f);
-            defeat.SetState(EQuestState.Inactive, false);
+            _helper.InitializeQuestEntry(ref QuestEntry_DefeatBoss,
+                name: "Defeat",
+                title: "Defeat the Cartel Brute",
+                new PoIConfig(true, false, false, poiPosition: bossSelectedPosition));
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-
             var action = (Action)OnMinPass;
-
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
             instance.onMinutePass.Add(action);
@@ -300,22 +213,7 @@ namespace CartelEnforcer
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
-            StartQuestDetail();
-        }
-
-        private void StartQuestDetail()
-        {
-            SetupHUDUI();
-
-            if (hudUI != null)
-            {
-                if (hudUI.MainLabel != null)
-                    this.hudUI.MainLabel.text = "Unexpected Alliances";
-                this.hudUI.gameObject.SetActive(true);
-            }
-
-            SetIsTracked(true);
-            SetQuestState(EQuestState.Active);
+            _helper.StartQuestFromEntry(QuestEntry_Investigate);
 
             if (QuestEntry_Investigate != null)
             {
@@ -327,205 +225,260 @@ namespace CartelEnforcer
                     QuestEntry_Investigate.compassElement.Visible = false;
                 }
             }
+        }
+        private void SendMannyMessage()
+        {
+            switch (mannyMessagesSent)
+            {
+                case 0:
+                    fixer.SendTextMessage("One of the cartel brutes is hiding out in the woods. I sent you the location.");
+                    break;
+
+                case 1:
+                    fixer.SendTextMessage("Hurry up! Go take down the Benzies thug. They will leave the area soon.");
+                    break;
+
+                case 2:
+                    fixer.SendTextMessage("I marked the location on your map. Head there and take the down their brute.");
+                    break;
+
+                case 3:
+                    fixer.SendTextMessage("Nevermind. I guess you were not the right person for the job.");
+                    break;
+            }
+            mannyMessagesSent++;
+            return;
+        }
+        public override void OnMinPass()
+        {
+            if (!registered || SaveManager.Instance.IsSaving || defeatEnforcerCompleted || this.State != EQuestState.Active) return;
+#if MONO
+            base.OnMinPass();
+#endif
+            if (!InstanceFinder.IsServer)
+            {
+                return;
+            }
+            if (QuestEntry_Investigate != null && QuestEntry_Investigate.State == EQuestState.Active)
+            {
+                if (QuestEntry_Investigate != null && QuestEntry_Investigate.entryUI != null && this.hudUIExists)
+                    QuestEntry_Investigate.SetEntryTitle($"• Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\n• Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
+
+                if (StageDeadDropsObserved >= 2 || StageGatheringsDefeated >= 1)
+                    QuestEntry_Investigate.Complete();
+
+                return;
+            }
+            if (QuestEntry_WaitForContact != null && QuestEntry_WaitForContact.State == EQuestState.Active)
+            {
+                if (fixer != null && fixer.MSGConversation != null && fixer.MSGConversation.isOpen && mannyMessagesSent > 0)
+                {
+                    mannyMessageRead = true;
+                    QuestEntry_WaitForContact.Complete();
+                }
+
+                if (mannyMessagesSent > 2)
+                {
+                    Log("Fail quest timeout");
+                    Fail();
+                }
+                return;
+
+            }
+            else if (QuestEntry_DefeatBoss != null && QuestEntry_DefeatBoss.State == EQuestState.Active)
+            {
+                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 800)
+                {
+                    defeatEnforcerCompleted = true;
+
+                    // player slept through the night boss disappears and quest fails
+                    if (bossGoon != null)
+                    {
+                        bossGoon.Despawn();
+                        ResetGoonBoss();
+                    }
+                    Fail();
+                    return;
+                }
+
+                if (bossGoon == null && !isBossSpawning && !bossHasSpawned) 
+                {
+                    PlayerManager.GetClosestPlayer(QuestEntry_DefeatBoss.PoILocation.transform.position, out float dist);
+                    if (dist < 40f)
+                    {
+                        isBossSpawning = true;
+                        coros.Add(MelonCoroutines.Start(_helper.RunBossSpawn()));
+                        return;
+                    }
+                }
+
+                if (bossGoon != null && bossHasSpawned)
+                {
+                    QuestEntry_DefeatBoss.SetEntryTitle($"Defeat the Cartel Brute\nHP:{Mathf.RoundToInt(bossGoon.Health.Health)}");
+                    Player p = PlayerManager.GetClosestPlayer(bossGoon.transform.position, out float dist);
+
+                    if (dist < 16f && !bossCombatBegun)
+                    {
+                        bossCombatBegun = true;
+                        bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
+                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
+                    }
+
+                    if (bossCombatBegun)
+                    {
+                        fightElapsed++;
+
+
+                        if (!rageStageStarted)
+                        {
+                            if (bossGoon.Behaviour.activeBehaviour == null || bossGoon.Behaviour.activeBehaviour != bossGoon.Behaviour.CombatBehaviour)
+                            {
+                                if (bossGoon.Behaviour.CombatBehaviour.Target == null)
+                                    bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
+
+                                bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
+                            }
+
+                            if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null || bossGoon.Behaviour.CombatBehaviour.IsCurrentWeaponMelee())
+                            {
+                                coros.Add(MelonCoroutines.Start(_helper.EquipBossWeapon()));
+                            }
+
+                            if (bossGoon.Health.Health < 230f || fightElapsed > 40)
+                            {
+                                rageStageStarted = true;
+                                coros.Add(MelonCoroutines.Start(_helper.RunRageStage()));
+                            }
+                        }
+
+                        // Check distance of boss to player & Check distance of Boss to the area & check elapsed time under 5min
+                        if (dist > 70f || Vector3.Distance(bossGoon.CenterPoint, bossSelectedPosition) > 70f || fightElapsed > 300)
+                        {
+                            defeatEnforcerCompleted = true;
+
+                            QuestEntry_DefeatBoss.SetState(EQuestState.Failed);
+                            // Player Out of range or Boss is over 70 units from spawn pos or time has elapsed over 5min
+                            bossGoon.Despawn();
+                            ResetGoonBoss();
+                            Fail();
+                            return;
+                        }
+                    }
+                }
+            }
 
             return;
         }
-        private IEnumerator ContactSpawn()
+
+        private void HourPass()
         {
-            Log("Spawning Contact NPC");
-            NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
-            PrefabObjects spawnablePrefabs = netManager.SpawnablePrefabs;
-            NetworkObject nob = null;
-            for (int i = 0; i < spawnablePrefabs.GetObjectCount(); i++)
+            if (!registered || SaveManager.Instance.IsSaving || defeatEnforcerCompleted || this.State != EQuestState.Active) return;
+
+            if (!InstanceFinder.IsServer)
             {
-                NetworkObject prefab = spawnablePrefabs.GetObject(true, i);
-                if (prefab?.gameObject?.name == "PoliceNPC")
+                return;
+            }
+            else if (QuestEntry_WaitForContact.State == EQuestState.Active)
+            {
+                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 2159 || NetworkSingleton<TimeManager>.Instance.CurrentTime <= 200)
                 {
-                    nob = prefab;
-                    break;
+                    if (mannyMessagesSent == 0)
+                        QuestEntry_WaitForContact.SetEntryTitle($"Read Mannys text message.");
+
+                    SendMannyMessage();
+                }
+                else if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 359 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 402 && !mannyMessageRead)
+                {
+                    defeatEnforcerCompleted = true;
+                    Fail();
                 }
             }
-            if (nob == null)
-            {
-                Log("No Police Base Found for spawn");
-                yield break;
-            }
-            Log("Spawn Base Object");
-
-            NetworkObject copNet = UnityEngine.Object.Instantiate<NetworkObject>(nob);
-            NPC myNpc = copNet.gameObject.GetComponent<NPC>();
-            myNpc.ID = $"CartelEnforcer_Contact_NPC";
-            myNpc.FirstName = "Unknown";
-            myNpc.LastName = "";
-            myNpc.transform.parent = NPCManager.Instance.NPCContainer;
-            NPCManager.NPCRegistry.Add(myNpc);
-            yield return Wait05;
-            if (!registered) yield break;
-
-            netManager.ServerManager.Spawn(copNet);
-            yield return Wait05;
-            if (!registered) yield break;
-
-            copNet.gameObject.SetActive(true);
-            myNpc.Health.Invincible = true;
-            myNpc.Behaviour.CombatBehaviour.Disable_Networked(null);
-            myNpc.Behaviour.CombatBehaviour.enabled = false;
-
-            myNpc.intObj.onHovered.RemoveAllListeners();
-            myNpc.intObj.SetMessage("Talk");
-            myNpc.intObj.interactionState = InteractableObject.EInteractableState.Default;
-
-            PoliceOfficer offc = copNet.gameObject.GetComponent<PoliceOfficer>();
-
-            #region Avatar
-            var originalBodySettings = offc.Avatar.CurrentSettings.BodyLayerSettings;
-#if MONO
-            List<LayerSetting> bodySettings = new();
-#else
-            Il2CppSystem.Collections.Generic.List<LayerSetting> bodySettings = new();
-#endif
-            foreach (var layer in originalBodySettings)
-            {
-                bodySettings.Add(new LayerSetting
-                {
-                    layerPath = layer.layerPath,
-                    layerTint = layer.layerTint
-                });
-            }
-
-            var originalAccessorySettings = offc.Avatar.CurrentSettings.AccessorySettings;
-#if MONO
-            List<AccessorySetting> accessorySettings = new();
-#else
-            Il2CppSystem.Collections.Generic.List<AccessorySetting> accessorySettings = new();
-#endif
-            foreach (var acc in originalAccessorySettings)
-            {
-                accessorySettings.Add(new AccessorySetting
-                {
-                    path = acc.path,
-                    color = acc.color
-                });
-            }
-
-            for (int i = 0; i < bodySettings.Count; i++)
-            {
-                var layer = bodySettings[i];
-                layer.layerPath = "";
-                layer.layerTint = Color.white;
-                bodySettings[i] = layer;
-            }
-
-            for (int i = 0; i < accessorySettings.Count; i++)
-            {
-                var acc = accessorySettings[i];
-                acc.path = "";
-                acc.color = Color.white;
-                accessorySettings[i] = acc;
-            }
-
-            var jeans = bodySettings[2];
-            jeans.layerPath = "Avatar/Layers/Bottom/Jeans";
-            jeans.layerTint = new Color(0.306f, 0.416f, 0.569f);
-            bodySettings[2] = jeans;
-            var shirt = bodySettings[3];
-            shirt.layerPath = "Avatar/Layers/Top/RolledButtonUp";
-            shirt.layerTint = new Color(0.020f, 0.188f, 0.420f);
-            bodySettings[3] = shirt;
-
-            var cap = accessorySettings[0];
-            cap.path = "Avatar/Accessories/Head/Cap/Cap";
-            cap.color = new Color(0.149f, 0.149f, 0.149f);
-            accessorySettings[0] = cap;
-            var vest = accessorySettings[1];
-            vest.path = "Avatar/Accessories/Chest/BulletproofVest/BulletproofVest";
-            vest.color = new Color(0.3962f, 0.3962f, 0.3962f);
-            accessorySettings[1] = vest;
-            var sneakers = accessorySettings[2];
-            sneakers.path = "Avatar/Accessories/Feet/Sneakers/Sneakers";
-            sneakers.color = new Color(0.149f, 0.149f, 0.149f);
-            accessorySettings[2] = sneakers;
-            var glasses = accessorySettings[3];
-            glasses.path = "Avatar/Accessories/Head/LegendSunglasses/LegendSunglasses";
-            glasses.color = new Color(0.717f, 0.717f, 0.717f);
-            accessorySettings[3] = glasses;
-
-            offc.Avatar.CurrentSettings.BodyLayerSettings = bodySettings;
-            offc.Avatar.CurrentSettings.AccessorySettings = accessorySettings;
-            offc.Avatar.ApplyBodyLayerSettings(offc.Avatar.CurrentSettings);
-            offc.Avatar.ApplyAccessorySettings(offc.Avatar.CurrentSettings);
-
-            offc.Avatar.Impostor.SetAvatarSettings(offc.Avatar.CurrentSettings);
-
-            if (offc.Avatar.onSettingsLoaded != null)
-                offc.Avatar.onSettingsLoaded.Invoke();
-
-            #endregion
-            Log("Set offc stats");
-            offc.Movement.Agent.enabled = false;
-            Vector3 spawnPos = QuestEntry_WaitForContact.PoILocation.position;
-            offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
-            offc.Behaviour.ScheduleManager.DisableSchedule();
-            offc.Awareness.VisionCone.enabled = false;
-            offc.ChatterEnabled = false;
-            offc.Movement.Agent.enabled = true;
-            yield return Wait2;
-            if (!registered) yield break;
-
-            Log("Reset Pos");
-
-            // because for some reason the cop just tps back to station and sets invis in building
-            offc.Movement.Agent.enabled = true;
-            offc.Avatar.gameObject.SetActive(true);
-            offc.Movement.Warp(new Vector3(128.27f, 1.56f, 88.96f));
-            offc.Movement.WarpToNavMesh();
-            yield return Wait01;
-            if (!registered) yield break;
-
-            offc.Movement.Stop();
-            offc.Movement.Agent.enabled = false;
-            offc.Movement.enabled = false;
-            offc.transform.rotation = Quaternion.Euler(0f, 160f, 0f);
-
-            void OnDialogComplete()
-            {
-                QuestEntry_WaitForContact.Complete();
-                MelonCoroutines.Start(RunContactDespawn(myNpc));
-                MelonCoroutines.Start(RunBossSpawn());
-            }
-            Action callback = new Action(OnDialogComplete);
-            MelonCoroutines.Start(GenContactDialog(myNpc, callback));
-
-            Log("Send Message");
-            fixer.MSGConversation.SendMessage(new Message("I set up a meeting for you. He is waiting near the church until 4am.", Message.ESenderType.Other, true, -1), true, true);
-
-            contactNPC = myNpc;
-
-            yield return null;
+            return;
         }
-
-        public IEnumerator RunContactDespawn(NPC npc = null, bool immediate = false)
+        private void OnInvestigateComplete()
         {
-            if (!immediate)
-                yield return Wait30;
-            if (!registered) yield break;
+            if (QuestEntry_Investigate != null && QuestEntry_Investigate.State == EQuestState.Failed) return;
+            if (QuestEntry_WaitForContact == null) return;
 
-            if (npc == null && contactNPC != null)
-                npc = contactNPC;
+            QuestEntry_WaitForContact.Begin();
 
-            if (npc != null)
-                NPCManager.NPCRegistry.Remove(npc);
+            UpdateQuestMapLogo(QuestEntry_WaitForContact);
+            if (QuestEntry_WaitForContact.PoI != null && QuestEntry_WaitForContact.PoI.UI != null)
+                QuestEntry_WaitForContact.PoI.UI.gameObject.SetActive(false);
+            if (QuestEntry_WaitForContact.compassElement != null)
+                QuestEntry_WaitForContact.compassElement.Visible = false;
+            if (_investigateAction != null)
+            {
+                QuestEntry_Investigate.onComplete.RemoveListener(_investigateAction);
+                _investigateAction = null;
+            }
+            return;
+        }
+        private void OnContactComplete()
+        {
+            if (QuestEntry_WaitForContact != null && QuestEntry_WaitForContact.State == EQuestState.Failed) return;
+            if (QuestEntry_DefeatBoss == null) return;
 
-            if (npc != null)
-                if (npc.gameObject != null)
-                    GameObject.Destroy(npc.gameObject);
-            yield return null;
+            QuestEntry_DefeatBoss.Begin();
+
+            UpdateQuestMapLogo(QuestEntry_DefeatBoss);
+            if (_contactAction != null)
+            {
+                QuestEntry_WaitForContact.onComplete.RemoveListener(_contactAction);
+                _contactAction = null;
+            }
+            return;
+        }
+        public void OnBossDied()
+        {
+            defeatEnforcerCompleted = true;
+            coros.Add(MelonCoroutines.Start(QuestReward(bossGoon)));
+            Complete();
+
+            if (bossDiedAction != null)
+            {
+                bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
+                bossDiedAction = null;
+            }
+            return;
+        }
+        private void ResetGoonBoss()
+        {
+            if (bossGoon != null)
+            {
+                if (bossGoon.Behaviour.CombatBehaviour.Active)
+                    bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
+
+                if (bossDiedAction != null)
+                {
+                    bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
+                    bossDiedAction = null;
+                }
+
+                // Reset all non default stats that would carry on modified
+                bossGoon.NPCData.Health.MaxHealth = 100f;
+                bossGoon.Movement.MoveSpeedMultiplier = 1f;
+
+                bossGoon.Behaviour.ScheduleManager.EnableSchedule();
+                bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+
+                bossGoon.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
+                bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
+                bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
+            }
+            return;
         }
 
-        private IEnumerator RunBossSpawn()
+    }
+
+    // Quest coroutine wrapper
+    public class DefeatEnforcerHelper : QuestHelperBase<Quest_DefeatEnforcer>
+    {
+        public DefeatEnforcerHelper(Quest_DefeatEnforcer quest) : base(quest) { }
+        public IEnumerator RunBossSpawn()
         {
             Log("Boss Spawning");
-            Vector3 spawnPos = QuestEntry_DefeatBoss.PoILocation.position;
+            Vector3 spawnPos = _quest.QuestEntry_DefeatBoss.PoILocation.position;
 
             // if unspawned goon count is too low we insta despawn
             if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count == 0)
@@ -537,16 +490,20 @@ namespace CartelEnforcer
 
                     if (goon.IsGoonSpawned && (goon.Health.IsDead || goon.Health.IsKnockedOut))
                     {
-                        goon.Health.Revive();
                         goon.Despawn();
                     }
                 }
             }
 
             CartelGoon _bossGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
+            _quest.QuestEntry_DefeatBoss.PoILocation.transform.SetParent(_bossGoon.transform);
+            _quest.QuestEntry_DefeatBoss.PoILocation.transform.localPosition = Vector3.zero;
+
             _bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
             _bossGoon.Behaviour.ScheduleManager.DisableSchedule();
             bossGoon = _bossGoon;
+
+            /*
             if (_bossGoon.Health.IsDead || _bossGoon.Health.IsKnockedOut)
                 _bossGoon.Health.Revive();
             yield return Wait05;
@@ -563,16 +520,11 @@ namespace CartelEnforcer
 
             yield return Wait05;
             if (!registered) yield break;
+             */
 
-            #region Movement and Health
-            _bossGoon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(500f, 1000f, questDifficultyScalar - 1f) / 10f) * 10f;
-            _bossGoon.Health.Health = Mathf.Round(Mathf.Lerp(500f, 1000f, questDifficultyScalar - 1f) / 10f) * 10f;
+            _bossGoon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(500f, 1000f, _quest.questDifficultyScalar - 1f) / 10f) * 10f;
+            _bossGoon.Health.Health = Mathf.Round(Mathf.Lerp(500f, 1000f, _quest.questDifficultyScalar - 1f) / 10f) * 10f;
             _bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
-            _bossGoon.SetScale(1.35f);
-            #endregion
-            Log("Setup Boss Move & Health");
-            yield return Wait05;
-            if (!registered) yield break;
 
             coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
 
@@ -613,6 +565,11 @@ namespace CartelEnforcer
             watch.color = new Color(0.96f, 0.79f, 0.23f);
             accessorySettings[2] = watch;
 
+            _bossGoon.Avatar.CurrentSettings.Height = 2f;
+            _bossGoon.Avatar.CurrentSettings.Weight = 1f;
+            _bossGoon.Avatar.SetAdditionalWeight(0.5f);
+            _bossGoon.Avatar.ApplyBodySettings(_bossGoon.Avatar.CurrentSettings);
+
             _bossGoon.Avatar.CurrentSettings.AccessorySettings = accessorySettings;
             _bossGoon.Avatar.ApplyAccessorySettings(_bossGoon.Avatar.CurrentSettings);
 
@@ -622,55 +579,28 @@ namespace CartelEnforcer
                 _bossGoon.Avatar.onSettingsLoaded.Invoke();
 
             #endregion
-            Log("Setup Boss Avatar");
-            // because for some reason the avatar goes off and same with nav
-            if (_bossGoon.isInBuilding)
-            {
-                _bossGoon.ExitBuilding();
-            }
-            _bossGoon.Movement.Warp(spawnPos);
-            if (_bossGoon.Health.IsKnockedOut || _bossGoon.Health.IsDead)
-            {
-                _bossGoon.Health.Revive();
-            }
-            yield return Wait05;
-            if (!registered) yield break;
 
-            if (!_bossGoon.Avatar.gameObject.activeSelf) _bossGoon.Avatar.gameObject.SetActive(true);
-            if (_bossGoon.Movement.Agent != null && _bossGoon.Movement.Agent.enabled == false) _bossGoon.Movement.Agent.enabled = true;
-
-            if (GiveUpRange == 0f)
+            if (!_quest.hasSavedCombatVariables)
             {
-                GiveUpRange = _bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
-                GiveUpAfterSuccessfulHits = _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
-                DefaultSearchTime = _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
+                _quest.GiveUpRange = _bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
+                _quest.GiveUpAfterSuccessfulHits = _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
+                _quest.DefaultSearchTime = _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
+                _quest.hasSavedCombatVariables = true;
             }
 
             _bossGoon.Behaviour.CombatBehaviour.GiveUpRange = 70f;
             _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 200;
             _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
 
-            void OnBossDied()
-            {
-                completed = true;
-                MelonCoroutines.Start(QuestReward(bossGoon));
-                this.Complete();
+            _quest.bossDiedAction = (UnityEngine.Events.UnityAction)_quest.OnBossDied;
+            bossGoon.Health.onDieOrKnockedOut.AddListener(_quest.bossDiedAction);
 
-                if (bossDiedAction != null)
-                {
-                    bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
-                    bossDiedAction = null;
-                }
-            }
-            bossDiedAction = (UnityEngine.Events.UnityAction)OnBossDied;
-            bossGoon.Health.onDieOrKnockedOut.AddListener(bossDiedAction);
-
-            yield return null;
+            _quest.bossHasSpawned = true;
+            yield break;
         }
 
-        private IEnumerator EquipBossWeapon()
+        public IEnumerator EquipBossWeapon()
         {
-            #region Cracked Shotgun
             bossGoon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/PumpShotgun");
             yield return Wait05;
             if (!registered) yield break;
@@ -687,11 +617,11 @@ namespace CartelEnforcer
                 if (wep != null)
                 {
 
-                    wep.MaxUseRange = Mathf.Round(25f * questDifficultyScalar);
+                    wep.MaxUseRange = Mathf.Round(25f * _quest.questDifficultyScalar);
                     wep.MinUseRange = 0.4f;
-                    wep.HitChance_MaxRange = Mathf.Lerp(0.08f, 0.15f, questDifficultyScalar - 1f);
-                    wep.HitChance_MinRange = Mathf.Lerp(0.65f, 0.85f, questDifficultyScalar - 1f);
-                    wep.MaxFireRate = 2.6f - (questDifficultyScalar - 1f);
+                    wep.HitChance_MaxRange = Mathf.Lerp(0.08f, 0.15f, _quest.questDifficultyScalar - 1f);
+                    wep.HitChance_MinRange = Mathf.Lerp(0.65f, 0.85f, _quest.questDifficultyScalar - 1f);
+                    wep.MaxFireRate = 2.6f - (_quest.questDifficultyScalar - 1f);
                     wep.CooldownDuration = 0.8f;
                     wep.Damage = 55f;
                     wep.ReloadTime = 2.3f;
@@ -703,13 +633,11 @@ namespace CartelEnforcer
                 }
             }
 
-            if (bossGoon.Behaviour.CombatBehaviour.DefaultWeapon == null && bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
-                bossGoon.Behaviour.CombatBehaviour.DefaultWeapon = bossGoon.Behaviour.CombatBehaviour.currentWeapon;
-#endregion
-            Log("Setup Boss Weapon");
+            if (bossGoon.Behaviour.CombatBehaviour._defaultWeapon == null && bossGoon.Behaviour.CombatBehaviour.currentWeapon != null)
+                bossGoon.Behaviour.CombatBehaviour._defaultWeapon = bossGoon.Behaviour.CombatBehaviour.currentWeapon;
         }
 
-        private IEnumerator RunRageStage()
+        public IEnumerator RunRageStage()
         {
             DrinkItem drinkAct = bossGoon.transform.Find("Aux/Drink").GetComponent<DrinkItem>();
             Log("RunRage Stage");
@@ -737,7 +665,7 @@ namespace CartelEnforcer
                         {
                             yield return Wait2;
                             if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) yield break;
-                            bossGoon.Health.Health += Mathf.RoundToInt(Mathf.Lerp(35f, 65f, questDifficultyScalar - 1f));
+                            bossGoon.Health.Health += Mathf.RoundToInt(Mathf.Lerp(35f, 65f, _quest.questDifficultyScalar - 1f));
                         }
                         drinkAct.End();
                         healthRegenerated = true;
@@ -746,7 +674,7 @@ namespace CartelEnforcer
                     {
                         Log("DrinkAction is null");
                     }
-                    Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
+                    Player p = PlayerManager.GetClosestPlayer(bossGoon.transform.position, out float dist);
                     yield return Wait01;
                     if (!registered) yield break;
 
@@ -782,192 +710,8 @@ namespace CartelEnforcer
                 }
             }
 
-            yield return null;
+            yield break;
         }
-
-
-        public override void OnMinPass()
-        {
-            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return;
-#if MONO
-            base.OnMinPass();
-#endif
-            if (!InstanceFinder.IsServer)
-            {
-                return;
-            }
-            if (QuestEntry_Investigate != null && QuestEntry_Investigate.State == EQuestState.Active && !completed)
-            {
-                if (QuestEntry_Investigate != null && QuestEntry_Investigate.entryUI != null && this.hudUIExists)
-                    QuestEntry_Investigate.SetEntryTitle($"â€¢ Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\nâ€¢ Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
-
-                if (StageDeadDropsObserved >= 2 || StageGatheringsDefeated >= 1)
-                {
-                    Log("Completed first stage");
-                    QuestEntry_Investigate.Complete();
-                    return;
-                }
-            }
-            else if (QuestEntry_DefeatBoss != null && QuestEntry_DefeatBoss.State == EQuestState.Active && !completed)
-            {
-                if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 659 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 800)
-                {
-                    completed = true;
-
-                    QuestEntry_DefeatBoss.SetState(EQuestState.Failed);
-                    // player slept through the night boss disappears and quest fails
-                    bossGoon.Despawn();
-                    ResetGoonBoss();
-                    this.Fail();
-                    return;
-                }
-
-
-                if (bossGoon != null && !completed)
-                {
-                    Log("MinPass QE Defeat Boss");
-                    QuestEntry_DefeatBoss.SetEntryTitle($"Defeat the Cartel Brute \nHP:{Mathf.RoundToInt(bossGoon.Health.Health)}");
-                    Player p = Player.GetClosestPlayer(bossGoon.transform.position, out float dist);
-
-                    if (dist < 16f && !bossCombatBegun)
-                    {
-                        bossCombatBegun = true;
-                        bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
-                        bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
-                    }
-
-                    if (bossCombatBegun)
-                    {
-                        fightElapsed++;
-
-
-                        if (!rageStageStarted)
-                        {
-                            if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
-                                bossGoon.Behaviour.CombatBehaviour.Enable_Networked();
-
-                            if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null || bossGoon.Behaviour.CombatBehaviour.IsCurrentWeaponMelee())
-                            {
-                                coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
-                            }
-
-                            if (bossGoon.Health.Health < 230f || fightElapsed > 40)
-                            {
-                                rageStageStarted = true;
-                                coros.Add(MelonCoroutines.Start(RunRageStage()));
-                            }
-                        }
-                        if (rageStageStarted)
-                        {
-
-                        }
-
-                        // Check distance of boss to player & Check distance of Boss to the area & check elapsed time under 5min
-                        if (dist > 70f || Vector3.Distance(bossGoon.CenterPoint, QuestEntry_DefeatBoss.PoILocation.position) > 70f || fightElapsed > 300)
-                        {
-                            completed = true;
-
-                            QuestEntry_DefeatBoss.SetState(EQuestState.Failed);
-                            // Player Out of range or Boss is over 70 units from spawn pos or time has elapsed over 5min
-                            bossGoon.Despawn();
-                            ResetGoonBoss();
-                            this.Fail();
-                            return;
-                        }
-
-                    }
-
-                }
-            }
-
-        }
-
-        private void HourPass()
-        {
-            if (!registered || SaveManager.Instance.IsSaving || completed || this.State != EQuestState.Active) return;
-
-            Log("HourPass In Quest");
-            if (!InstanceFinder.IsServer)
-            {
-                return;
-            }
-            if (QuestEntry_Investigate.State == EQuestState.Active)
-            {
-                Log("State Investigate");
-            }
-            else if (QuestEntry_WaitForContact.State == EQuestState.Active)
-            {
-                if (!contactMade)
-                {
-                    Log("State WaitContact");
-                    if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 0 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 100)
-                    {
-                        contactMade = true;
-                        try
-                        {
-                            Log("Set Waypoint");
-                            if (QuestEntry_WaitForContact.PoI != null && QuestEntry_WaitForContact.PoI.UI != null)
-                                QuestEntry_WaitForContact.PoI.UI.gameObject.SetActive(true);
-                            if (QuestEntry_WaitForContact.compassElement != null)
-                                QuestEntry_WaitForContact.compassElement.Visible = true;
-                            QuestEntry_WaitForContact.SetEntryTitle($"Read Manny's text message.");
-                        }
-                        catch (NullReferenceException ex)
-                        {
-                            Log("Quest Entry encountered an error: " + ex);
-                        }
-                        coros.Add(MelonCoroutines.Start(ContactSpawn()));
-                    }
-                }
-                else if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 359 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 402 && !inContactDialogue && contactMade)
-                {
-                    completed = true;
-
-                    QuestEntry_WaitForContact.SetState(EQuestState.Failed);
-                    QuestEntry_DefeatBoss.SetState(EQuestState.Failed);
-
-                    // Quest time out player did not attend meeting, not currently in dialogue with contact -> despawn contact fail quest, cleanup
-                    MelonCoroutines.Start(RunContactDespawn(contactNPC, true));
-                    this.Fail();
-                    return;
-                }
-                else if (contactMade)
-                {
-                    Log("Wait For Player To Arrive To NPC and initiate dialogue");
-                }
-            }
-        }
-
-        private void ResetGoonBoss()
-        {
-            if (bossGoon != null)
-            {
-                if (bossGoon.Behaviour.CombatBehaviour.Active)
-                    bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
-
-                if (bossDiedAction != null)
-                {
-                    bossGoon.Health.onDieOrKnockedOut.RemoveListener(bossDiedAction);
-                    bossDiedAction = null;
-                }
-                // Reset all non default stats that would carry on modified
-                bossGoon.Health.MaxHealth = 100f;
-                bossGoon.Movement.MoveSpeedMultiplier = 0.8f;
-                bossGoon.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
-                bossGoon.Behaviour.ScheduleManager.EnableSchedule();
-                bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-
-                bossGoon.Behaviour.CombatBehaviour.GiveUpRange = GiveUpRange;
-                bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = GiveUpAfterSuccessfulHits;
-                bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = DefaultSearchTime;
-            }
-
-            return;
-        }
-
-        public QuestEntry QuestEntry_Investigate;
-        public QuestEntry QuestEntry_WaitForContact;
-        public QuestEntry QuestEntry_DefeatBoss;
 
     }
 }

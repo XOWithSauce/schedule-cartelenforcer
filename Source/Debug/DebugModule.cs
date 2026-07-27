@@ -19,18 +19,16 @@ using static CartelEnforcer.ConsoleModule;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Economy;
-using ScheduleOne.ItemFramework;
 using ScheduleOne.Map;
 using ScheduleOne.NPCs;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI;
-using ConsoleType = ScheduleOne.Console;
 using TMPro;
+using ConsoleType = ScheduleOne.Console;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Economy;
-using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.PlayerScripts;
@@ -44,8 +42,10 @@ namespace CartelEnforcer
     public static class DebugModule
     {
         // Coordinate ui elements for debug
-        public static TextMeshProUGUI _positionText;
-        public static Transform _playerTransform;
+        public static TextMeshProUGUI positionText;
+        public static Transform playerTransform;
+        public static Transform debugVisualParent;
+
 
         [Conditional("DEBUG")] // Strips out of build the 30kb worth of strings from debug logging
         public static void Log(string msg, [CallerMemberName] string memberName = "")
@@ -205,7 +205,7 @@ namespace CartelEnforcer
             float distanceToP = 160f;
             foreach (Dealer d in allDealers)
             {
-                if (d.DealerType == EDealerType.CartelDealer) continue;
+                if (d.DealerData.DealerType == EDealerType.CartelDealer) continue;
                 if (!d.IsRecruited) continue;
                 if (d.isInBuilding) continue;
 
@@ -231,11 +231,11 @@ namespace CartelEnforcer
                 {
                     targetNPCs[random].HasActiveQuest = true;
                     InitMiniQuestDialogue(random);
-                    LogRelease($"Started Mini Quest for NPC: {random.fullName}");
+                    LogRelease($"Started Mini Quest for NPC: {random.ID}");
                 }
                 else
                 {
-                    LogRelease($"Failed to give Mini Quest for NPC: {random.fullName}, try again");
+                    LogRelease($"Failed to give Mini Quest for NPC: {random.ID}, try again");
                 }
             }
             yield break;
@@ -287,7 +287,7 @@ namespace CartelEnforcer
             }
             if (nearest == null) yield break;
 
-            LogRelease($"Stealing Nearest Customer: {nearest.NPC.fullName}");
+            LogRelease($"Stealing Nearest Customer: {nearest.NPC.ID}");
             StealCustomer(nearest.NPC);
 
             yield break;
@@ -312,17 +312,17 @@ namespace CartelEnforcer
         // display player pos 
         public static IEnumerator MakeUI()
         {
-            _playerTransform = Player.Local.CenterPointTransform;
+            playerTransform = Player.Local.CenterPointTransform;
             HUD hud = Singleton<HUD>.Instance;
-            _positionText = new GameObject("PlayerPositionText").AddComponent<TextMeshProUGUI>();
-            _positionText.transform.SetParent(hud.canvas.transform, false);
-            _positionText.alignment = TextAlignmentOptions.TopLeft;
-            _positionText.fontSize = 16;
-            _positionText.color = Color.red;
-            _positionText.rectTransform.anchorMin = new Vector2(0, 1);
-            _positionText.rectTransform.anchorMax = new Vector2(0, 1);
-            _positionText.rectTransform.pivot = new Vector2(0, 1);
-            _positionText.rectTransform.anchoredPosition = new Vector2(40, -40);
+            positionText = new GameObject("PlayerPositionText").AddComponent<TextMeshProUGUI>();
+            positionText.transform.SetParent(hud.canvas.transform, false);
+            positionText.alignment = TextAlignmentOptions.TopLeft;
+            positionText.fontSize = 16;
+            positionText.color = Color.red;
+            positionText.rectTransform.anchorMin = new Vector2(0, 1);
+            positionText.rectTransform.anchorMax = new Vector2(0, 1);
+            positionText.rectTransform.pivot = new Vector2(0, 1);
+            positionText.rectTransform.anchoredPosition = new Vector2(40, -40);
             yield return null;
         }
 
@@ -331,12 +331,12 @@ namespace CartelEnforcer
         {
             Log("Spawning Debug visuals for Ambush Areas");
 
-            Shader standardShader = Shader.Find("Unlit/Color");
-            if (standardShader == null)
+            if (debugVisualParent == null)
             {
-                standardShader = Shader.Find("Standard");
+                debugVisualParent = new GameObject("DebugVisuals").transform;
             }
 
+            Shader standardShader = Shader.Find("Universal Render Pipeline/Lit");
             // Create materials once
             Dictionary<EMapRegion, Material> regionMaterials = new Dictionary<EMapRegion, Material>();
             foreach (EMapRegion region in Enum.GetValues(typeof(EMapRegion)))
@@ -372,7 +372,7 @@ namespace CartelEnforcer
                     mr.receiveShadows = false;
                     mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-                    cube.transform.parent = Map.Instance.transform;
+                    cube.transform.parent = debugVisualParent;
                     cube.transform.localScale = new Vector3(rad, rad, rad);
                     cube.transform.position = loc.transform.position + new Vector3(0, 25f + rad, 0);
                     cube.SetActive(true);
@@ -404,11 +404,14 @@ namespace CartelEnforcer
         }
         public static IEnumerator SpawnDriveByAreaVisual()
         {
+            if (debugVisualParent == null)
+            {
+                debugVisualParent = new GameObject("DebugVisuals").transform;
+            }
+
             Log("Spawning Debug visuals for Drive By Triggers");
             // Shader select order
-            Shader standardShader = Shader.Find("Unlit/Color");
-            if (standardShader == null)
-                standardShader = Shader.Find("Standard");
+            Shader standardShader = Shader.Find("Universal Render Pipeline/Lit");
 
             Material sphereMaterial = new Material(standardShader);
             sphereMaterial.color = new Color(255f / 255f, 145f / 255f, 0f / 255f);
@@ -424,7 +427,7 @@ namespace CartelEnforcer
                 mr.receiveShadows = false;
                 mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
 
-                sphere.transform.parent = Map.Instance.transform;
+                sphere.transform.parent = debugVisualParent;
                 sphere.transform.localScale = new Vector3(rad * 2, rad * 2, rad * 2);
                 sphere.transform.position = trig.triggerPosition + new Vector3(0, 20f + rad * 2, 0);
                 sphere.SetActive(true);

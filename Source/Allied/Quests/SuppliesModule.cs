@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
-using MelonLoader;
 using UnityEngine.UI;
+using MelonLoader;
 
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelEnforcer;
@@ -32,8 +32,6 @@ using ScheduleOne.Property;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
-using FishNet;
-using TMPro;
 #else
 using Il2CppScheduleOne.Dragging;
 using Il2CppScheduleOne.DevUtilities;
@@ -68,17 +66,35 @@ namespace CartelEnforcer
     {
         public static List<SupplyLocation> supplyLocations;
 
+        // todo add motoroil?
         public static readonly List<string> barrelLootIds = new()
         {
-            "acid", "phosphorus", "gasoline"
+            "acid", "phosphorus", "gasoline", "fertilizer", "pgr", "speedgrow"
         };
         public static List<ItemInstance> barrelLoot = new();
 
-        public static readonly List<string> carLootIds = new()
+        public static readonly List<string> commonLootPool = new()
         {
-            "fullspectrumgrowlight", "dryingrack", "airpot"
+            "fertilizer", "longlifesoil", "extralonglifesoil", "airpot", "moisturepreservingpot",
         };
-        public static List<ItemInstance> carLoot = new();
+
+        public static readonly List<string> rareLootPool = new()
+        {
+            "fullspectrumgrowlight", "ledgrowlight", "dryingrack", "airpot", "moisturepreservingpot",
+        };
+
+        public static readonly List<string> legendaryLootPool = new()
+        {
+            "bigsprinkler", "brickpress", "mixingstationmk2", "cauldron", "laboven", "chemistrystation", "acunit"
+        };
+
+        public static Dictionary<string, List<ItemInstance>> carLoot = new()
+        {
+            { "Common", new() },
+            { "Rare", new() },
+            { "Legendary", new() },
+        };
+
 
         public static readonly List<string> thomasMessageTemplates = new()
         {
@@ -180,18 +196,32 @@ namespace CartelEnforcer
             GetItem = Il2CppScheduleOne.Registry.GetItem;
 #endif
 
-            // acid, phosphorus, gasoline 5 qty itemInstance
+            // acid, phosphorus, gasoline etc 5 qty itemInstance
             foreach (string id in barrelLootIds)
             {
                 ItemDefinition def = GetItem(id);
                 barrelLoot.Add(def.GetDefaultInstance(5));
             }
 
-            // growing gear 7 qty inst
-            foreach (string id in carLootIds)
+
+            // Populate car loot 
+            // randomize the quantity each load, except for legendary tier loot
+            foreach (string id in commonLootPool)
+            {
+                int randomQty = UnityEngine.Random.Range(4, 8);
+                ItemDefinition def = GetItem(id);
+                carLoot["Common"].Add(def.GetDefaultInstance(randomQty));
+            }
+            foreach (string id in rareLootPool)
+            {
+                int randomQty = UnityEngine.Random.Range(2, 5);
+                ItemDefinition def = GetItem(id);
+                carLoot["Rare"].Add(def.GetDefaultInstance(randomQty));
+            }
+            foreach (string id in legendaryLootPool)
             {
                 ItemDefinition def = GetItem(id);
-                carLoot.Add(def.GetDefaultInstance(7));
+                carLoot["Legendary"].Add(def.GetDefaultInstance(1));
             }
             #endregion
 
@@ -329,17 +359,26 @@ namespace CartelEnforcer
 
             veeperVeh.GetComponent<Rigidbody>().isKinematic = true;
 
-            int rewardedSlots = UnityEngine.Random.Range(2, 8);
+            int rewardedSlots = UnityEngine.Random.Range(4, 9);
+
             for (int i = 0; i < rewardStorage.ItemSlots.Count; i++)
             {
                 if (i >= rewardedSlots) break;
-                ItemInstance randomItem = carLoot[UnityEngine.Random.Range(0, carLoot.Count)].GetCopy();
-                // half the time reduce 1 quantity to make it more natural not just flat amount stacks
-                // so it generates 6 to 7 items each slot
-                if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
-                    randomItem.Quantity -= 1;
+                // Common 60%, Rare 35%, Legendary 5%
+                float random = UnityEngine.Random.Range(0f, 1f);
+                List<ItemInstance> selectedLootPool;
+                if (random <= 0.6f)
+                    selectedLootPool = carLoot["Common"];
+                else if (random > 0.6f && random <= 0.95f)
+                    selectedLootPool = carLoot["Rare"];
+                else // Rand > 0.95
+                    selectedLootPool = carLoot["Legendary"];
+
+                ItemInstance randomItem = selectedLootPool[UnityEngine.Random.Range(0, selectedLootPool.Count)].GetCopy();
                 rewardStorage.ItemSlots[i].InsertItem(randomItem);
                 Log($"Generated Supply Reward: {randomItem.ID} x {randomItem.Quantity}");
+                rewardStorage.ContentsChanged();
+                Log("Invoke changed contents");
             }
 #if MONO
             System.Action onClosedAction = null;
@@ -369,7 +408,7 @@ namespace CartelEnforcer
             rewardStorage.onClosed += onClosedAction;
             rewardStorage.StorageEntitySubtitle = "Cartel Supply Delivery";
 
-            yield return null;
+            yield break;
         }
 
         // Because Docks spawned barrels have drag interaction this function prevents that
@@ -436,7 +475,7 @@ namespace CartelEnforcer
             goonGuard = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(pos);
             goonGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false); // set stayinside disable
             goonGuard.Behaviour.ScheduleManager.DisableSchedule();
-            if (goonGuard.isInBuilding) 
+            if (goonGuard.isInBuilding)
             {
                 Log("Exit Guard Building");
                 goonGuard.ExitBuilding(goonGuard.CurrentBuilding);
@@ -464,7 +503,7 @@ namespace CartelEnforcer
 #endif
             if (weaponShotgun != null)
             {
-                goonGuard.Behaviour.CombatBehaviour.DefaultWeapon = weaponShotgun;
+                goonGuard.Behaviour.CombatBehaviour.SetDefaultWeapon(weaponShotgun);
             }
             if (weaponRangedShotgun != null)
             {
@@ -479,14 +518,14 @@ namespace CartelEnforcer
                 weaponRangedShotgun.MaxUseRange = 36f;
                 weaponRangedShotgun.MinUseRange = 0.1f;
             }
-            goonGuard.Behaviour.CombatBehaviour.DefaultWeapon.Equip(goonGuard.Avatar);
+            goonGuard.Behaviour.CombatBehaviour._defaultWeapon.Equip(goonGuard.Avatar);
 
-            goonGuard.Health.MaxHealth = 500f;
+            goonGuard.NPCData.Health.MaxHealth = 500f;
             goonGuard.Health.Health = 500f;
             goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.55f));
 
             // create dialogue choice
-             
+
             DialogueController controller = goonGuard.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
             string text = "Relax buddy, the boss sent me.";
@@ -509,11 +548,12 @@ namespace CartelEnforcer
                 }
             }
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)ReplyChosen);
-            guardChoiceIndex = controller.AddDialogueChoice(choice); 
+            guardChoiceIndex = controller.AddDialogueChoice(choice);
 
             alliedGuard = goonGuard;
 
             coros.Add(MelonCoroutines.Start(HandleGuardGoon()));
+            return;
         }
 
         public static IEnumerator HandleGuardGoon()
@@ -587,11 +627,12 @@ namespace CartelEnforcer
                         alliedGuard.Movement.ResumeMovement();
                 }
             }
+            yield break;
         }
 
         private static bool CanStartInterrogate()
         {
-            return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0 && !alliedGuard.DialogueHandler.IsDialogueInProgress;
+            return !Singleton<DialogueCanvas>.Instance.IsOpen && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount <= 0 && !alliedGuard.DialogueHandler.IsDialogueInProgress;
         }
 
         public static IEnumerator CheckInterrogate()
@@ -671,18 +712,16 @@ namespace CartelEnforcer
         {
             // because calling base.MinPass in il2cpp crashes instantly
             //activeAlliedSupplies.UpdateHUDUI();
+
             if (activeAlliedSupplies.hudUI != null && !activeAlliedSupplies.hudUI.WasCollected && activeAlliedSupplies.hudUI.Pointer != IntPtr.Zero)
             {
                 TextMeshProUGUI textComp = activeAlliedSupplies.hudUI.MainLabel;
                 if (textComp != null && !textComp.WasCollected && textComp.Pointer != IntPtr.Zero)
                 {
-                    textComp.text = activeAlliedSupplies.title + activeAlliedSupplies.Subtitle;
+                    textComp.text = activeAlliedSupplies.GetQuestTitle() + activeAlliedSupplies.Subtitle;
 
                     textComp.ForceMeshUpdate();
                 }
-                else
-                    Log("Text component from Hud UI was garbage collected");
-
 
                 VerticalLayoutGroup group = activeAlliedSupplies.hudUI.hudUILayout;
                 if (group != null && !group.WasCollected && group.Pointer != IntPtr.Zero)
@@ -695,104 +734,9 @@ namespace CartelEnforcer
                     group.enabled = false;
                     group.enabled = true;
                 }
-                else
-                    Log("Layout Group component from Hud UI was garbage collected");
-            }
-            else
-            {
-                Log("Hud UI was garbage collected");
             }
         }
 #endif
-
-        public static void MinPassSupply()
-        {
-            if (!registered || Singleton<SaveManager>.Instance.IsSaving || activeAlliedSupplies == null || activeAlliedSupplies.State != EQuestState.Active) return;
-            if (!InstanceFinder.IsServer)
-            {
-                Log("Not server instance");
-                return;
-            }
-
-#if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
-#else
-            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
-#endif
-            {
-                activeAlliedSupplies.Fail();
-            }
-
-            activeAlliedSupplies.Subtitle = $"\n<color=#757575>{activeAlliedSupplies.GetExpiryText()} until supplies vanish</color>";
-
-
-#if MONO
-            activeAlliedSupplies.OnMinPass();
-#else
-            UpdateQuestHUD();
-            activeAlliedSupplies.CheckExpiry();
-            if (activeAlliedSupplies.State != EQuestState.Active) return;
-#endif
-
-            if (activeAlliedSupplies.QuestEntry_LocateSupplies != null && activeAlliedSupplies.QuestEntry_LocateSupplies.State == EQuestState.Active)
-            {
-                if (Vector3.Distance(
-                    a: Player.Local.CenterPointTransform.position,
-                    b: activeAlliedSupplies.location.Type == ESupplyType.Van ? activeAlliedSupplies.location.CarPosition : activeAlliedSupplies.location.BarrelObjects[0].transform.position
-                ) < 14f)
-                {
-                    activeAlliedSupplies.QuestEntry_LocateSupplies.SetState(EQuestState.Completed, false);
-                    return;
-                }
-            }
-
-            if (activeAlliedSupplies.QuestEntry_GatherSupplies != null && activeAlliedSupplies.QuestEntry_GatherSupplies.State == EQuestState.Active)
-            {
-                // If barrel update barrel poi and compass pos
-                bool suppliesClaimed = false;
-                // Check unclaimed barrels, update poi
-                if (activeAlliedSupplies.location.Type == ESupplyType.Barrel)
-                {
-                    Vector3 nextBarrel = Vector3.zero;
-                    Transform currentBarrel;
-                    int consumedBarrels = 0;
-                    foreach (GameObject go in activeAlliedSupplies.location.BarrelObjects)
-                    {
-                        currentBarrel = go.transform.Find("CE_SUPPLY"); // find the interactable child object
-                        if (currentBarrel == null)
-                        {
-                            consumedBarrels++;
-                            continue;
-                        }
-                        else
-                        {
-                            nextBarrel = currentBarrel.position;
-                        }
-                    }
-
-                    if (consumedBarrels == activeAlliedSupplies.location.BarrelObjects.Count)
-                    {
-                        suppliesClaimed = true;
-                    }
-                    else if (nextBarrel != Vector3.zero)
-                    {
-                        if (activeAlliedSupplies.QuestEntry_GatherSupplies.PoI != null && activeAlliedSupplies.QuestEntry_GatherSupplies.PoI.gameObject != null)
-                        {
-                            activeAlliedSupplies.QuestEntry_GatherSupplies.SetPoILocation(nextBarrel);
-                        }
-                    }
-                }
-
-                if (suppliesClaimed)
-                {
-                    activeAlliedSupplies.Complete(false);
-                    return;
-                }
-            }
-            return;
-
-        }
-        
     }
     public enum ESupplyType
     {

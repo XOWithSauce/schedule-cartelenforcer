@@ -1,4 +1,3 @@
-
 using MelonLoader;
 using System.Reflection;
 using static CartelEnforcer.CartelEnforcer;
@@ -12,7 +11,9 @@ namespace CartelEnforcer
 
         public void SetupMelonPreferences()
         {
-            modConfigCategory = MelonPreferences.CreateCategory(identifier: $"{BuildInfo.Name} {BuildInfo.Author}", display_name: BuildInfo.Name);
+            string categoryIdentifier = $"{BuildInfo.Name} {BuildInfo.Author}";
+            modConfigCategory = MelonPreferences.CreateCategory(categoryIdentifier, display_name: BuildInfo.Name);
+
             modConfigCategory.CreateEntry(
                 "debugMode", currentConfig.debugMode,
                 display_name: "Debug Mode Enabled",
@@ -96,8 +97,7 @@ namespace CartelEnforcer
                 }
                 modConfigCategory.Entries[i].OnEntryValueChangedUntyped.Subscribe(ThisEntryChanged);
             }
-           
-            MelonPreferences.Save();
+            MelonPreferences.SaveCategory<MelonPreferences_Category>(categoryIdentifier, printmsg: false);
             Log("Melon preferences created");
         }
 

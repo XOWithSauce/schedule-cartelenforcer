@@ -208,7 +208,7 @@ namespace CartelEnforcer
                     text = "What's the word around town? I need info on the Benzies.";
                     break;
             }
-            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-${paid}</color>)";
+            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>${paid}</color>)";
             choice.Enabled = true;
 #if MONO
             choice.onChoosen.AddListener(() => { OnMiniQuestChosen(choice, npc, controller, paid); });
@@ -427,7 +427,6 @@ namespace CartelEnforcer
             System.Action onOpenedAction = null;
 #else
             Il2CppSystem.Action onOpenedAction = null;
-
 #endif
             void WrapOnOpenCallback()
             {
@@ -436,7 +435,10 @@ namespace CartelEnforcer
                 opened = true;
                 if (changeInfluence)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(entity.Region, influenceConfig.deadDropSuccess);
-                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active && StageDeadDropsObserved <= 1)
+                if (activeDefeatEnforcerQuest != null && activeDefeatEnforcerQuest.State == EQuestState.Active &&
+                    activeDefeatEnforcerQuest.QuestEntry_Investigate != null && 
+                    activeDefeatEnforcerQuest.QuestEntry_Investigate.State == EQuestState.Active && 
+                    StageDeadDropsObserved <= 1)
                     StageDeadDropsObserved += 1;
 
                 if (onOpenedAction != null)

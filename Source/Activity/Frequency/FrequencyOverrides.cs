@@ -2,7 +2,6 @@ using HarmonyLib;
 using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
-using static CartelEnforcer.ConfigLoader;
 using static CartelEnforcer.DebugModule;
 
 #if MONO

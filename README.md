@@ -1,7 +1,7 @@
 # Cartel Enforcer
 **Requires Melon Loader**
 
-Cartel Enforcer adds new features and challenges to the Cartel, including new ambush locations, events, and a better dealer robbery system. Experience the drive-by events, take on mini-quests, and influence the enforced Cartel's presence in new ways!
+Cartel Enforcer adds new features and challenges to the Cartel, including new ambush locations, events, and a better dealer robbery system. Experience the drive-by events, take on mini-quests, and influence the enforced Cartels presence in new ways!
 
 ---
 
@@ -10,6 +10,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [Installation](#installation)
 * [Config Files Locations](#config-files-locations)
 * [Configuration](#configuration)
+* [Mod Quests](#mod-added-quests)
 * [Events and Activities](#events-and-activities)
     * [Realistic Robberies](#realistic-robberies)
     * [Intercept Deals](#intercept-deals)
@@ -21,13 +22,6 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [Allied Extensions](#allied-extensions)
     * [Persuade Cartel Dealers](#persuade-cartel-dealers)
     * [Greet the Gathering Goons](#greet-the-gathering-goons)
-    * [Allied Intro](#allied-intro)
-    * [Allied Supplies](#allied-supplies)
-    * [True Brothers Quest](#true-brothers)
-* [End Game Quests](#end-game-quests)
-    * [Unexpected Alliances](#unexpected-alliances)
-    * [Infiltrate Manor](#infiltrate-manor)
-    * [Four Wheels](#four-wheels) 
 * [Modifying Configs](#modifying-configs-and-spawns)
     * [Modifying Event Frequency](#modifying-event-frequency)
     * [Modifying Cartel Dealers](#modifying-cartel-dealers)
@@ -53,7 +47,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
-- **End Game Quests:** 3 New Quests where you get to fight enforced cartel members and weaken their influence across the entire Hyland Point.
+- **End Game Quests:** 6 New Quests where you get to fight against the cartel when Hostile and collaborate when Truced!
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Steal Back Customers:** While hostile with the Cartel your customers might be stolen back by the Cartel, requiring you to re-unlock them with free samples!
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
@@ -71,8 +65,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 ### Manual installation: 
 
 1. Install **Melon Loader** from a trusted source like the official [MelonWiki](https://melonwiki.xyz/) and follow their setup instructions.
-2. With **Melon Loader** install version **0.7.0** or **0.7.2 nightly builds** for Schedule I (0.7.1 is incompatible in IL2CPP)
-    - If you use "alternate" Beta version in Steam -> Game Properties -> Betas, then any 0.7.x version is compatible (Must download MONO)
+2. With **Melon Loader** install version **0.7.3** for Schedule I
 3. Download the correct version and unzip the downloaded folder, here you will find the **Mods** folder containing the mod .dll file and **UserData** folder containing the mod data folder
 4. Copy the contents **Mods** folder into the **Steam/steamapps/common/Schedule I/Mods** folder
 5. Copy the contents of **UserData** folder into the **Steam/steamapps/common/Schedule I/UserData** folder
@@ -165,8 +158,15 @@ Manual editing:
     - `0.0`: Monologue messages are displayed for roughly 10 seconds
 ---
 
-## Events and Activities
+## Mod Added Quests
 
+### [Mod Quests Wiki](https://github.com/XOWithSauce/schedule-cartelenforcer/wiki/Mod-Quests)
+
+> The mod comes with 6 new quests! Three quests for when Cartel is Hostile and three quests for when Cartel is Truced. See the Quests Wiki page for more information!
+
+---
+
+## Events and Activities
 
 <img src="https://i.imgur.com/9umAuV9.png">
 
@@ -300,7 +300,7 @@ Unlocked customers can now be stolen back by the Cartel forcing you to re-unlock
 Allied Extensions consists of multiple features that are added to the game while the Cartel is Truced. These features aim to provide new means of reducing influence even while Cartel is Truced in order to progress and complete the game. 
 
 - Allows the player to persuade Cartel Dealers to work for them instead!
-- Adds 2 new quests: Allied Supplies & True Brothers
+- Adds 3 new quests: Allied Intro, Allied Supplies & True Brothers
 
 - Allied Extensions features and cooldowns can be modified from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file
 
@@ -336,174 +336,6 @@ After hiring a succesfully persuaded Cartel Dealer the regions Cartel Influence 
 While a Cartel Goon Gathering is active, greeting all 3 goons in a short timeframe will award the player with influence reduction in the respective region.
 
 - The influence reduction can be changed from `XO_WithSauce-CartelEnforcer/Influence/influence.json` by changing the `trucedGreetingChallenge` value
-
----
-
-### Allied Intro
-
-After player attends the meeting with Thomas and chooses Truce or loads into a save where Westville Cartel Dealer is not recruited and Cartel is Truced, the Allied Intro Quest will be automatically enabled.
-
-> Completion XP: 200
-
-- Find the Westville Cartel Dealer
-- Persuade the Westville Cartel Dealer
-- Hire the Westville Cartel Dealer
-
----
-
-### Allied Supplies
-
-When the Cartel is Truced an Allied Supplies Quest will periodically appear! Grab the Cartel supplies before they disappear.
-
-> Completion XP: 300
-
-- Cooldown time can be changed from the `XO_WithSauce-CartelEnforcer/Allied/config.json` file at `SupplyQuestCooldownHours`
-- Starts at 08:00 whenever the cooldown time has been waited
-- The quest begins by Thomas Benzies sending you a message containing information about the supply location
-- Find the supply location and grab the supplies to complete the quest
-- Remember: Dont mess with the Allied Guard!!!
-
-**Supply Loot by type:**
-- Blue Barrels:
-    - Acid
-    - Phosphorus
-    - Gasoline
-
-- White Van:
-    - Full spectrum grow lights
-    - Drying racks
-    - Air pots
-
-
----
-
-### True Brothers
-
-Help the cartel transport cocaine at the northern waterfront and fight off the police ambush! This Quest can be completed only once per session.
-
-> Completion XP: 1500
-
-- During daytime a Cartel Goon can spawn and invite you to partake in the quest
-- Follow the Cartel Goon to Northern Waterfront and help transport their cocaine
-- Fight off the police ambush with the help of your cartel friends
-
-- **Quest Prerequirements:**
-    1. Cartel must be Truced
-    2. Player must have atleast 4 customers unlocked from Suburbia region
-
-- **Rewards:**
-  - $30 000 in bank wire from Thomas
-  - Unlock feature to launder cash through the Cartel (NOT IMPLEMENTED YET)
-
----
-
-
-## End Game Quests
-
-All end game quests scale in difficulty based on the total cartel influence across all regions. Higher total influence will result in enemies having more HP and being overall more lethal and harder to kill. XP Rewards are also scaled based on the total cartel influence to compensate for difficulty.
-
----
-
-<img src="https://i.imgur.com/UDb9giZ.png">
-
-### Unexpected Alliances
-
-The End Game Quest can be started by speaking to Manny (the Warehouse Fixer). This Quest can be completed only once per session.
-
-> Note: The *Unexpected Alliances* Quest is in early phase development and is subject to change in content, difficulty and rewards.
-
-- **Quest Prerequirements:**
-    1. Cartel must be Hostile
-    2. Player must have Suburbia region unlocked
-    3. Player must be atleast Bagman rank
-
-- Upon paying the $5000 Bribe to Manny, you get a custom active quest:
-    - First you must intercept cartel dead drops twice
-    - OR you must stop a Cartel Gathering once
-    - After completing the first step you must wait for Manny to arrange a meeting and send a text.
-    - After player attends the meeting and finishes the dialogue they get the final quest step
-    - Kill the Cartel Brute
-        - If you run more than 70 units away from the Brute the Quest will fail
-        - If the Brute runs more than 70 units away from its spawn position the Quest will fail
-        - The Brute enters a Rage Stage when low on HP, starting to drink Cuke to regain health and having random sprint speed boosts
-
-- **Quest Rewards:**
-    - XP Based on Total Cartel Influence (850 - 1700 XP)
-    - You get a Shotgun, Gold Watch, Gold Chain and shotgun shells from the Cartel Brute inventory
-    - Customer relationships increase by 5% for all unlocked customers
-    - Police Law Intensity is lowered by 25%
-    - All unlocked regions have their Cartel Influence decreased by 25%
-    - And lastly but most importantly: *Bragging Rights*
-
----
-
-<img src="https://i.imgur.com/esO142K.png">
-
-### Infiltrate Manor
-
-The End Game Quest can be started by speaking to Ray between 18:15 and 19:00 when they are smoking a cigarette near the courthouse. This Quest can be completed only once per session.
-
-> Note: The *Infiltrate Manor* Quest is in early phase development and is subject to change in content, difficulty and rewards.
-
-- **Quest Prerequirements:**
-    1. Cartel must be Hostile
-    2. Player must have Suburbia region unlocked
-    3. Player must be atleast Bagman rank
-
-- Upon paying the $2500 Bribe to Ray, you get a custom active quest:
-    - First you must investigate the forest near Manor
-    - After investigating, return to Ray to obtain more information
-    - Wait for Night to arrive before breaking into Manor
-    - Break in through the back door of Manor
-    - Kill Manor Goons and steal their loot
-    - Investigate the Manor Upstairs rooms and find Thomas' safe
-    - Leave the Manor before police arrive
-
-- **Quest Rewards:**
-    - XP Based on Total Cartel Influence (600 - 1200 XP)
-    - Ray will give you -15% discount from all properties and businesses until the game is exited
-    - All unlocked regions have their Cartel Influence decreased by 15%
-    - Thomas' safe is filled in order to up to 5 items max from the loot table below
-
-| Item | Drop Chance | Quantity | Notes |
-| :--- | :--- | :--- | :--- |
-| M1911 Magazine | **100%** | 1 | This item is a guaranteed drop. |
-| M1911 Pistol | **33.4%** | 1 | |
-| Cocaine | **10%** | 12-20 |  |
-| Gold Bar | **70%** | 3-7 | This drop prevents cash from spawning. |
-| Cash | **30%** | $1000 | Will spawn if a gold bar does not.  |
-| Silver Watch | **60%** | 1 |  |
-| Silver Chain | **60%** | 1 |  |
-| Stolen Cartel Item | **80%** | 1 | Only spawns if the `cartelStolenItems` pool has items. |
-
----
-
-
----
-
-<img src="https://i.imgur.com/sWndjjy.png">
-
-### Four Wheels
-
-The End Game Quest can be started by speaking to Cranky Frank between 16:00 and 18:00 when they are smoking a cigarette near the Northern Waterfront. This Quest can be completed only once per session.
-
-> Note: The *Four Wheels* Quest is in early phase development and is subject to change in content, difficulty and rewards.
-
-- **Quest Prerequirements:**
-    1. Cartel must be Hostile
-    2. Player must have unlocked atleast 3 customers from the Docks region
-    3. Player must be atleast Hustler rank
-
-- Upon paying the $3500 Bribe to Cranky Frank, you get a custom active quest:
-    - You must first ask Jeremy for additional information after 21:00 at their house. Bribing them costs $6000.
-    - After talking to Jeremy you must stop the Cartel from transporting cocaine in the Northern Waterfront.
-    - After killing all the enemies you must escape before police arrive.
-
-- **Quest Rewards:**
-    - XP Based on Total Cartel Influence (300 - 600 XP)
-    - You get Cocaine Bricks from the SUV trunk (available after all cartel enemies are killed)
-    - Cocaine Bricks amount scales with Total Cartel Influence
-    - All unlocked regions have their Cartel Influence decreased by 10%
 
 ---
 
@@ -681,7 +513,7 @@ You can customize the Cartel Dealers' settings through the **dealer.json** file.
 - **`CartelDealerWalkSpeed`**: Adjusts the **walking speed** of Cartel Dealers (Range 1.0 - 7.0)
 - **`CartelDealerHP`**: Sets the **total health points** for a Cartel dealer (Range 10.0 - 2000.0)
 - **`CartelDealerLethality`**: Controls how lethal Cartel Dealers' weapons are (Range 0.0 - 1.0)
-- **`CartelDealerWeapon`**: Specifies the **weapon** used by Cartel dealers. Supported values are: "M1911", "Revolver", "Knife" and "Shotgun".
+- **`CartelDealerWeapon`**: Specifies the **weapon** used by Cartel dealers. Supported values are: "M1911", "GoldenM1911", "Revolver", "Shotgun", "Knife" and "BrokenBottle".
 - **`StealDealerContractChance`**: Controls the **probability** for the Cartel Dealer stealing Players hired dealers active contracts. (Range 0.0 - 1.0)
 - **`StealPlayerPendingChance`**: Controls the **probability** for the Cartel Dealer stealing Players pending deal requests. (Range 0.0 - 1.0)
 - **`DealerActivityDecreasePerKill`**: A decrease in dealer activity for **each kill** the player makes. (Range 0.0 - 1.0)
@@ -754,23 +586,25 @@ You can add or modify custom ambush locations.
 3. The file content is by default:
 ```json
 {
-    "RangedWeaponAssetPaths": [
-        "Avatar/Equippables/Revolver",
-        "Avatar/Equippables/M1911",
-        "Avatar/Equippables/PumpShotgun"
-    ],
-    "MeleeWeaponAssetPaths": [
-        "Avatar/Equippables/Knife"
-    ],
-    "MinRankForRanged": 2,
-    "AfterDealAmbushEnabled": true,
-    "AmbushTriggerProbability": 0.8,
-    "AmbushWeaponLethality": 0.33
+  "RangedWeapons": [
+    "Revolver",
+    "M1911",
+    "GoldenM1911",
+    "PumpShotgun"
+  ],
+  "MeleeWeapons": [
+    "Knife",
+    "BrokenBottle"
+  ],
+  "MinRankForRanged": 2,
+  "AfterDealAmbushEnabled": true,
+  "AmbushTriggerProbability": 0.8,
+  "AmbushWeaponLethality": 0.33
 }
 ```
 
-- **RangedWeaponAssetPaths** & **MeleeWeaponAssetPaths**: Paths to the weapon assets that get used in Ambushes.
-    - Note: Must be a valid path and string is case sensitive (example: Machete melee weapon can't currently be loaded with "Avatar/Equippables/Machete")
+- **RangedWeapons** & **MeleeWeapons**: Weapon names that Cartel Goons will use in Ambushes (and also in other events where they spawn)
+    - Supported values are: "Revolver", "M1911", "GoldenM1911", "PumpShotgun" for Ranged and "Knife", "BrokenBottle" for Melee weapons.
 - **MinRankForRanged**: Player Rank requirement that indicates when goons start using ranged weapons in ambushes.
 - **AfterDealAmbushesEnabled**: When true by default, after player completes a deal an ambush can happen instantly after. When disabled these stop happening and ambushes are only triggered by positional triggers.
 - **AmbushTriggerProbability**: Controls how much of the regional influence is taked into the calculation of chance.

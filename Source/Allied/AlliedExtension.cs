@@ -26,7 +26,6 @@ using ScheduleOne.UI.Handover;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.UI.Phone.ContactsApp;
 using ScheduleOne.Persistence;
-using FishNet.Connection;
 #else
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Quests;
@@ -41,8 +40,10 @@ using Il2CppScheduleOne.UI.Handover;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI.Phone.ContactsApp;
 using Il2CppScheduleOne.Persistence;
-using Il2Cpp;
+using static Il2CppScheduleOne.Dialogue.DialogueController;
 using Il2CppScheduleOne.NPCs.CharacterClasses;
+using Il2Cpp;
+using Il2CppInterop.Runtime;
 using Il2CppFishNet.Connection;
 #endif
 
@@ -59,7 +60,6 @@ namespace CartelEnforcer
         // Save dealers by region to map out connections 
         // whenever player goes from undecided to truced 
         public static Dictionary<EMapRegion, CartelDealer> dealersByRegion;
-
 
         //Map markers for hired dealers
         public static void MakeMapPoI(Dealer dealer) 
@@ -80,8 +80,6 @@ namespace CartelEnforcer
             dealer.DealerPoI = poiComponent;
             return;
         }
-
-
 
         // If this truce quest gets started right when the state changes it bugs out and throws a jumpscare?
         // maybe its the active dialogue with thomas that triggers it
@@ -110,57 +108,32 @@ namespace CartelEnforcer
                 foreach (Dealer d in Dealer.AllPlayerDealers)
                     if (d.ID == "molly_presley")
                         molly = d;
+
+                if (molly == null)
+                    Log("Molly dealer not found in all player dealers");
+
                 foreach (CartelDealer d in DealerActivity.allCartelDealers)
                 {
-                    // Assign cuts
-                    switch (d.Region)
-                    {
-                        case EMapRegion.Westville:
-                            d.Cut = alliedConfig.WestvilleCartelDealerCut;
-                            d.SigningFee = alliedConfig.WestvilleCartelSigningFee;
-                            break;
-
-                        case EMapRegion.Downtown:
-                            d.Cut = alliedConfig.DowntownCartelDealerCut;
-                            d.SigningFee = alliedConfig.DowntownCartelSigningFee;
-                            break;
-
-                        case EMapRegion.Docks:
-                            d.Cut = alliedConfig.DocksCartelDealerCut;
-                            d.SigningFee = alliedConfig.DocksCartelSigningFee;
-                            break;
-
-                        case EMapRegion.Suburbia:
-                            d.Cut = alliedConfig.SuburbiaCartelDealerCut;
-                            d.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
-                            break;
-
-                        case EMapRegion.Uptown:
-                            d.Cut = alliedConfig.UptownCartelDealerCut;
-                            d.SigningFee = alliedConfig.UptownCartelSigningFee;
-                            break;
-
-                        default:
-                            d.Cut = 99f;
-                            d.SigningFee = 9999f;
-                            break;
-                    }
+                    Log($"{d.Region} dealer assign cut and fee");
+                    AssignDealerConfig(d);
 
                     // Assign connections
-                    foreach (var kvp in dealersByRegion)
+                    if (dealersByRegion.Count > 0)
                     {
-                        // Westville must have molly unlocked
-                        if (kvp.Key == EMapRegion.Westville)
+                        if (d.Region == EMapRegion.Westville)
+                            d.RelationData.Connections.Add(molly);
+                        else
                         {
-                            dealersByRegion[kvp.Key].RelationData.Connections.Add(molly);
-                        }
-                        else // must have previous dealer unlocked
-                        {
-                            EMapRegion prev = (EMapRegion)((int)kvp.Key - 1);
-                            dealersByRegion[kvp.Key].RelationData.Connections.Add(dealersByRegion[prev]);
+                            EMapRegion prev = (EMapRegion)((int)d.Region - 1);
+                            d.RelationData.Connections.Add(dealersByRegion[prev]);
                         }
                     }
+                    else
+                    {
+                        Log("Failed to assign cartel dealer connections, dealers by region not mapped");
+                    }
 
+                    Log($"{d.Region} Generate persuade");
                     AddPersuadeDialogue(d);
                 }
                 // the mod still tracks the quest need to revert that in config manually it seems
@@ -169,7 +142,7 @@ namespace CartelEnforcer
                     // Wait until exit dialogue because setting up quest during it caused big bug
                     bool CanStart()
                     {
-                        return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0;
+                        return !Singleton<DialogueCanvas>.Instance.IsOpen && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount <= 0;
                     }
 #if MONO
                     yield return new WaitUntil(CanStart);
@@ -196,7 +169,7 @@ namespace CartelEnforcer
                     if (d.IsRecruited)
                     {
                         d.IsRecruited = false;
-                        d.Inventory.ClearInventoryEachNight = true;
+                        d.NPCData.Inventory.ClearInventoryOnNewDay = true;
                         if (d.AssignedCustomers.Count == 0)
                             continue;
 
@@ -291,7 +264,39 @@ namespace CartelEnforcer
                 if (d.ID == "molly_presley")
                     molly = d;
 
+            // Populate dealers by region since its needed for changing status in runtime
+            // Also fixes the dialogue not valid text being overly long in isValid check in hire dialogue opt
             dealersByRegion = new();
+            foreach (CartelDealer d in DealerActivity.allCartelDealers)
+            {
+                switch (d.Region)
+                {
+                    case EMapRegion.Westville:
+                        dealersByRegion.Add(EMapRegion.Westville, d);
+                        break;
+
+                    case EMapRegion.Downtown:
+                        dealersByRegion.Add(EMapRegion.Downtown, d);
+                        break;
+
+                    case EMapRegion.Docks:
+                        dealersByRegion.Add(EMapRegion.Docks, d);
+                        break;
+
+                    case EMapRegion.Suburbia:
+                        dealersByRegion.Add(EMapRegion.Suburbia, d);
+                        break;
+
+                    case EMapRegion.Uptown:
+                        dealersByRegion.Add(EMapRegion.Uptown, d);
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+
+
 #if MONO
             if (NetworkSingleton<Cartel>.Instance.Status == ECartelStatus.Truced && currentConfig.alliedExtensions)
 #else
@@ -300,51 +305,14 @@ namespace CartelEnforcer
             {
                 // If world was loaded with cartel already truced, go and reset the dealer cuts and add dialogue options for non recruited cartel
                 // Also change mugshot sprite to be the Benzies logo + change First Name to include Region
-
                 bool westvilleRecruited = false;
                 foreach (CartelDealer d in DealerActivity.allCartelDealers)
                 {
-                    switch (d.Region)
-                    {
-                        case EMapRegion.Westville:
-                            d.Cut = alliedConfig.WestvilleCartelDealerCut;
-                            d.SigningFee = alliedConfig.WestvilleCartelSigningFee;
-                            dealersByRegion.Add(EMapRegion.Westville, d);
-                            break;
-
-                        case EMapRegion.Downtown:
-                            d.Cut = alliedConfig.DowntownCartelDealerCut;
-                            d.SigningFee = alliedConfig.DowntownCartelSigningFee;
-                            dealersByRegion.Add(EMapRegion.Downtown, d);
-                            break;
-
-                        case EMapRegion.Docks:
-                            d.Cut = alliedConfig.DocksCartelDealerCut;
-                            d.SigningFee = alliedConfig.DocksCartelSigningFee;
-                            dealersByRegion.Add(EMapRegion.Docks, d);
-                            break;
-
-                        case EMapRegion.Suburbia:
-                            d.Cut = alliedConfig.SuburbiaCartelDealerCut;
-                            d.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
-                            dealersByRegion.Add(EMapRegion.Suburbia, d);
-                            break;
-
-                        case EMapRegion.Uptown:
-                            d.Cut = alliedConfig.UptownCartelDealerCut;
-                            d.SigningFee = alliedConfig.UptownCartelSigningFee;
-                            dealersByRegion.Add(EMapRegion.Uptown, d);
-                            break;
-
-                        default:
-                            d.Cut = 99f;
-                            d.SigningFee = 9999f;
-                            break;
-                    }
+                    AssignDealerConfig(d);
 
                     // Change mugshot and first name
-                    d.MugshotSprite = benziesLogo;
-                    d.FirstName = $"{d.FirstName} ({d.Region})";
+                    d.NPCData.Appearance.Mugshot = benziesLogo;
+                    d.NPCData.BasicInfo.FirstName = $"{d.FirstName} ({d.Region})";
 
                     // Set flag for automatic start of the intro allied quest
                     if (d.Region == EMapRegion.Westville && d.IsRecruited)
@@ -352,7 +320,7 @@ namespace CartelEnforcer
 
                     if (d.IsRecruited)
                     {
-                        d.Inventory.ClearInventoryEachNight = false;
+                        d.NPCData.Inventory.ClearInventoryOnNewDay = false;
                         // Already has default dialogue options
                         Log($"- {d.Region} already recruited");
                         continue;
@@ -458,6 +426,42 @@ namespace CartelEnforcer
             if (!TrueBrothersQuestPreRequirementsMet()) return;
             alliedQuests.daysPassedSinceEncounter++;
         }
+
+        public static void AssignDealerConfig(CartelDealer d)
+        {
+            switch (d.Region)
+            {
+                case EMapRegion.Westville:
+                    d.DealerData.SalesCutPercentage = alliedConfig.WestvilleCartelDealerCut;
+                    d.DealerData.SigningFee = alliedConfig.WestvilleCartelSigningFee;
+                    break;
+
+                case EMapRegion.Downtown:
+                    d.DealerData.SalesCutPercentage = alliedConfig.DowntownCartelDealerCut;
+                    d.DealerData.SigningFee = alliedConfig.DowntownCartelSigningFee;
+                    break;
+
+                case EMapRegion.Docks:
+                    d.DealerData.SalesCutPercentage = alliedConfig.DocksCartelDealerCut;
+                    d.DealerData.SigningFee = alliedConfig.DocksCartelSigningFee;
+                    break;
+
+                case EMapRegion.Suburbia:
+                    d.DealerData.SalesCutPercentage = alliedConfig.SuburbiaCartelDealerCut;
+                    d.DealerData.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
+                    break;
+
+                case EMapRegion.Uptown:
+                    d.DealerData.SalesCutPercentage = alliedConfig.UptownCartelDealerCut;
+                    d.DealerData.SigningFee = alliedConfig.UptownCartelSigningFee;
+                    break;
+
+                default:
+                    d.DealerData.SalesCutPercentage = 99f;
+                    d.DealerData.SigningFee = 9999f;
+                    break;
+            }
+        }
     }
     
     // Patch the Cartel Deal Manager while Truced to avoid changing the cartel status to hostile upon expiry
@@ -519,7 +523,7 @@ namespace CartelEnforcer
         // Based on source code these are used to block it
         public static bool CanShowInfluenceChange()
         {
-            return !Singleton<DialogueCanvas>.Instance.isActive && 
+            return !Singleton<DialogueCanvas>.Instance.IsOpen && 
                 !Singleton<DealCompletionPopup>.Instance.IsPlaying && 
                 !Singleton<NewCustomerPopup>.Instance.IsPlaying;
         }
@@ -682,32 +686,4 @@ namespace CartelEnforcer
             return true;
         }
     }
-
-    // When the player hires a cartel dealer whenever the allied extensions is enabled
-    // Set the region influence to 0
-    [HarmonyPatch(typeof(Dealer), "SetIsRecruited")]
-    public static class Dealer_SetIsRecruited_Patch
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(Dealer __instance, NetworkConnection conn)
-        {
-            // If Allied Extensions are not enabled in mod, dont patch
-            if (!currentConfig.alliedExtensions) return true;
-            // only cartel dealers
-            if (__instance.DealerType != EDealerType.CartelDealer) return true;
-
-            // Add truce check
-#if MONO
-            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
-#else
-            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
-#endif
-                return true;
-
-            NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.Region, -1f);
-            AlliedExtension.MakeMapPoI(__instance);
-            return true;
-        }
-    }
-
 }

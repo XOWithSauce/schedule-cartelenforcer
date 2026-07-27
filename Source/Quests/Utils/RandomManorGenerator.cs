@@ -5,6 +5,7 @@ using UnityEngine;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.EndGameQuest;
+
 #if MONO
 using ScheduleOne;
 using ScheduleOne.Audio;
@@ -14,8 +15,6 @@ using ScheduleOne.Interaction;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Misc;
 using ScheduleOne.EntityFramework;
-using ScheduleOne.AvatarFramework.Animation;
-using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.ObjectScripts;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Property;
@@ -33,8 +32,6 @@ using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Misc;
 using Il2CppScheduleOne.EntityFramework;
-using Il2CppScheduleOne.AvatarFramework.Animation;
-using Il2CppScheduleOne.NPCs.CharacterClasses;
 using Il2CppScheduleOne.ObjectScripts;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Property;
@@ -89,13 +86,11 @@ namespace CartelEnforcer
             { "Small Safe", null },
             { "TV_Built", null },
             { "WoodSquareTable", null },
-            { "Metal Bars Sewer Door", null },
-            { "Thomas", null },
+            // { "Metal Bars Sewer Door", null }, Removed 0.4.6>
+            // { "Thomas", null }, Removed 0.4.6>
             { "GoldenToilet", null }
 
         };
-        // Except for sofa thats in the hierarchy inside the RE office which will be manual
-        private static GameObject sofaObj = null;
 
         // During quest needs to track safe
         // public static Safe questSafe = null; // would this be now just a general storage class instead so no extra class component? -> test instantiate
@@ -108,6 +103,8 @@ namespace CartelEnforcer
         // And track all generated objects to destroy them later
         public static List<RoomDesignBase> roomsGenerated = new();
         public static List<GameObject> nonRoomObjects = new();
+        // Flag for tracking when Thomas should be reseated to vehicle
+        public static bool goldenRoomWasGenerated = false;
 
         // For door lerp animation
         private static Quaternion doorOrigRot;
@@ -280,13 +277,12 @@ namespace CartelEnforcer
 
         public static IEnumerator InitManorItemRef()
         {
+            Log("Init manor items ref");
             // parse needed nobs and assign them
             NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
             PrefabObjects spawnablePrefabs = netManager.SpawnablePrefabs;
 
             List<string> keys = new List<string>(buildablesMap.Keys);
-
-            bool sofaAssigned = false;
 
             for (int i = 0; i < spawnablePrefabs.GetObjectCount(); i++)
             {
@@ -296,20 +292,8 @@ namespace CartelEnforcer
 
                 NetworkObject prefab = spawnablePrefabs.GetObject(true, i);
                 string name = prefab?.gameObject.name;
-                // First check for sofa root
-                if (!sofaAssigned && name.Contains("RE Office"))
-                {
-                    //For Sofa: Search Spawnable Prefabs for "RE Office"
-                    //That has transform child object: "Interior" and that has child object "Double Sofa" Instantiate new from that
-                    Transform interior = prefab.transform.Find("Interior");
-                    if (interior != null)
-                    {
-                        sofaAssigned = true;
-                        sofaObj = interior.Find("Double Sofa").gameObject;
-                    }
-                }
                 // Check for the big safe prefab
-                else if (name.Contains("Safe_Built"))
+                if (name.Contains("Safe_Built"))
                 {
                     // Instantiate new from it ->
                     // set scale 0.5 and rot 0 0 90 (similiar scale to small safe and rot so it works without additional work)
@@ -333,7 +317,7 @@ namespace CartelEnforcer
                     {
                         if (buildablesMap[key] == null && name.Contains(key))
                         {
-                            if (key == "Thomas" && name.Contains("BoxSUV")) continue;
+                            if  (name.Contains("BoxSUV")) continue;
                             buildablesMap[key] = prefab;
                             wasAssigned = key;
                             break; // break out
@@ -344,8 +328,6 @@ namespace CartelEnforcer
                         keys.Remove(wasAssigned);
                 }
             }
-
-            
 
             Log("Finished initializing manor items");
 
@@ -362,10 +344,10 @@ namespace CartelEnforcer
             {
                 buildablesMap[key] = null;
             }
-            sofaObj = null;
             questSafe = null;
             activeJukebox = null;
             onSafeBuilt = null;
+            goldenRoomWasGenerated = false;
             roomsGenerated.Clear();
             nonRoomObjects.Clear();
             manorGoons.Clear();
@@ -665,7 +647,7 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                goon.Health.MaxHealth = 100f;
+                goon.NPCData.Health.MaxHealth = 100f;
                 goon.Health.Health = 100f;
 
                 goon.Behaviour.CombatBehaviour.GiveUpRange = activeManorQuest.GiveUpRange;
@@ -675,12 +657,15 @@ namespace CartelEnforcer
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                 goon.Behaviour.ScheduleManager.EnableSchedule();
 
-                if (goon.Health.IsDead)
-                    goon.Health.Revive();
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
-                if (goon.Behaviour.CombatBehaviour.Active)
-                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
+            }
+
+            // If applicable move thomas back to car
+            if (goldenRoomWasGenerated)
+            {
+                DriveByEvent.thomasInstance.transform.localPosition = DriveByEvent.localOrigin;
+                DriveByEvent.thomasInstance.transform.localRotation = DriveByEvent.localRotation;
             }
 
             // Destroy built
@@ -875,6 +860,7 @@ namespace CartelEnforcer
             }
 
             activeJukebox.SetVolume(0, false);
+
             return;
         }
 
@@ -915,15 +901,6 @@ namespace CartelEnforcer
                 }
                 nob = this.SpawnItem(buildablesMap[itemKey]);
                 return;
-            }
-            public void SpawnItemOut(string itemKey, out GameObject go)
-            {
-                go = null;
-                if (itemKey == "Sofa")
-                {
-                    go = this.SpawnItem(sofaObj);
-                    return;
-                }
             }
 
             public void AdjustY(NetworkObject nob)
@@ -972,9 +949,6 @@ namespace CartelEnforcer
             private readonly Vector3 coffeeTablePos = new Vector3(-0.2873f, 0f, 1.2164f);
             private readonly Vector3 coffeeTableRot = Vector3.zero;
 
-            private readonly Vector3 sofaPos = Vector3.zero;
-            private readonly Vector3 sofaRot = Vector3.zero;
-
             private readonly Vector3 displayCabinetPos = new Vector3(0.9627f, 0.85f, -1.2836f);
             private readonly Vector3 displayCabinetRot = Vector3.zero;
 
@@ -989,12 +963,6 @@ namespace CartelEnforcer
                 base.SpawnItemOut("CoffeeTable", out NetworkObject coffeeTable);
                 coffeeTable.transform.localPosition = coffeeTablePos;
                 coffeeTable.transform.localRotation = Quaternion.Euler(coffeeTableRot);
-                yield return waitInstantiateEach;
-                if (!registered) yield break;
-
-                base.SpawnItemOut("Sofa", out GameObject sofa);
-                sofa.transform.localPosition = sofaPos;
-                sofa.transform.localRotation = Quaternion.Euler(sofaRot);
                 yield return waitInstantiateEach;
                 if (!registered) yield break;
 
@@ -1094,8 +1062,6 @@ namespace CartelEnforcer
 
         private class DownstairsLivingRoom : RoomDesignBase
         {
-            private readonly Vector3 sofaPos = new Vector3(0.25f, 0f, 0f);
-            private readonly Vector3 sofaRot = Vector3.zero;
 
             private readonly Vector3 tvPos = new Vector3(0.295f, 0f, 2.4532f);
             private readonly Vector3 tvRot = new Vector3(0f, 180f, 0f);
@@ -1115,11 +1081,6 @@ namespace CartelEnforcer
                 roomTransform.position = roomCenter;
 
 
-                base.SpawnItemOut("Sofa", out GameObject sofa);
-                sofa.transform.localPosition = sofaPos;
-                sofa.transform.localRotation = Quaternion.Euler(sofaRot);
-                yield return waitInstantiateEach;
-                if (!registered) yield break;
                 base.SpawnItemOut("TV_Built", out NetworkObject tv);
                 tv.transform.localPosition = tvPos;
                 tv.transform.localRotation = Quaternion.Euler(tvRot);
@@ -1225,13 +1186,16 @@ namespace CartelEnforcer
 
             public override IEnumerator SpawnDesign()
             {
-
-                // sewer door
-                NetworkObject door = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["Metal Bars Sewer Door"], roomTransform);
+                goldenRoomWasGenerated = true;
+                // sewer door removed from spawnable prefabs 0.4.6> but can still be manually fetched TODO
+                /*
+                 NetworkObject door = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["Metal Bars Sewer Door"], roomTransform);
                 door.transform.SetPositionAndRotation(new Vector3(165.8605f, 14.2515f, -61f), Quaternion.Euler(0f, 270f, 0f));
                 yield return Wait05;
                 if (!registered) yield break;
                 door.gameObject.SetActive(true);
+                 */
+
                 
                 // Prepare toilet
                 NetworkObject toilet = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["GoldenToilet"], roomTransform);
@@ -1239,9 +1203,7 @@ namespace CartelEnforcer
 
                 GameObject sittingPoint = new("SittingPoint");
                 sittingPoint.transform.parent = toilet.transform;
-                sittingPoint.transform.localPosition = new Vector3(0f, 0.6f, 0.2f);
-                AvatarSeat toiletSeat = toilet.gameObject.AddComponent<AvatarSeat>();
-                toiletSeat.SittingPoint = sittingPoint.transform;
+                sittingPoint.transform.localPosition = new Vector3(0f, -0.24f, 0.2f);
 
                 Transform particleSystemTr = toilet.transform.Find("Golden Toilet/Toilet/Particle System");
                 particleSystemTr.localPosition = new Vector3(0f, 0.6772f, 0.0364f);
@@ -1262,17 +1224,8 @@ namespace CartelEnforcer
                 toilet.gameObject.SetActive(true);
                 particleSystem.Play();
 
-                // Prepare thomas
-                NetworkObject thomas = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["Thomas"], roomTransform);
-                Thomas thomasNpc = thomas.GetComponent<Thomas>();
-                thomasNpc.Health.Invincible = true;
-                yield return Wait05;
-                if (!registered) yield break;
-
-                thomas.gameObject.SetActive(true);
-                nonRoomObjects.Add(thomas.gameObject);
-                thomasNpc.Movement.SetSeat(toiletSeat);
-                thomasNpc.Avatar.LookController.AutoLookAtPlayer = true;
+                DriveByEvent.thomasInstance.transform.position = sittingPoint.transform.position;
+                DriveByEvent.thomasInstance.transform.localRotation = Quaternion.Euler(351.6206f, 250.0409f, 1.4658f);
 
                 // lamp
                 NetworkObject floorLamp = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["FloorLamp"], roomTransform);

@@ -24,9 +24,9 @@ namespace CartelEnforcer
     [Serializable]
     public class AmbushGeneralSettingsSerialized
     {
-        public List<string> RangedWeaponAssetPaths;
+        public List<string> RangedWeapons;
 
-        public List<string> MeleeWeaponAssetPaths;
+        public List<string> MeleeWeapons;
 
         public int MinRankForRanged = 2; // default 3 see below
         public bool AfterDealAmbushEnabled = true; // By default in source code its enabled (see Ambush.ContractReceiptRecorded), patched prefix true/false by this condition

@@ -34,8 +34,8 @@
 		<TargetFramework>net6.0</TargetFramework>
 
 		<AssemblyVersion>1.0.0.0</AssemblyVersion>
-		<FileVersion>1.9.0.0</FileVersion>
-		<Version>1.9.0</Version>
+		<FileVersion>2.0.0.0</FileVersion>
+		<Version>2.0.0</Version>
 		<Product>Cartel Enforcer</Product>
 		<Company>XOWithSauce</Company>
 		<Copyright>Copyright XOWithSauce 2026 Source MIT</Copyright>
@@ -56,10 +56,10 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.1" />
+		<PackageReference Include="LavaGang.MelonLoader" Version="0.7.3" />
 		<PackageReference Include="Lib.Harmony" Version="2.4.2" />
 	</ItemGroup>
-
+	
 	<ItemGroup>
 		<Compile Include="..\Source\**\*.cs" />
 	</ItemGroup>

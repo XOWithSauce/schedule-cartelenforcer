@@ -42,6 +42,8 @@ namespace CartelEnforcer
     {
         // Drive By logic
         public static LandVehicle driveByVeh;
+        public static Vector3 localOrigin;
+        public static Quaternion localRotation;
         public static VehicleAgent driveByAgent;
         public static VehicleTeleporter driveByTp;
         public static bool driveByActive = false;
@@ -94,7 +96,8 @@ namespace CartelEnforcer
                 driveByAgent = thomasCar.GetComponent<VehicleAgent>();
                 driveByTp = thomasCar.GetComponent<VehicleTeleporter>();
                 thomasInstance = UnityEngine.Object.FindObjectOfType<Thomas>();
-
+                localOrigin = thomasInstance.transform.localPosition;
+                localRotation = thomasInstance.transform.localRotation;
                 // Now configure the vehicle and agent based on testings..
                 if (driveByVeh != null)
                 {
@@ -396,7 +399,7 @@ namespace CartelEnforcer
                 bool isHostile = NetworkSingleton<Cartel>.Instance.Status == Il2Cpp.ECartelStatus.Hostile;
 #endif
                 bool isInTimeFrame = TimeManager.Instance.IsCurrentTimeWithinRange(2230, 500);
-                if (!isHostile || driveByActive || !isInTimeFrame || hoursUntilDriveBy > 0)
+                if (!isHostile || driveByActive || !isInTimeFrame || hoursUntilDriveBy > 0 || EndGameQuest.activeManorQuest != null)
                 {
                     yield return Wait60;
                     if (!registered) yield break;
@@ -439,7 +442,7 @@ namespace CartelEnforcer
             driveByActive = true;
             Log("Beginning Drive By Event");
             Log($"TRIG Pos = {trig.triggerPosition}");
-            Player player = Player.GetClosestPlayer(trig.triggerPosition, out _);
+            Player player = PlayerManager.GetClosestPlayer(trig.triggerPosition, out _);
 
             driveByVeh.ExitPark_Networked(null, false);
             driveByVeh.SetTransform_Server(trig.startPosition, Quaternion.Euler(trig.spawnEulerAngles));
@@ -452,6 +455,8 @@ namespace CartelEnforcer
             driveByAgent.AutoDriving = true;
 
             thomasInstance.gameObject.SetActive(true);
+            if (thomasInstance.HasUmbrella)
+                thomasInstance.HasUmbrella = false;
 
             coros.Add(MelonCoroutines.Start(DriveByShooting(player)));
             yield return null;

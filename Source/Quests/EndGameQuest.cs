@@ -1,10 +1,9 @@
-
-
 using System.Collections;
 using MelonLoader;
 using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.Events;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -12,7 +11,7 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.RandomManorGenerator;
-using static CartelEnforcer.Quest_TrueBrothers;
+using static CartelEnforcer.NPCInitHelper;
 
 #if MONO
 using ScheduleOne.Law;
@@ -37,10 +36,10 @@ using ScheduleOne.UI;
 using ScheduleOne.UI.Handover;
 using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.Persistence;
-using ScheduleOne.Storage;
 using ScheduleOne.Police;
-using ScheduleOne.Vehicles;
 using ScheduleOne.Messaging;
+using ScheduleOne.AvatarFramework;
+using static ScheduleOne.Console;
 using FishNet;
 using FishNet.Object;
 using FishNet.Managing;
@@ -50,30 +49,31 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.Economy;
+using Il2CppScheduleOne.Levelling;
+using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.Map;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.GameTime;
+using Il2CppScheduleOne.Property;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
+using Il2CppScheduleOne.NPCs.Schedules;
 using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.NPCs.CharacterClasses;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.UI.Handover;
-using Il2CppScheduleOne.Property;
-using Il2CppScheduleOne.NPCs.Schedules;
-using Il2CppScheduleOne.Levelling;
-using Il2CppScheduleOne.Money;
 using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Persistence;
-using Il2CppScheduleOne.Storage;
 using Il2CppScheduleOne.Police;
-using Il2CppScheduleOne.Vehicles;
 using Il2CppScheduleOne.Messaging;
+using Il2CppScheduleOne.AvatarFramework;
+using static Il2CppScheduleOne.Console;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
 using Il2CppFishNet.Managing;
+using Il2CppInterop.Runtime.Injection;
 #endif
 
 namespace CartelEnforcer
@@ -89,9 +89,9 @@ namespace CartelEnforcer
         [HarmonyPrefix]
         public static bool Prefix(NPC __instance, Vector3 forcePoint, Vector3 forceDirection, ref float force)
         {
-            if (activeQuest == null && activeManorQuest == null && activeCarMeetupQuest == null) return true;
+            if (activeDefeatEnforcerQuest == null && activeManorQuest == null && activeCarMeetupQuest == null) return true;
 
-            if (activeQuest != null && activeQuest.gameObject.activeSelf) 
+            if (activeDefeatEnforcerQuest != null && activeDefeatEnforcerQuest.gameObject.activeSelf) 
             {
                 if (bossGoon != null && bossGoon.GUID == __instance.GUID)
                 {
@@ -134,20 +134,202 @@ namespace CartelEnforcer
 
     }
 
+    // Fix the Il2Cpp backend having issues with the ActiveEntryCount LINQ
+    [HarmonyPatch(typeof(Quest), nameof(Quest.ActiveEntryCount), MethodType.Getter)]
+    public static class Quest_ActiveEntryCount_Get_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(Quest __instance, ref int __result)
+        {
+
+            if (__instance is not ModQuestBase)
+                return true;
+
+            Log($"ActiveEntryCount called in Quest {__instance.Title}");
+            int count = 0;
+            for (int i = 0; i < __instance.Entries.Count; i++)
+                if (__instance.Entries[i].State == EQuestState.Active)
+                    count++;
+            __result = count;
+            return false;
+        }
+    }
+    public class ModQuestBase : Quest
+    {
+#if IL2CPP
+        public ModQuestBase(IntPtr ptr) : base(ptr) { }
+        public ModQuestBase() : base(ClassInjector.DerivedConstructorPointer<ModQuestBase>())
+            => ClassInjector.DerivedConstructorBody(this);
+#endif
+    }
+
+    // Mod added quest helper base
+    public class QuestHelperBase<T> where T : Quest
+    {
+        protected readonly T _quest;
+        public QuestHelperBase(T quest)
+        {
+            _quest = quest;
+        }
+        protected string QuestTypeName => _quest.GetType().Name;
+        public void InitializeQuest(string title, int xp, bool expires = false, GameDateTime expiry = default, bool trackOnBegin = true)
+        {
+            _quest.name = QuestTypeName;
+            _quest.Expires = expires;
+            _quest.title = title;
+            _quest.CompletionXP = xp;
+            _quest.Description = "";
+            _quest.TrackOnBegin = trackOnBegin;
+            _quest.autoInitialize = false;
+            _quest.AutoCompleteOnAllEntriesComplete = false;
+            _quest.AutoStartFirstEntry = false; // default true
+            _quest.ShouldSendExpiryReminder = false; // default true
+            _quest.ShouldSendExpiredNotification = false; // default true
+
+            if (expires)
+            {
+                _quest.Expiry = expiry;
+                _quest.ExpiryVisibility = EExpiryVisibility.Always;
+            }
+
+            /*
+            _quest.onActiveState = new UnityEvent();
+            _quest.onComplete = new UnityEvent();
+            _quest.onInitialComplete = new UnityEvent();
+             */
+            _quest.onQuestBegin = new UnityEvent();
+            _quest.onQuestEnd = new UnityEvent<EQuestState>();
+            _quest.onTrackChange = new UnityEvent<bool>();
+
+#if MONO
+            _quest.Entries = new System.Collections.Generic.List<QuestEntry>();
+#else
+            _quest.Entries = new Il2CppSystem.Collections.Generic.List<QuestEntry>();
+#endif
+
+            Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
+            if (target != null)
+                _quest.transform.SetParent(target);
+
+            _quest.IconPrefab = MakeIcon(_quest.transform);
+            _quest.PoIPrefab = MakePOI();
+#if MONO
+            _quest.SetGUID(Guid.NewGuid());
+#else
+            _quest.SetGUID(Il2CppSystem.Guid.NewGuid());
+#endif
+        }
+
+        public void InitializeQuestEntry(ref QuestEntry targetEntry, string name, string title, PoIConfig poiSettings, UnityAction completeCallback = null)
+        {
+            GameObject entryObj = new GameObject($"QuestEntry_{name}");
+            entryObj.SetActive(false);
+            entryObj.transform.SetParent(_quest.transform);
+            targetEntry = entryObj.AddComponent<QuestEntry>();
+
+            targetEntry.EntryTitle = title;
+            targetEntry.ParentQuest = _quest;
+            targetEntry.CompleteParentQuest = false;
+
+            targetEntry.PoILocation = new GameObject($"{name}Entry_POI").transform;
+            if (poiSettings.usePoI) 
+            {
+                if (poiSettings.useParent && poiSettings.parent != null)
+                    targetEntry.PoILocation.transform.SetParent(poiSettings.parent);
+                else
+                    targetEntry.PoILocation.transform.SetParent(targetEntry.transform);
+
+                if (poiSettings.useTransformLocal)
+                    targetEntry.PoILocation.transform.localPosition = poiSettings.poiPosition;
+                else
+                    targetEntry.PoILocation.transform.position = poiSettings.poiPosition;
+
+                targetEntry.AutoUpdatePoILocation = true;
+            }
+            else
+            {
+                targetEntry.AutoCreatePoI = false;
+                targetEntry.PoILocation.transform.SetParent(targetEntry.transform);
+                targetEntry.AutoUpdatePoILocation = false;
+            }
+
+            targetEntry.onComplete = new UnityEvent();
+            if (completeCallback != null)
+                targetEntry.onComplete.AddListener(completeCallback);
+            /*
+            targetEntry.onEnd = new UnityEvent();
+            targetEntry.onStart = new UnityEvent();
+            targetEntry.onInitialComplete = new UnityEvent();
+             */
+
+            targetEntry.state = EQuestState.Inactive;
+            _quest.Entries.Add(targetEntry);
+            return;
+        }
+
+        public void StartQuestFromEntry(QuestEntry startEntry)
+        {
+            _quest.SetupHUDUI();
+            _quest.SetupJournalEntry();
+
+            // After the setup it should in theory have QuestHUDUI.EntryContainer
+            Log($"EntryContainer exists {_quest.hudUI.EntryContainer != null}");
+            // So that whenever QuestEntry calls UpdateUI -> QuestEntryHudUI it wouldnt be null?
+
+            if (_quest.hudUI != null)
+            {
+                if (_quest.hudUI.MainLabel != null)
+                    _quest.hudUI.MainLabel.text = _quest.title;
+                _quest.hudUI.gameObject.SetActive(true);
+            }
+
+            foreach (QuestEntry entry in _quest.Entries)
+                entry.gameObject.SetActive(true);
+
+            _quest.SetIsTracked(true);
+            _quest.SetQuestState(EQuestState.Active);
+            startEntry.SetState(EQuestState.Active, false);
+
+            UpdateQuestMapLogo(startEntry);
+        }
+    }
+    public class PoIConfig
+    {
+        public bool usePoI;
+        public bool useParent;
+        public bool useTransformLocal;
+        public Transform parent;
+        public Vector3 poiPosition;
+
+        public PoIConfig(bool usePoI, bool useParent, bool useTransformLocal, Transform parent = null, Vector3 poiPosition = default)
+        {
+            this.usePoI = usePoI;
+            this.useParent = useParent;
+            this.useTransformLocal = useTransformLocal;
+            this.parent = parent;
+            this.poiPosition = poiPosition;
+        }
+    }
+
     public static class EndGameQuest
     {
-
         #region End Game Quest start eval
         public static bool hasGeneratedDefeatEnforcerQuest = false;
         public static bool hasGeneratedManorQuest = false;
         public static bool hasGeneratedCarQuest = false;
+
+
+        public static bool CanEvaluate()
+        {
+            return !Singleton<DialogueCanvas>.Instance.IsOpen && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount <= 0;
+        }
+
         public static IEnumerator InitializeEndGameQuest()
         {
             yield return Wait10;
             if (!registered) yield break;
 
             coros.Add(MelonCoroutines.Start(InitManorItemRef()));
-
             Log("Evaluating End Game Quest Creation");
 
             DialogueController frankController;
@@ -157,13 +339,21 @@ namespace CartelEnforcer
                 if (!registered) yield break;
                 if (!currentConfig.endGameQuest) continue;
 
-                if (PreRequirementsMet() && !completed && !hasGeneratedDefeatEnforcerQuest && activeQuest == null)
+#if MONO
+                yield return new WaitUntil(CanEvaluate);
+#else
+                yield return new WaitUntil((Il2CppSystem.Func<bool>)CanEvaluate);
+#endif
+
+                if (PreRequirementsMet() && !defeatEnforcerCompleted && !hasGeneratedDefeatEnforcerQuest && activeDefeatEnforcerQuest == null)
                 {
+                    Log("Fixer quest opt generated");
                     hasGeneratedDefeatEnforcerQuest = true;
                     coros.Add(MelonCoroutines.Start(GenDialogOption()));
                 }
                 if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest && activeManorQuest == null)
                 {
+                    Log("Manor quest opt generated");
                     hasGeneratedManorQuest = true;
                     coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
                 }
@@ -191,15 +381,13 @@ namespace CartelEnforcer
         #endregion
 
         #region End Game Quest Unexpected Alliances
-        public static bool completed = false;
+        public static bool defeatEnforcerCompleted = false;
         public static int StageDeadDropsObserved = 0;
         public static int StageGatheringsDefeated = 0;
         public static NPC fixer;
         public static CartelGoon bossGoon;
-        public static Quest_DefeatEnforcer activeQuest = null;
+        public static Quest_DefeatEnforcer activeDefeatEnforcerQuest = null;
         public static int fixerDiagIndex = 0;
-
-        public static bool inContactDialogue = false;
 
         public static bool PreRequirementsMet()
         {
@@ -253,11 +441,9 @@ namespace CartelEnforcer
             if (npc != null)
                 fixer = npc;
 
-
             DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
-            string text = "How do we get rid of the Benzies?";
-            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-$5000</color>)";
+            choice.ChoiceText = $"How do we get rid of the Benzies? (Bribe <color=#FF3008>$5000</color>)";
             choice.Enabled = true;
 #if MONO
             choice.onChoosen.AddListener(() => { OnQuestChosen(controller); });
@@ -269,7 +455,7 @@ namespace CartelEnforcer
             choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnQuestChosenWrapped);
 #endif
             fixerDiagIndex = controller.AddDialogueChoice(choice);
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator DisposeChoice(DialogueController controller)
@@ -281,7 +467,7 @@ namespace CartelEnforcer
             oldChoices.RemoveAt(fixerDiagIndex);
             controller.Choices = oldChoices;
             Log("Disposed Choice");
-            yield return null;
+            yield break;
         }
 
         public static void OnQuestChosen(DialogueController controller)
@@ -304,81 +490,6 @@ namespace CartelEnforcer
         }
         #endregion
 
-        #region Contact NPC dialogue
-        public static IEnumerator GenContactDialog(NPC npc, Action cb)
-        {
-            DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
-            DialogueController.DialogueChoice choice = new();
-            choice.ChoiceText = "Who are you?";
-            choice.Enabled = true;
-#if MONO
-            choice.onChoosen.AddListener(() => { OnOptionSelected(controller, cb); });
-#else
-            void OnOptionSelectedWrapped()
-            {
-                OnOptionSelected(controller, cb);
-            }
-            choice.onChoosen.AddListener((UnityEngine.Events.UnityAction)OnOptionSelectedWrapped);
-#endif
-            controller.AddDialogueChoice(choice);
-            yield return null;
-        }
-        public static IEnumerator DisposeContactChoice(DialogueController controller)
-        {
-            yield return Wait05;
-            if (!registered) yield break;
-
-            var oldChoices = controller.Choices;
-            oldChoices.RemoveAt(0);
-            controller.Choices = oldChoices;
-            Log("Disposed Choice");
-            yield return null;
-        }
-        public static void OnOptionSelected(DialogueController controller, Action cb)
-        {
-            controller.handler.ContinueSubmitted();
-            MelonCoroutines.Start(DisposeContactChoice(controller));
-            MelonCoroutines.Start(ContactDialogue(controller, cb));
-        }
-
-        public static IEnumerator ContactDialogue(DialogueController controller, Action cb)
-        {
-            inContactDialogue = true;
-            float lerpWait = Mathf.Lerp(10f, 5f, currentConfig.endGameQuestMonologueSpeed);
-            WaitForSeconds waitObj = new WaitForSeconds(lerpWait);
-            List<string> dialog = dialogOptions[UnityEngine.Random.Range(0, dialogOptions.Count)];
-            controller.npc.PlayVO(EVOLineType.Concerned);
-            controller.handler.WorldspaceRend.ShowText("It doesn't matter who I am. We have a bigger issue at our hands.", lerpWait);
-            yield return waitObj;
-            if (!registered) yield break;
-
-            controller.npc.PlayVO(EVOLineType.Acknowledge);
-            controller.handler.WorldspaceRend.ShowText("The cartel has been running Hyland Point for too long.", lerpWait);
-            yield return waitObj;
-            if (!registered) yield break;
-
-            controller.handler.WorldspaceRend.ShowText("We have intel that Thomas' high ranking soldier is nearby that house up the dirt road.", lerpWait);
-            yield return waitObj;
-            if (!registered) yield break;
-
-            controller.handler.WorldspaceRend.ShowText("This is not your basic goon, they are a Brute. One of the best soldiers he has.", lerpWait);
-            yield return waitObj;
-            if (!registered) yield break;
-
-            controller.handler.WorldspaceRend.ShowText("Go and take them down. I'll make sure nobody comes snooping around.", lerpWait);
-            yield return waitObj;
-            if (!registered) yield break;
-
-
-            Log("Running callback");
-            if (cb != null)
-                cb();
-
-            inContactDialogue = false;
-            yield return null;
-        }
-        #endregion
-
         // 3 Alternatives for the worldspace dialogue
         public static List<List<string>> dialogOptions = new()
         {
@@ -387,7 +498,7 @@ namespace CartelEnforcer
                 "I ain't having the Benzies come messing with my operation. Not here, not ever.",
                 "First move, we gotta rattle them a little bit.",
                 "Go make a couple of their dead drops disappear.",
-                "After that, I'll set you up with the right people to finish the job."
+                "After that, I'll set you up with a gig."
             },
 
             new List<string>()
@@ -395,7 +506,7 @@ namespace CartelEnforcer
                 "The Benzies are getting bold. I can't have that.",
                 "I'm about to show them how we do things out here. No games.",
                 "Find their dead drops and clean 'em out. A couple of them going missing will send a message.",
-                "Once you get that done, I'll get you a meeting with someone who can help with the rest."
+                "Once you get that done, I'll tell you how to proceed."
             },
 
             new List<string>()
@@ -403,7 +514,7 @@ namespace CartelEnforcer
                 "I don't want the Benzies to ruin my business here either.",
                 "We need to send a message. They got to leave.",
                 "They have been moving product through dead drops. You know what to do.",
-                "Get started and I'll set up a meeting with someone who can help..."
+                "Get started and I'll see how we can take down the Benzies..."
             }
         };
         public static IEnumerator EventInstructions(DialogueController controller)
@@ -429,21 +540,20 @@ namespace CartelEnforcer
             yield return waitObj;
             if (!registered) yield break;
 
-
-            yield return null;
+            yield break;
         }
         public static IEnumerator GenerateQuestState()
         {
             Log("Starting");
             GameObject newQuestObject = new GameObject();
             Log("Add Component");
-            activeQuest = newQuestObject.AddComponent<Quest_DefeatEnforcer>();
+            activeDefeatEnforcerQuest = newQuestObject.AddComponent<Quest_DefeatEnforcer>();
             newQuestObject.SetActive(true);
-            activeQuest.enabled = true;
+            activeDefeatEnforcerQuest.enabled = true;
             Log("SetupSelf");
-            activeQuest.SetupSelf();
+            activeDefeatEnforcerQuest.SetupSelf();
 
-            yield return null;
+            yield break;
         }
         public static IEnumerator QuestReward(CartelGoon goon)
         {
@@ -516,18 +626,17 @@ namespace CartelEnforcer
             if (bossGoon.IsGoonSpawned)
             {
                 // Reset all non default stats that would carry on modified
-                bossGoon.Health.MaxHealth = 100f;
+                bossGoon.NPCData.Health.MaxHealth = 100f;
                 bossGoon.Health.Health = 100f;
-                bossGoon.Health.Revive();
                 bossGoon.Movement.MoveSpeedMultiplier = 0.8f;
                 bossGoon.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
                 bossGoon.Behaviour.ScheduleManager.EnableSchedule();
+                bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                 bossGoon.Despawn();
-                bossGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 bossGoon = null;
             }
 
-            yield return null;
+            yield break;
         }
         #endregion
 
@@ -542,6 +651,7 @@ namespace CartelEnforcer
 
         public static IEnumerator GenManorDialogOption()
         {
+            // Should this be NPC Registry instead? TODO Fix
 #if MONO
             NPC npc = UnityEngine.Object.FindObjectOfType<ScheduleOne.NPCs.CharacterClasses.Ray>(true);
 #else
@@ -550,11 +660,12 @@ namespace CartelEnforcer
             if (npc != null)
                 ray = npc;
 
-
             DialogueController controller = npc.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
-            string text = "What can you tell me about the owner of that manor?";
-            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-$2500</color>)";
+            // So what is it its a symbol that when color parsed now crashes the game here
+            // either dash or dolar 
+            // A fucking dash crashes the game
+            choice.ChoiceText = "Who owns that big manor? (Bribe <color=#FF3008>$2500</color>)";
             choice.Enabled = true;
             
 #if MONO
@@ -593,9 +704,7 @@ namespace CartelEnforcer
                 Log($"In Position: {isInPos} (distance: {Vector3.Distance(ray.CenterPoint, standPos)})");
                 Log("Has Cash: " + hasCash);
                 Log("In Time Window: " + inTimeWindow);
-
             }
-
         }
 
         public static IEnumerator DisposeRayChoice(DialogueController controller)
@@ -784,7 +893,7 @@ namespace CartelEnforcer
             yield return waitObj;
             if (!registered) yield break;
 
-            controller.handler.WorldspaceRend.ShowText("It won't work on the main entrance, but try the back door.", 5f);
+            controller.handler.WorldspaceRend.ShowText("It won't work on the main entrance so try the back door.", 5f);
             yield return waitObj;
             if (!registered) yield break;
 
@@ -794,7 +903,7 @@ namespace CartelEnforcer
 
             yield return null;
         }
-        
+
         public static IEnumerator QuestManorReward()
         {
             yield return Wait025;
@@ -914,8 +1023,7 @@ namespace CartelEnforcer
 
             DialogueController controller = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
-            string text = "Have you seen any Benzies around here?";
-            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-$3500</color>)";
+            choice.ChoiceText = $"Have you seen any Benzies around here? (Bribe <color=#FF3008>$3500</color>)";
             choice.Enabled = true;
 #if MONO
             choice.onChoosen.AddListener(() => { OnCarQuestChosen(controller); });
@@ -1010,7 +1118,7 @@ namespace CartelEnforcer
             yield return Wait2;
             if (!registered) yield break;
 
-            controller.npc.Movement.FacePoint(Player.GetClosestPlayer(controller.npc.CenterPoint, out _).CenterPointTransform.position, lerpTime: 1f);
+            controller.npc.Movement.FacePoint(PlayerManager.GetClosestPlayer(controller.npc.CenterPoint, out _).CenterPointTransform.position, lerpTime: 1f);
             yield return waitObj;
             if (!registered) yield break;
 
@@ -1053,7 +1161,7 @@ namespace CartelEnforcer
             DialogueController controller = jeremy.DialogueHandler.gameObject.GetComponent<DialogueController>();
             DialogueController.DialogueChoice choice = new();
             string text = "Who is buying green cars from you?";
-            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>-$6000</color>)";
+            choice.ChoiceText = $"{text} (Bribe <color=#FF3008>$6000</color>)";
             choice.Enabled = true;
 #if MONO
             choice.onChoosen.AddListener(() => { OnJeremyOptionSelected(controller, cb); });
@@ -1197,6 +1305,7 @@ namespace CartelEnforcer
         public static Quest_TrueBrothers activeTrueBrothersQuest = null;
         public static bool trueBrothersCompleted = false;
         public static bool encounterActive = false;
+        public static GameObject copBaseClone = null;
 
         public static IEnumerator SetupTrueBrothersQuest(CartelGoon spawnedGoon)
         {
@@ -1259,9 +1368,10 @@ namespace CartelEnforcer
 
         public static bool CanStartConversate()
         {
-            return !Singleton<DialogueCanvas>.Instance.isActive && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.activeUIElementCount <= 0;
+            return !Singleton<DialogueCanvas>.Instance.IsOpen && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount <= 0;
         }
 
+        // TODO: FIX THIS CAN SPPAWN BLOCKED AREAS: IF V3 DOESNT MOVE FOR N AMOUNT OF ITERS WARP NEARBY
         public static IEnumerator SummonConversateGoon()
         {
 
@@ -1358,6 +1468,7 @@ namespace CartelEnforcer
             int maxTraverseTime = 60;
             int traverseTime = 0;
             bool playerConversated = false;
+
             for (; ; )
             {
                 // While traversing to player (check proximity and conversate OR interrupt -> cancel despawn)
@@ -1486,13 +1597,6 @@ namespace CartelEnforcer
             
             if (shouldDespawn)
             {
-                if (spawnedGoon.Health.IsDead || spawnedGoon.Health.IsKnockedOut)
-                    spawnedGoon.Health.Revive();
-
-                // if in combat disable
-                if (spawnedGoon.Behaviour.activeBehaviour != null && spawnedGoon.Behaviour.activeBehaviour == spawnedGoon.Behaviour.CombatBehaviour)
-                    spawnedGoon.Behaviour.CombatBehaviour.Disable_Networked(null);
-
                 spawnedGoon.Behaviour.ScheduleManager.EnableSchedule();
                 if (!spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.activeSelf)
                     spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true); // set stayinside enable
@@ -1512,15 +1616,14 @@ namespace CartelEnforcer
             yield return Wait30;
             if (!registered) yield break;
 
+            Log("Reset goons + despawn props");
             // Reset the quest goons
             foreach (CartelGoon goon in activeTrueBrothersQuest.alliedGoons)
             {
+                Log("Despawn");
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                 goon.Behaviour.ScheduleManager.EnableSchedule();
                 goon.Movement.SpeedController.RemoveSpeedControl("combat");
-
-                if (goon.Health.IsDead || goon.Health.IsKnockedOut)
-                    goon.Health.Revive();
 
                 goon.Despawn();
             }
@@ -1528,38 +1631,24 @@ namespace CartelEnforcer
             // Remove quest related instantiated items
             foreach (GameObject go in activeTrueBrothersQuest.spawnedDecor)
             {
-                yield return Wait05;
-                if (!registered) yield break;
-
                 if (go != null)
+                {
+                    yield return Wait05;
+                    if (!registered) yield break;
+                    Log($"Destroying: {go.name} ({activeTrueBrothersQuest.spawnedDecor.Count})");
                     UnityEngine.Object.Destroy(go);
+                }
             }
 
-            NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
+            Log("Despawn cops");
             // Despawn cops
             foreach (PoliceOfficer offc in activeTrueBrothersQuest.ambushCops)
-            {
-                NPCManager.NPCRegistry.Remove(offc);
-#if MONO
-                netManager.ServerManager.Despawn(offc.NetworkObject, DespawnType.Destroy);
-#else
-                // For some reason in IL2CPP thhe Despawn type must be marked as Nullable IL2cpp system type
-                Il2CppSystem.Nullable<DespawnType> type = new(DespawnType.Destroy);
-                netManager.ServerManager.Despawn(offc.NetworkObject, type);
-#endif
-            }
+                if (offc.gameObject != null)
+                    UnityEngine.Object.Destroy(offc.gameObject);
 
             // Despawn the land vehicle
-            if (activeTrueBrothersQuest.spawnedVehicle != null)
-#if MONO
-                netManager.ServerManager.Despawn(activeTrueBrothersQuest.spawnedVehicle.NetworkObject, DespawnType.Destroy);
-#else
-            {
-                // For some reason in IL2CPP thhe Despawn type must be marked as Nullable IL2cpp system type
-                Il2CppSystem.Nullable<DespawnType> type = new(DespawnType.Destroy);
-                netManager.ServerManager.Despawn(activeTrueBrothersQuest.spawnedVehicle.NetworkObject, type);
-            }
-#endif
+            if (activeTrueBrothersQuest.spawnedVehicle != null && activeTrueBrothersQuest.spawnedVehicle.gameObject != null)
+                UnityEngine.Object.Destroy(activeTrueBrothersQuest.spawnedVehicle.gameObject);
 
             // Reset quest values
             activeTrueBrothersQuest.startGoon = null;
@@ -1570,6 +1659,8 @@ namespace CartelEnforcer
             activeTrueBrothersQuest.ambushCops.Clear();
             activeTrueBrothersQuest.spawnedDecor.Clear();
             activeTrueBrothersQuest.spawnedBrickPiles.Clear();
+
+            Log("Cleanup complete");
             yield break;
         }
 
@@ -1598,7 +1689,68 @@ namespace CartelEnforcer
 
             yield break;
         }
-#endregion
+        public static IEnumerator ReplicateCopNPC()
+        {
+            Log("Replicating COP NPC");
+            NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
+
+            PoliceOfficer officer = UnityEngine.Object.FindObjectOfType<PoliceOfficer>();
+
+            AvatarSettings copySettings = officer.Avatar.CurrentSettings;
+
+            if (officer == null)
+            {
+                Log("No officer found");
+                yield break;
+            }
+            GameObject obj = officer.gameObject;
+            obj.SetActive(false);
+
+            List<CartelGoon> clones = new();
+            WaitForEndOfFrame frameEnd = new WaitForEndOfFrame();
+
+            GameObject clone = UnityEngine.Object.Instantiate(obj);
+            copBaseClone = clone;
+
+            clone.transform.position = Vector3.zero;
+            clone.transform.rotation = Quaternion.identity;
+
+            NPC npc = clone.GetComponent<NPC>();
+            NetworkObject newNob = clone.GetComponent<NetworkObject>();
+            PoliceOfficer offc = clone.GetComponent<PoliceOfficer>();
+            offc.AutoDeactivate = false; // Prevent from returning to station and from being added to officer pool
+
+            clone.name = $"RuntimeOfficer";
+            yield return MelonCoroutines.Start(InitiateClone(newNob, netManager));
+
+            npc.NPCData.BasicInfo.ID = "officerPrefab";
+
+            if (!NPCManager.NPCRegistry.Contains(npc))
+                NPCManager.NPCRegistry.Add(npc);
+            else
+                Log("NPC already registered in NPCRegistry");
+
+            npc.Avatar.LoadAvatarSettings(copySettings);
+            offc.PursuitBehaviour.arrestingEnabled = false;
+
+            Log("Spawn");
+            try
+            {
+                netManager.ServerManager.Spawn(newNob);
+            }
+            catch (Exception ex)
+            {
+                Log($"Failed to spawn officer {ex}");
+            }
+
+            offc.Behaviour.ScheduleManager.DisableSchedule();
+            offc.Movement.PauseMovement();
+
+            obj.SetActive(true);
+            Log("Finished replicating COP NPC");
+            yield break;
+        }
+        #endregion
 
         #region Allied Supplies Quest
         public static Quest_AlliedSupplies activeAlliedSupplies = null;
@@ -1617,6 +1769,7 @@ namespace CartelEnforcer
             activeAlliedSupplies.SetupSelf();
             yield return null;
         }
+
         public static IEnumerator CleanupTruceSuppliesQuest(SupplyLocation location)
         {
             if (location.Type == ESupplyType.Barrel)
@@ -1642,10 +1795,6 @@ namespace CartelEnforcer
             // despawn goon
             if (alliedGuard != null)
             {
-                if (alliedGuard.Health.IsDead)
-                    alliedGuard.Health.Revive();
-
-                alliedGuard.Behaviour.CombatBehaviour.Disable_Networked(null);
                 alliedGuard.Behaviour.ScheduleManager.EnableSchedule();
                 alliedGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true); // set stayinside enable
                 alliedGuard.Movement.SpeedController.RemoveSpeedControl("combat");
@@ -1732,10 +1881,37 @@ namespace CartelEnforcer
         }
         public static RectTransform MakeIcon(Transform parent)
         {
+            
+            NPCManager manager = NetworkSingleton<NPCManager>.Instance;
+            NPCPoI prefab = manager.PotentialCustomerPoIPrefab;
+            GameObject parentObj = prefab.UIPrefab;
+            Log($"UIPrefab is null {parentObj == null}");
+            GameObject instantiated = UnityEngine.Object.Instantiate(parentObj);
+            RectTransform uiObjRt = instantiated.GetComponent<RectTransform>();
+            Transform areaExample = uiObjRt.transform.Find("Area");
+            Log($"areaExample is null {areaExample == null}");
             GameObject logo = new("BenziesLogoQuest");
             RectTransform rt = logo.AddComponent<RectTransform>();
-            Image imgComp = logo.AddComponent<Image>();
+            GameObject areaObj = UnityEngine.Object.Instantiate(areaExample.gameObject);
+            RectTransform rtArea = areaObj.GetComponent<RectTransform>();
+            rtArea.SetParent(logo.transform);
+            rtArea.localScale = Vector3.one;
+            rtArea.localPosition = Vector3.one;
+            rtArea.rotation = Quaternion.identity;
+            rtArea.sizeDelta = new Vector2(25f, 25f);
+            UnityEngine.Object.Destroy(instantiated);
+            Image areaImage = areaObj.GetComponent<Image>();
+            areaImage.color = new Color(0.15f, 0.7f, 0.15f, 0.5f);
+
+            GameObject imgObj = new GameObject("Image");
+            imgObj.transform.SetParent(logo.transform);
+            imgObj.transform.localScale = Vector3.one;
+            imgObj.transform.localPosition = Vector3.one;
+            imgObj.transform.rotation = Quaternion.identity;
+            Image imgComp = imgObj.AddComponent<Image>();
             imgComp.sprite = benziesLogo;
+            RectTransform rtImg = imgObj.GetComponent<RectTransform>();
+            rtImg.sizeDelta = new Vector2(20f, 20f);
             logo.transform.SetParent(parent, worldPositionStays: false);
             return rt;
         }

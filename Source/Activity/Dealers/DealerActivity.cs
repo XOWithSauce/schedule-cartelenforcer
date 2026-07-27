@@ -23,8 +23,6 @@ using ScheduleOne.Quests;
 using ScheduleOne.Product;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.UI.Handover;
-using ScheduleOne.NPCs.Other;
-using FishNet;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
@@ -39,8 +37,6 @@ using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.UI.Handover;
-using Il2CppScheduleOne.NPCs.Other;
-using Il2CppFishNet;
 #endif
 
 namespace CartelEnforcer
@@ -88,7 +84,7 @@ namespace CartelEnforcer
 
             foreach (Dealer d in allSceneDealers)
             {
-                if (d.DealerType == EDealerType.PlayerDealer)
+                if (d.DealerData.DealerType == EDealerType.PlayerDealer)
                     allDealers.Add(d);
             }
             allSceneDealers = null;
@@ -313,18 +309,6 @@ namespace CartelEnforcer
         public static void SetupDealers()
         {
             Log("Configuring Cartel Dealers");
-            // Note: Brad has that broken bottle weapon whats the resource path, it could be also listed for ambush weapons and these supported?? 
-
-            // how to unify these logics currently ambush weps load based on resource path, whereas these are properly validated...
-            // Pros for this:
-            // - Validates the resource path and available options, provides default fallback
-            // Cons for this:
-            // - In future if more weapons are added, this needs to be manually changed
-
-            // The ambush logic pros:
-            // - If new weapons are added, the user can simply just tap into the resource paths and add new ones without needing to update mod?
-            //Cons:
-            // - The resource path is not validated by default, if some logic allows that then it would be better... Also forces user to go through game and kind of mod the game themselves..
 
             Log("Setup inventory tracking stolen items");
             string resourcePath = "";
@@ -334,12 +318,20 @@ namespace CartelEnforcer
                     resourcePath = "Avatar/Equippables/M1911";
                     break;
 
+                case "goldenm1911":
+                    resourcePath = "Avatar/Equippables/M1911_Gold";
+                    break;
+
                 case "revolver":
                     resourcePath = "Avatar/Equippables/Revolver";
                     break;
 
                 case "knife":
                     resourcePath = "Avatar/Equippables/Knife";
+                    break;
+
+                case "brokenbottle":
+                    resourcePath = "Avatar/Equippables/BrokenBottle";
                     break;
 
                 case "shotgun":
@@ -397,33 +389,32 @@ namespace CartelEnforcer
 
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
-                dealer.Movement.WalkSpeed = dealerConfig.CartelDealerWalkSpeed;
-                dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
+                dealer.NPCData.Movement.WalkSpeed = dealerConfig.CartelDealerWalkSpeed;
+                dealer.NPCData.Health.MaxHealth = dealerConfig.CartelDealerHP;
                 dealer.Health.Health = dealerConfig.CartelDealerHP;
+                AvatarWeapon weapon = null;
 #if MONO
-                if (equippable is AvatarWeapon weapon)
-                {
-                    dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
-                    if (dealer.Avatar != null)
-                        equippable.Equip(dealer.Avatar);
-                    else
-                        Log($"{dealer.Region} dealer is missing avatar field");
-                }
+                if (equippable is AvatarWeapon)
+                    weapon = equippable as AvatarWeapon;
 #else
-                AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
-                if (weapon != null) 
+                AvatarWeapon temp = equippable.TryCast<AvatarWeapon>();
+                if (temp != null) 
                 {
-                    dealer.Behaviour.CombatBehaviour.DefaultWeapon = weapon;
-                    if (dealer.Avatar != null)
-                        equippable.Equip(dealer.Avatar);
-                    else
-                        Log($"{dealer.Region} dealer is missing avatar field");
+                    weapon = temp;
                 }
 #endif
+                if (weapon != null)
+                {
+                    dealer.Behaviour.CombatBehaviour.SetDefaultWeapon(weapon);
+                    if (dealer.Avatar != null)
+                        equippable.Equip(dealer.Avatar);
+                    else
+                        Log($"{dealer.Region} dealer is missing avatar field");
+                }
 
                 Log($"Setup {dealer.Region} weapon");
 
-                dealer.OverrideAggression(1f); 
+                dealer.NPCData.Behaviour.DefaultAggression = 1f; 
                 #region Stay Inside and Deal Signal actions
                 NPCEvent_StayInBuilding event1 = null;
                 if (dealer.Behaviour.ScheduleManager.ActionList != null)
@@ -487,7 +478,7 @@ namespace CartelEnforcer
                     if (UnityEngine.Random.Range(0f, 1f) > 0.5f && !currentConfig.debugMode) return;
                     if (NetworkSingleton<Cartel>.Instance.GoonPool.UnspawnedGoonCount < 2) return;
 
-                    Player p = Player.GetClosestPlayer(dealer.CenterPoint, out _);
+                    Player p = PlayerManager.GetClosestPlayer(dealer.CenterPoint, out _);
 
                     Vector3 randomDirection;
                     Vector3 randomPoint = Vector3.zero;
@@ -518,9 +509,9 @@ namespace CartelEnforcer
                     {
                         goon.Movement.WarpToNavMesh(); // just incase
                         if (UnityEngine.Random.Range(0f, 1f) > 0.7f && RangedWeapons != null && RangedWeapons.Length != 0)
-                            goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
+                            goon.Behaviour.CombatBehaviour.SetDefaultWeapon(RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)]);
                         else if (MeleeWeapons != null && MeleeWeapons.Length != 0)
-                            goon.Behaviour.CombatBehaviour.DefaultWeapon = MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)];
+                            goon.Behaviour.CombatBehaviour.SetDefaultWeapon(MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)]);
                         goon.AttackEntity(p.GetComponent<ICombatTargetable>(), true);
                     }
                     coros.Add(MelonCoroutines.Start(DespawnDefenderGoonsSoon(goons)));
@@ -561,11 +552,9 @@ namespace CartelEnforcer
             // To ensure it doesnt clear out the stolen temp items
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
-                dealer.Inventory.ClearInventoryEachNight = false;
+                dealer.NPCData.Inventory.ClearInventoryOnNewDay = false;
             }
-
             #endregion
-
         }
 
 #if MONO
@@ -584,9 +573,7 @@ namespace CartelEnforcer
                     if ((goon.Health.IsDead || goon.Health.IsKnockedOut) && goon.IsGoonSpawned)
                     {
                         goonsDead++;
-                        goon.Health.Revive();
                         goon.Despawn();
-                        goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                     }
                 }
                 if (goonsDead == goons.Count) break;
@@ -595,10 +582,7 @@ namespace CartelEnforcer
             {
                 if (goon.IsGoonSpawned)
                 {
-                    if ((goon.Health.IsDead || goon.Health.IsKnockedOut))
-                        goon.Health.Revive();
                     goon.Despawn();
-                    goon.Behaviour.CombatBehaviour.Disable_Networked(null);
                 }
             }
 
@@ -1080,7 +1064,7 @@ namespace CartelEnforcer
             public static bool Prefix(Dealer __instance)
             {
                 // only run it for cartel dealers
-                if (__instance.DealerType == EDealerType.CartelDealer)
+                if (__instance.DealerData.DealerType == EDealerType.CartelDealer)
                 {
 #if MONO
                     List<Contract> cartelDealerContracts = new(__instance.ActiveContracts);
@@ -1206,7 +1190,7 @@ namespace CartelEnforcer
                 // This function is still problematic it seems this can return both false when something happens and is indecisive
                 // only at longer distances, needs outcome logged too to figure out what happens with it
 
-                Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.fullName}", name);
+                Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.NPCData.BasicInfo.ID}", name);
                 Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}", name);
                 Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f} dist:{distanceToCartelDealer}", name);
                 Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f} dist:{distanceToPlayerDealer}", name);
@@ -1244,14 +1228,14 @@ namespace CartelEnforcer
                             float relationChange = Mathf.Max(__instance.NPC.RelationData.RelationDelta * 0.85f, 0.20f);
                             float result = Mathf.Clamp(relationChange, min: 0f, max: 5f);
 
-                            Log($"{__instance.NPC.fullName} Relation Down: -{relationChange} now: {result}", name);
+                            Log($"{__instance.NPC.NPCData.BasicInfo.ID} Relation Down: -{relationChange} now: {result}", name);
                             __instance.NPC.RelationData.RelationDelta = result;
                         }
                     }
                 }
                 else
                 {
-                    Log($"{__instance.NPC.fullName} RESULT UNDECIDED", name);
+                    Log($"{__instance.NPC.NPCData.BasicInfo.ID} RESULT UNDECIDED", name);
                 }
 
                 lock (playerDealerStolenLock)
@@ -1323,29 +1307,6 @@ namespace CartelEnforcer
             }
 
         }
-
-
-        // Whenever SmokeBreak behaviour ends, the function for SmokeCigarette
-        // does not check that equipped item is not null, causing
-        // null reference exceptions in game logs
-        [HarmonyPatch(typeof(SmokeCigarette), "End")]
-        public static class SmokeCigarette_End_Patch
-        {
-            [HarmonyPrefix]
-            public static bool Prefix(SmokeCigarette __instance)
-            {
-                if (!InstanceFinder.IsServer)
-                    return false;
-
-                // This null check needed and not in code otherwise the same function
-                if (__instance._equippedItem != null)
-                    __instance._npc.Unequip(__instance._equippedItem);
-
-                __instance._npc.Avatar.LookController.OverrideIKWeight(0.2f);
-                return false;
-            }
-        }
-
 
         // Whenever the cartel is truced and benzies dealers are hired,
         // player hired normal dealers will send messages regarding those deals disable that

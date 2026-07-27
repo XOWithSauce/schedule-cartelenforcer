@@ -7,7 +7,6 @@ using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.AlliedCartelDialogue;
 using static CartelEnforcer.AlliedExtension;
 
-
 #if MONO
 using ScheduleOne.Economy;
 using ScheduleOne.PlayerScripts;
@@ -92,7 +91,7 @@ namespace CartelEnforcer
             // make node11 choice
             DialogueChoiceData node1StartPersuadeChoice = new();
             node1StartPersuadeChoice.ChoiceLabel = "START_PERSUADE";
-            node1StartPersuadeChoice.ChoiceText = "<color=#6BBCFF>[Persuade]</color> Just hear me out. You could work with me instead.";
+            node1StartPersuadeChoice.ChoiceText = "<color=#6BBCFF>[Persuade]</color> Just hear me out. You could work for me instead.";
             node1StartPersuadeChoice.Guid = GetGuid();
             node1StartPersuadeChoice.ShowWorldspaceDialogue = true;
 
@@ -157,7 +156,7 @@ namespace CartelEnforcer
 
             void OnConversationStarted()
             {
-                DialogueHandler.activeDialogueNode = entryNode;
+                DialogueHandler.ActiveDialogueNode = entryNode;
             }
 
             d.DialogueHandler.onConversationStart.AddListener((UnityEngine.Events.UnityAction)OnConversationStarted);
@@ -169,30 +168,33 @@ namespace CartelEnforcer
         {
             // While the persuade dialogue container is open in the first entry node
             // Update the first dialogue choice not possible text with time
-            while (DialogueHandler.activeDialogue != null && 
-                DialogueHandler.activeDialogueNode != null && 
-                DialogueHandler.activeDialogue.name == "CARTEL_ENFORCER_PERSUADE" && 
-                DialogueHandler.activeDialogueNode.Guid == entryNode.Guid)
+            while (DialogueHandler.ActiveDialogue != null && 
+                DialogueHandler.ActiveDialogueNode != null && 
+                DialogueHandler.ActiveDialogue.name == "CARTEL_ENFORCER_PERSUADE" && 
+                DialogueHandler.ActiveDialogueNode.Guid == entryNode.Guid)
             {
                 if (Singleton<DialogueCanvas>.Instance.dialogueChoices.Count == 0) break;
-                DialogueChoiceEntry entry = Singleton<DialogueCanvas>.Instance.dialogueChoices[0];
+                
+                 DialogueChoiceEntry entry = Singleton<DialogueCanvas>.Instance.dialogueChoices[0];
                 // If cd hits 0 while dialogue open
-                if (persuadeCooldown == 0 && entry.notPossibleGameObject.activeSelf)
+                if (persuadeCooldown == 0 && entry.NotPossibleGameObject.activeSelf)
                 {
                     // needs to manually enable it again while dialogue open?
-                    entry.notPossibleGameObject.SetActive(false);
-                    entry.button.interactable = true;
-                    ColorBlock colors = entry.button.colors;
+                    entry.NotPossibleGameObject.SetActive(false);
+                    entry.Button.interactable = true;
+                    ColorBlock colors = entry.Button.colors;
                     colors.disabledColor = colors.pressedColor;
-                    entry.button.colors = colors;
-                    entry.text.GetComponent<RectTransform>().offsetMax = new Vector2(0f, 0f);
+                    entry.Button.colors = colors;
+                    entry.Label.GetComponent<RectTransform>().offsetMax = new Vector2(0f, 0f);
                 }
                 else // update the cd text
                 {
-                    string invalidReason = $"<color=#DE3F31>Wait {persuadeCooldown} minutes before trying again.</color>";
-                    entry.notPossibleText.text = invalidReason.ToUpper();
+                    string invalidReason = $"<color=#DE3F31>On cooldown: {persuadeCooldown}</color>";
+                    entry.NotPossibleText.text = invalidReason.ToUpper();
                 }
+                
 
+                Log("Evaluate text");
                 yield return Wait1;
                 if (!registered) yield break;
             }
@@ -212,7 +214,13 @@ namespace CartelEnforcer
         {
             int totalApparel = 0;
             int apparelMatched = 0;
-            AvatarSettings playerSettings = Player.Local.CurrentAvatarSettings.GetAvatarSettings();
+
+            if (Player.Local.Avatar.CurrentSettings == null)
+            {
+                Log("Could not find player avatar settings");
+                return 0f;
+            }
+            AvatarSettings playerSettings = Player.Local.Avatar.CurrentSettings;
             // For each dealer body layer setting, check each player body layer setting
             for (int i = 0; i < d.Avatar.CurrentSettings.BodyLayerSettings.Count; i++)
             {
@@ -331,20 +339,34 @@ namespace CartelEnforcer
 
         public static float CalculateThreathenProbability()
         {
-            int prev = PlayerSingleton<PlayerInventory>.Instance.PriorEquippedSlotIndex - 1;
-            string id = "";
-            if (prev != -1 && prev < 8)
+            Log("Calculate Threathen probability");
+            int prev = PlayerSingleton<PlayerInventory>.Instance.PriorEquippedSlotIndex;
+            if (prev == null)
             {
-                
-                ItemInstance item = Player.Local.Inventory[prev].ItemInstance;
+                Log("Inventory prior equipped slot field is unassigned");
+                return 0f;
+            }    
+            string id = "";
+            Log("Previous slot equipped: " + prev.ToString());
+            if (prev >= 0 && prev < 8)
+            {
+                ItemInstance item = Player.Local._inventory[prev].ItemInstance;
                 if (item != null)
+                {
                     id = item.ID;
+                    Log($"ID {id}");
+                }
                 else
+                {
                     Log("Item Instance is null");
+                    return 0f;
+                }
             }
             else
+            {
+                Log("Invalid inventory slot index");
                 return 0f;
-
+            }
             float weaponThreath = 0f;
             switch (id)
             {

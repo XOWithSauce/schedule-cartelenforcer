@@ -12,14 +12,12 @@ using ScheduleOne.DevUtilities;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Levelling;
 using ScheduleOne.Economy;
-using ScheduleOne.Equipping;
 #else
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Economy;
-using Il2CppScheduleOne.Equipping;
 #endif
 
 namespace CartelEnforcer
@@ -160,26 +158,75 @@ namespace CartelEnforcer
         public static IEnumerator SetAmbushGeneralSettings()
         {
             Log("Setting Ambush general settings...");
+            List<string> RangedWeaponAssetPaths = new();
+            List<string> MeleeWeaponAssetPaths = new();
 
-            if (ambushSettings.RangedWeaponAssetPaths != null)
+            foreach (string weaponName in ambushSettings.RangedWeapons)
             {
-                RangedWeapons = new AvatarWeapon[ambushSettings.RangedWeaponAssetPaths.Count];
+                if (weaponName == null || weaponName == string.Empty) continue;
+                string resourcePath = "";
+                switch (weaponName.ToLower())
+                {
+                    case "m1911":
+                        resourcePath = "Avatar/Equippables/M1911";
+                        break;
+
+                    case "goldenm1911":
+                        resourcePath = "Avatar/Equippables/M1911_Gold";
+                        break;
+
+                    case "revolver":
+                        resourcePath = "Avatar/Equippables/Revolver";
+                        break;
+
+                    case "shotgun":
+                        resourcePath = "Avatar/Equippables/PumpShotgun";
+                        break;
+
+                    default:
+                        resourcePath = string.Empty;
+                        break;
+                }
+                if (resourcePath != string.Empty)
+                    RangedWeaponAssetPaths.Add(resourcePath);
             }
-            if (ambushSettings.MeleeWeaponAssetPaths != null)
+            foreach (string weaponName in ambushSettings.MeleeWeapons)
             {
-                MeleeWeapons = new AvatarWeapon[ambushSettings.MeleeWeaponAssetPaths.Count];
+                if (weaponName == null || weaponName == string.Empty) continue;
+                string resourcePath = "";
+                switch (weaponName.ToLower())
+                {
+                    case "knife":
+                        resourcePath = "Avatar/Equippables/Knife";
+                        break;
+
+                    case "brokenbottle":
+                        resourcePath = "Avatar/Equippables/BrokenBottle";
+                        break;
+                }
+                if (resourcePath != string.Empty)
+                    MeleeWeaponAssetPaths.Add(resourcePath);
             }
 
-            int assetPaths = ambushSettings.RangedWeaponAssetPaths.Count;
+            if (RangedWeaponAssetPaths != null && RangedWeaponAssetPaths.Count > 0)
+            {
+                RangedWeapons = new AvatarWeapon[RangedWeaponAssetPaths.Count];
+            }
+            if (MeleeWeaponAssetPaths != null && MeleeWeaponAssetPaths.Count > 0)
+            {
+                MeleeWeapons = new AvatarWeapon[MeleeWeaponAssetPaths.Count];
+            }
+
+            int assetPaths = RangedWeaponAssetPaths.Count;
             Log("  Ranged asset paths count: " + assetPaths);
             for (int i = 0; i < assetPaths; i++) 
             {
                 Log("  Load: " + i);
                 // Instantiate Load into array
 #if MONO
-                GameObject gameObject = Resources.Load(ambushSettings.RangedWeaponAssetPaths[i]) as GameObject;
+                GameObject gameObject = Resources.Load(RangedWeaponAssetPaths[i]) as GameObject;
 #else
-                UnityEngine.Object obj = Resources.Load(ambushSettings.RangedWeaponAssetPaths[i]);
+                UnityEngine.Object obj = Resources.Load(RangedWeaponAssetPaths[i]);
                 GameObject gameObject = obj.TryCast<GameObject>();
 #endif
                 Log("    Resource Loaded: " + i);
@@ -189,18 +236,14 @@ namespace CartelEnforcer
 
                 if (equippable == null) 
                 { 
-                    Log($"Equippable failed to load from {ambushSettings.RangedWeaponAssetPaths[i]}");
+                    Log($"Equippable failed to load from {RangedWeaponAssetPaths[i]}");
                     continue;
                 }
                 if (!equippable.gameObject.activeSelf)
                     equippable.gameObject.SetActive(true);
 #if MONO
-                Log("  AvatarWeaponCast: " + i);
                 if (equippable is AvatarWeapon rangedWeapon)
-                {
-                    Log("    AvatarWeaponCast Done: " + i);
                     RangedWeapons[i] = rangedWeapon;
-                }
 #else
                 AvatarWeapon weapon = equippable.TryCast<AvatarWeapon>();
                 if (weapon != null)
@@ -225,18 +268,18 @@ namespace CartelEnforcer
                     rangedWep.ReloadTime = Mathf.Lerp(rangedWep.ReloadTime, rangedWep.ReloadTime * 0.5f, ambushSettings.AmbushWeaponLethality);
                 }
 
-                Log($"Succesfully loaded {ambushSettings.RangedWeaponAssetPaths[i]}");
+                Log($"Succesfully loaded {RangedWeaponAssetPaths[i]}");
             }
 
-            assetPaths = ambushSettings.MeleeWeaponAssetPaths.Count;
+            assetPaths = MeleeWeaponAssetPaths.Count;
             Log("Melee asset paths count: " + assetPaths);
             for (int i = 0; i < assetPaths; i++)
             {
                 // same
 #if MONO
-                GameObject gameObject = Resources.Load(ambushSettings.MeleeWeaponAssetPaths[i]) as GameObject;
+                GameObject gameObject = Resources.Load(MeleeWeaponAssetPaths[i]) as GameObject;
 #else
-                UnityEngine.Object obj = Resources.Load(ambushSettings.MeleeWeaponAssetPaths[i]);
+                UnityEngine.Object obj = Resources.Load(MeleeWeaponAssetPaths[i]);
                 GameObject gameObject = obj.TryCast<GameObject>();
 #endif
 
@@ -244,7 +287,7 @@ namespace CartelEnforcer
                 
                 if (equippable == null)
                 {
-                    Log($"Equippable failed to load from {ambushSettings.MeleeWeaponAssetPaths[i]}");
+                    Log($"Equippable failed to load from {MeleeWeaponAssetPaths[i]}");
                     continue;
                 }
                 if (!equippable.gameObject.activeSelf)
@@ -272,7 +315,7 @@ namespace CartelEnforcer
                     meleeWep.MaxUseRange = Mathf.Lerp(meleeWep.MaxUseRange, meleeWep.MaxUseRange * 2f, ambushSettings.AmbushWeaponLethality);
                 }
 
-                Log($"Succesfully loaded {ambushSettings.MeleeWeaponAssetPaths[i]}");
+                Log($"Succesfully loaded {MeleeWeaponAssetPaths[i]}");
             }
 
 
@@ -289,7 +332,6 @@ namespace CartelEnforcer
                 {
                     ambush.RangedWeapons = RangedWeapons;
                     ambush.MeleeWeapons = MeleeWeapons;
-                    
                 }
 #else
                 Ambush temp = globalActivity.TryCast<Ambush>();

@@ -8,7 +8,7 @@ using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.FrequencyOverrides;
 
 #if MONO
-using ScheduleOne.Core.Audio;
+using ScheduleOne.Audio;
 using ScheduleOne.Interaction;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Property;
@@ -27,7 +27,7 @@ using ScheduleOne.VoiceOver;
 using ScheduleOne.Persistence;
 using FishNet;
 #else
-using Il2CppScheduleOne.Core.Audio;
+using Il2CppScheduleOne.Audio;
 using Il2CppScheduleOne.Interaction;
 using Il2CppScheduleOne.ItemFramework;
 using Il2CppScheduleOne.Property;
@@ -55,6 +55,7 @@ namespace CartelEnforcer
 
         public static GameObject intBomb = null;
         public static InteractableObject bombInteractable = null;
+        public static CartelGoon sabotager = null;
 
         public static Light bombLight = null;
         public static Material bombCubeMat = null;
@@ -153,6 +154,7 @@ namespace CartelEnforcer
 
         public static void PrepareBombFXObjects()
         {
+            Log("Prepare bomb fx");
             RV rv = UnityEngine.Object.FindObjectOfType<RV>();
             // THIS ONE FOR THE FX FIRE + get bomb obj
             // FX gameobject, instatiate new and disabled version which can be moved around with coordinates and on enabled it plays animation...
@@ -189,23 +191,18 @@ namespace CartelEnforcer
             ItemDefinition def = GetItem("bomb");
             bombInstance = def.GetDefaultInstance();
 
+
+            StorableItemInstance storable = null;
 #if MONO
-            if (bombInstance is StorableItemInstance storable)
-            {
-                if (storable != null && storable.StoredItem != null)
-                {
-                    Log("Parsing bomb go");
-                    bombGo = storable.StoredItem.gameObject;
-                }
-            }
+            storable = bombInstance as StorableItemInstance;
 #else
-            StorableItemInstance storable = bombInstance.TryCast<StorableItemInstance>();
+            storable = bombInstance.TryCast<StorableItemInstance>();
+#endif
             if (storable != null && storable.StoredItem != null)
             {
-                Log("Parsing bomb go");
                 bombGo = storable.StoredItem.gameObject;
             }
-#endif
+            Log($" bombGo is null {bombGo == null}");
             // Instantiate new Bomb object, preparing for int object
             intBomb = UnityEngine.Object.Instantiate(bombGo);
             intBomb.SetActive(false);
@@ -214,7 +211,6 @@ namespace CartelEnforcer
             // Then that is Bomb_Stored(Clone) basically
             GameObject bombMeshObj = intBomb.transform.Find("Bomb/bomb").gameObject;
             bombMeshObj.AddComponent<BoxCollider>();
-
             bombInteractable = intBomb.AddComponent<InteractableObject>();
             bombInteractable.message = "x 6 - Defuse bomb";
 
@@ -235,7 +231,6 @@ namespace CartelEnforcer
                 }
             }
             bombInteractable.onInteractStart.AddListener((UnityEngine.Events.UnityAction)OnBombInteract);
-
             // Add the red light component
             Transform lightTransform = new GameObject("BombLight").transform;
             lightTransform.parent = intBomb.transform;
@@ -247,7 +242,9 @@ namespace CartelEnforcer
             bombLight.type = LightType.Point;
 
             // Primitive cube as unlit material that blinks red/grey
-            Shader standardShader = Shader.Find("Unlit/Color");
+            Shader standardShader = Shader.Find("Universal Render Pipeline/Lit");
+
+
             bombCubeMat = new Material(standardShader);
             bombCubeMat.color = Color.grey;
 
@@ -259,7 +256,8 @@ namespace CartelEnforcer
 
             cube.transform.localScale = new Vector3(0.023f, 0.01f, 0.01f);
             cube.transform.position = new Vector3(0f, 0.052f, -0.016f);
-
+            Log("Shader and renderer done");
+            
             // Audio source for bomb beeping
             bombSound = intBomb.AddComponent<AudioSource>();
             bombSound.maxDistance = 7f;
@@ -276,7 +274,19 @@ namespace CartelEnforcer
             if (voObj == null)
                 Log("Could not find police chatter vo");
             else
-                bombSound.clip = voObj.StartEndBeep._audioSource.clip;
+            {
+                AudioSourceController controller = voObj.StartEndBeep;
+                if (controller != null)
+                {
+                    AudioSource source = controller._audioSource;
+                    if (source != null && source.clip != null)
+                    {
+                        bombSound.clip = source.clip;
+                    }
+                    else { Log("Audio source is null"); }
+                }
+                else { Log("Audio controller"); }
+            }
 
             Log("Instantiated gameobjects for event");
 
@@ -333,7 +343,7 @@ namespace CartelEnforcer
                         break;
                     }
 
-                    Player nearbyPlayer = Player.GetClosestPlayer(location.bombLocation.Item1, out float distance);
+                    Player nearbyPlayer = PlayerManager.GetClosestPlayer(location.bombLocation.Item1, out float distance);
                     if (distance < 20f && nearbyPlayer.CurrentBusiness != null && nearbyPlayer.CurrentBusiness == location.business && location.business.IsOwned)
                     {
                         Log("Selected by player inside business");
@@ -373,7 +383,6 @@ namespace CartelEnforcer
                 sabotageEventActive = true;
                 coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
             }
-            yield return null;
         }
 
         public static IEnumerator GoonPlantBomb(SabotageEventLocation location)
@@ -381,6 +390,7 @@ namespace CartelEnforcer
             // Decide goon spawn pos
             Vector3 randomPoint = location.sabotagerSpawns[UnityEngine.Random.Range(0, location.sabotagerSpawns.Count)];
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
+            sabotager = goon;
             goon.Movement.WarpToNavMesh();
             Log($"Sabotager spawned at {goon.CenterPointTransform.position}");
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
@@ -450,7 +460,7 @@ namespace CartelEnforcer
 
             Singleton<NotificationsManager>.Instance.SendNotification(
                 location.business.PropertyName,
-                $"<color=#FF1E12>Business Sabotage Alert!</color>",
+                $"<color=#FF1E12>Sabotage alert!</color>",
                 NetworkSingleton<MoneyManager>.Instance.LaunderingNotificationIcon,
                 10f,
                 true
@@ -515,7 +525,7 @@ namespace CartelEnforcer
                 // While not proximity initiated update the timeout initiation
                 // when proximity is triggered tick up until explosion
 
-                Player.GetClosestPlayer(location.bombLocation.Item1, out distanceToBomb);
+                PlayerManager.GetClosestPlayer(location.bombLocation.Item1, out distanceToBomb);
                 if (!proximityInitiated)
                 {
                     proximityInitiated = (distanceToBomb < 6f);
@@ -577,7 +587,7 @@ namespace CartelEnforcer
             // maybe in the future do something similiar like the drive by shooting raycasting but use radial then max penetration of layers by 3 or something similiar??
             // this way it doesnt always go through multiple walls??
             bool playerConcussed = false;
-            Player player = Player.GetClosestPlayer(location.bombLocation.Item1, out float distance);
+            Player player = PlayerManager.GetClosestPlayer(location.bombLocation.Item1, out float distance);
             IDamageable damageablePlayer = player.GetComponent<IDamageable>();
             if (distance <= maxExplosionDistance && damageablePlayer != null)
             {
@@ -602,7 +612,7 @@ namespace CartelEnforcer
                 {
                     // Can have benzies goon on it, at long ranged render distance the goon that plants bomb dies here?
                     // during same time they bug out the fire for some reason what happens there? couldnt reprod but try again later...
-                    Log("NPC Explosion effect: " + npc.fullName);
+                    Log("NPC Explosion effect: " + npc.ID);
                     IDamageable damageableNpc = npc.GetComponent<IDamageable>();
                     if (damageableNpc == null)
                     {
@@ -758,16 +768,10 @@ namespace CartelEnforcer
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
 
-            if (goon.Health.IsDead || goon.Health.IsKnockedOut)
-                goon.Health.Revive();
-
             goon.Despawn();
 
-            if (goon.Behaviour.CombatBehaviour.Active)
-                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-
             goon.Movement.MoveSpeedMultiplier = 1f;
-
+            sabotager = null;
             yield return null;
         }
 

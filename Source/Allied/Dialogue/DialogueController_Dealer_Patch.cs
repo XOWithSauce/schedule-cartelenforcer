@@ -18,6 +18,8 @@ using ScheduleOne.Dialogue;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.Persistence;
+using ScheduleOne.NPCs;
+using ScheduleOne.Map;
 #else
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.PlayerScripts;
@@ -27,6 +29,8 @@ using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.Map;
 #endif
 
 
@@ -34,24 +38,69 @@ namespace CartelEnforcer
 {
     // Patch the Dialogue Controller for cartel dealers Check Choice and Choice Callback for custom dialogues
     // Show reasoning for disabled choice opt patch here
-
     [HarmonyPatch(typeof(DialogueController_Dealer), "CheckChoice")]
     public static class DialogueController_Dealer_CheckChoice_Patch
     {
+        public static bool IsHireChoiceValid(Dealer d, out string invalidReason)
+        {
+            Log("Run recruit choice validator");
+            invalidReason = "";
+            if (d.IsRecruited)
+            {
+                invalidReason = "Already recruited.";
+                return false;
+            }
+            if (!d.HasBeenRecommended)
+            {
+                invalidReason = "Persuade the dealer first.";
+                return false;
+            }
+#if MONO
+            List<NPC> lockedConnections = d.RelationData.GetLockedConnections();
+#else
+            Il2CppSystem.Collections.Generic.List<NPC> lockedConnections = d.RelationData.GetLockedConnections();
+#endif
+            if (lockedConnections != null && lockedConnections.Count > 0)
+            {
+                if (d.Region == EMapRegion.Westville)
+                {
+                    invalidReason = $"Unlock Molly first.";
+                    return false;
+                }
+                else
+                {
+                    EMapRegion prev = (EMapRegion)((int)d.Region - 1);
+                    invalidReason = $"Unlock {prev} dealer first.";
+                    return false;
+                }
+            }
+            return true;
+        }
+
         [HarmonyPostfix]
         public static void Postfix(DialogueController_Dealer __instance, ref string choiceLabel, ref bool __result, ref string invalidReason)
         {
-            Log("Check Choice Postfix");
-
             // If the dealer is not cartel dealer dont patch
-            if (__instance.Dealer.DealerType == EDealerType.PlayerDealer) return;
+            if (__instance.Dealer.DealerData.DealerType == EDealerType.PlayerDealer) return;
             // If the allied extensions features not enabled dont patch this method
             if (!currentConfig.alliedExtensions) return;
 
             // Check if the custom dialogue is active
-            if (DialogueHandler.activeDialogue == null) return;
+            if (DialogueHandler.ActiveDialogue == null) return;
 
-            if (DialogueHandler.activeDialogue.name == "CARTEL_ENFORCER_PERSUADE")
+            // Cant think of a better way to get this to work, choice index 0 is recruit choice...
+            if (__instance.shownChoices.Contains(__instance.Dealer.recruitChoice) && choiceLabel == "GENERIC_CHOICE_0")
+            {
+                if (!IsHireChoiceValid(__instance.Dealer, out invalidReason))
+                {
+                    __result = false;
+                }
+                else
+                {
+                    __result = true;
+                }
+            }
+            else if (DialogueHandler.ActiveDialogue.name == "CARTEL_ENFORCER_PERSUADE")
             {
                 __instance.OverrideContainer.DialogueNodeData[0].DialogueText = dealerEntryNodeTexts[UnityEngine.Random.Range(0, dealerEntryNodeTexts.Count)];
 
@@ -69,7 +118,7 @@ namespace CartelEnforcer
                 {
                     if (persuadeCooldown != 0)
                     {
-                        invalidReason = $"<color=#DE3F31>Wait {persuadeCooldown} minutes before trying again.</color>";
+                        invalidReason = $"<color=#DE3F31>On cooldown: {persuadeCooldown}</color>";
                         // Update the cooldown text while the dialogue is open
                         coros.Add(MelonCoroutines.Start(UpdatePersuadeCooldownText()));
                         __result = false;
@@ -100,26 +149,35 @@ namespace CartelEnforcer
 
         public static IEnumerator EnableDelayed(DialogueController_Dealer __instance, string choiceLabel)
         {
+            yield return Wait01;
             AlliedExtension.alliedQuests.timesPersuaded = 0;
             __instance.Dealer.HasBeenRecommended = true;
-
-            // Close the dialogue container
             __instance.handler.EndDialogue();
-            yield return Wait01;
+            __instance.Dealer.DialogueController.DialogueEnabled = false;
+            yield return Wait1;
             if (!registered) yield break;
 
             // Get rid of the override container
-            __instance.ClearOverrideContainer();
+            if (__instance.OverrideContainer != null)
+                __instance.ClearOverrideContainer();
 
             // Add the base dialogue options
             __instance.Dealer.SetUpDialogue();
 
-            void DisableInventoryClear()
+            if (__instance.Dealer.recruitChoice != null)
             {
-                coros.Add(MelonCoroutines.Start(DisableInventoryClearDelayed(__instance.Dealer)));
+                void DisableInventoryClear()
+                {
+                    coros.Add(MelonCoroutines.Start(DisableInventoryClearDelayed(__instance.Dealer)));
+                }
+                __instance.Dealer.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)DisableInventoryClear);
             }
-            __instance.Dealer.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)DisableInventoryClear);
+            else
+            {
+                Log("Dealer recruit choice is missing");
+            }
 
+            
             if (choiceLabel == "THREATEN_CARTEL")
             {
                 __instance.Dealer.SetPanicked_Server();
@@ -129,28 +187,35 @@ namespace CartelEnforcer
             {
                 __instance.npc.PlayVO(EVOLineType.Think, false);
             }
-            yield return Wait05;
+            yield return Wait1;
             if (!registered) yield break;
 
             switch (UnityEngine.Random.Range(0, 4))
             {
                 case 0:
-                    __instance.handler.WorldspaceRend.ShowText($"Pay me ${__instance.Dealer.SigningFee} and I'll work for you.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Pay me ${__instance.Dealer.DealerData.SigningFee} and I'll work for you.", 10f);
                     break;
 
                 case 1:
-                    __instance.handler.WorldspaceRend.ShowText($"Come back with ${__instance.Dealer.SigningFee}. Then we can talk.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Come back with ${__instance.Dealer.DealerData.SigningFee}. Then we can talk.", 10f);
                     break;
 
                 case 2:
-                    __instance.handler.WorldspaceRend.ShowText($"My price is ${__instance.Dealer.SigningFee}. Take it or leave it!", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"My price is ${__instance.Dealer.DealerData.SigningFee}. Take it or leave it!", 10f);
                     break;
 
                 case 3:
-                    __instance.handler.WorldspaceRend.ShowText($"Fine! For ${__instance.Dealer.SigningFee} cash I'm in.", 10f);
+                    __instance.handler.WorldspaceRend.ShowText($"Fine! For ${__instance.Dealer.DealerData.SigningFee} cash I'm in.", 10f);
+                    break;
+
+                default:
+                    __instance.handler.WorldspaceRend.ShowText($"Pay me ${__instance.Dealer.DealerData.SigningFee} and I'll work for you.", 10f);
                     break;
             }
-            yield return null;
+
+            __instance.Dealer.DialogueController.DialogueEnabled = true;
+            Log("Finished enable delayed");
+            yield break;
         }
 
         public static IEnumerator DisableInventoryClearDelayed(Dealer d)
@@ -159,7 +224,7 @@ namespace CartelEnforcer
             // just incase
             yield return Wait2;
             if (d.IsRecruited)
-                d.Inventory.ClearInventoryEachNight = false;
+                d.NPCData.Inventory.ClearInventoryOnNewDay = false;
             yield break;
         }
 
@@ -167,12 +232,12 @@ namespace CartelEnforcer
         public static bool Prefix(DialogueController_Dealer __instance, string choiceLabel)
         {
             // If the dealer is not cartel dealer dont patch
-            if (__instance.Dealer.DealerType == EDealerType.PlayerDealer) return true;
+            if (__instance.Dealer.DealerData.DealerType == EDealerType.PlayerDealer) return true;
             // If the allied extensions features not enabled dont patch this method
             if (!currentConfig.alliedExtensions) return true;
 
             // Check if the custom dialogue is active
-            if (DialogueHandler.activeDialogue?.name != "CARTEL_ENFORCER_PERSUADE") return true;
+            if (DialogueHandler.ActiveDialogue?.name != "CARTEL_ENFORCER_PERSUADE") return true;
 
             if (choiceLabel == "START_PERSUADE")
             {
@@ -188,13 +253,14 @@ namespace CartelEnforcer
                 persuasionChances["THREATEN_CARTEL"] = CalculateThreathenProbability();
                 persuasionChances["SPREAD_RUMOURS"] = CalculateRumourProbability();
                 persuadeCooldown = alliedConfig.PersuadeCooldownMins;
+                Log("gen choices");
                 for (int i = 0; i < __instance.OverrideContainer.DialogueNodeData[1].choices.Length; i++)
                 {
                     DialogueChoiceData choice = __instance.OverrideContainer.DialogueNodeData[1].choices[i];
                     List<string> textTemplates;
                     float chance = 0f;
                     string colorHex = "#000000";
-                    // Why doesnt this change color foreach?
+                    
                     if (alliedDialogue.TryGetValue(choice.ChoiceLabel, out textTemplates) && persuasionChances.TryGetValue(choice.ChoiceLabel, out chance))
                     {
                         // Change the chance text color based on probability
@@ -236,7 +302,10 @@ namespace CartelEnforcer
                 {
                     if (chance != 0f && UnityEngine.Random.Range(0f, 1f) < chance)
                     {
-                        coros.Add(MelonCoroutines.Start(EnableDelayed(__instance, choiceLabel)));
+                        Log("Eval chance hits!");
+                        string label = choiceLabel;
+                        coros.Add(MelonCoroutines.Start(EnableDelayed(__instance, label)));
+                        Log("Enable delayed past");
                     }
                     else
                     {
@@ -271,9 +340,9 @@ namespace CartelEnforcer
                     }
                 }
 
-
+                Log("End logic");
             }
-
+            Log("Continue prefix");
             return true;
         }
     }

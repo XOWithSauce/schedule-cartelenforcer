@@ -1,3 +1,37 @@
+# Version 2.0.0
+- Updated mod code to match the latest game version 0.4.6f8, requiring alot of bug fixing and refactoring.
+- Updated Melon Loader version dependency to be (latest) 0.7.3 and higher upgraded from 0.7.0
+
+- Refactored mod added quest system to fix multiple issues:
+    - Old quest system (since 1.5.0 changelogs) has had an issue with ActiveEntryCount in il2cpp backend tracing back bugs ever since 1st quest was added, fixed with prefixing getter instead of trying to override the class member.
+    - In Il2cpp backend the IEnumerator functions in these Quest-inherited classes caused yellow warnings in logs on injection, those are now gone as composed class handles them.
+    - Added quests now inherit from simple base class which handles all the redundant and repeating stuff.
+    - Changed mod added quests icons to be better visible with green background on the benzies logo (map + hud + compass)
+
+- Refactored all mod npc spawning related logic as the spawnable prefabs dont contain previously used base objects anymore -> now creates a clone from a runtime object and re-initializes it
+
+- Updated Ambush/settings.json to use `RangedWeapons` instead of `RangedWeaponAssetPaths` and `MeleeWeapons` instead of `MeleeWeaponAssetPaths`
+- Updated Ambush/settings.json `RangedWeapons` to support values: "m1911", "goldenm1911", "revolver" and "shotgun"
+- Updated Ambush/settings.json `MeleeWeapons` to support values: "knife" and "brokenbottle"
+- Changed Ambush/settings.json default weapon values for the mod to be shotgun and broken bottle.
+- Added new weapons compatibility to the dealer.json file allowing Cartel Dealers to equip 2 new weapons with `CartelDealerWeapon` as "goldenm1911" or "brokenbottle"
+
+- Changed the Unexpected Alliances quest to spawn the cartel brute to random locations, with Manny marking the position on map and removed the monologue with npc, soon to be refactored.
+- Added to Allied Supplies quest new loot table for the White Van (more specific in readme) with common, rare and legendary loot chance
+- Added to Allied Supplies quest new loot for the Barrels (more in readme)
+- Added to True Brothers quest spawned ambush police appearance randomization to not have them all look the same
+
+- Tried to fix a bug with the Influence change override for Ambush events, where the patch would not correctly find the ambush spawned cartel goons and fails to apply user configuration indicated influence change after it
+- Tried to fix a persistent bug in the mod force despawned cartel goons where they turn into ghosts again if not despawned by day pass function
+- Fixed bugs with Persuade dialogue having text overlapping choice text, also updating mod code to match source code related changes
+- Fixed a bug in the True Brothers and Four Wheels quests where one of the spawned cars would clip through the floor in latest version
+- Fixed a bug in the True Brothers quest where sometimes rarely the cops would not exit vehicle after arriving
+- Fixed the MelonPreferences saving logic to only save the mod related category and to not log a message if the user changes config at runtime as it felt spammy in the logs
+- Fixed Debug mode rendered objects shaders to use URP Lit shaders instead of Unlit due to Unlit not being part of the built in shaders
+- Added to GitHub new [Projects roadmap](https://github.com/users/XOWithSauce/projects/5) for the Allied Extensions module that contains the recommended / planned / requested features
+- Moved Mod added quests information from Readme file to the GitHub [Quests wiki](https://github.com/XOWithSauce/schedule-cartelenforcer/wiki/Mod-Quests).
+
+
 # Version 1.9.0
 - Added 1 new end game quest "True Brothers" to the Allied Extension that only happens when working with the cartel (more in readme)
 - Added console command support for toggling mod events

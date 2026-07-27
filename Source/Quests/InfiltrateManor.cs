@@ -1,5 +1,3 @@
-
-
 using System.Collections;
 using MelonLoader;
 using UnityEngine;
@@ -45,13 +43,25 @@ namespace CartelEnforcer
 #if IL2CPP
     [RegisterTypeInIl2Cpp]
 #endif
-    public class Quest_InfiltrateManor : Quest
+    public class Quest_InfiltrateManor : ModQuestBase
     {
-#if IL2CPP
-        public Quest_InfiltrateManor(IntPtr ptr) : base(ptr) { }
+        protected InfiltrateManorHelper _helper;
+#if MONO
+        public Quest_InfiltrateManor()
+        {
+            _helper = new InfiltrateManorHelper(this);
+        }
+#else
+        public Quest_InfiltrateManor(IntPtr ptr) : base(ptr) 
+        {
+            _helper = new InfiltrateManorHelper(this);
+        }
 
         public Quest_InfiltrateManor() : base(ClassInjector.DerivedConstructorPointer<Quest_InfiltrateManor>())
             => ClassInjector.DerivedConstructorBody(this);
+
+        public new string title;
+        public new string Subtitle;
 #endif
 
         private float questDifficultyScalar = 1f;
@@ -73,8 +83,8 @@ namespace CartelEnforcer
             { new Vector3(166.58f, 15.61f, -61.00f), false }
         };
 
-
         // store the combat variables
+        public bool hasSavedCombatVariables = false;
         public float GiveUpRange = 0f;
         public int GiveUpAfterSuccessfulHits = 0;
         public float DefaultSearchTime = 0f;
@@ -87,6 +97,27 @@ namespace CartelEnforcer
         private int roomsVisited = 0; // indexing for search location 
 
         public bool isJukeboxPlaying = false;
+
+        public QuestEntry QuestEntry_InvestigateWoods;
+        private UnityAction _investigateAction;
+
+        public QuestEntry QuestEntry_ReturnToRay;
+        private UnityAction _returnToRayAction;
+
+        public QuestEntry QuestEntry_WaitForNight;
+        private UnityAction _waitForNightAction;
+
+        public QuestEntry QuestEntry_BreakIn;
+        private UnityAction _breakInAction;
+
+        public QuestEntry QuestEntry_DefeatManorGoons;
+        private UnityAction _defeatGoonsAction;
+
+        public QuestEntry QuestEntry_SearchResidence;
+        private UnityAction _searchAction;
+
+        public QuestEntry QuestEntry_EscapeManor;
+
 
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
@@ -169,7 +200,6 @@ namespace CartelEnforcer
 
         public void SetupSelf()
         {
-            Log("SetupSelfStart");
             // calc difficulty scalar
             float allInfluence = 0f;
             foreach (CartelInfluence.RegionInfluenceData data in NetworkSingleton<Cartel>.Instance.Influence.regionInfluence)
@@ -179,298 +209,65 @@ namespace CartelEnforcer
             float allInfluenceNormalized = allInfluence / NetworkSingleton<Cartel>.Instance.Influence.regionInfluence.Count;
             questDifficultyScalar = 1f + allInfluenceNormalized;
 
-            Log("QuestInit");
-            this.name = "Quest_InfiltrateManor";
-            Expires = false;
-            title = "Infiltrate Manor";
-            CompletionXP = Mathf.RoundToInt(600f * questDifficultyScalar);
-            Description = "Find info about Thomas Benzie and break into Manor";
-            TrackOnBegin = true;
-            autoInitialize = false;
-            AutoCompleteOnAllEntriesComplete = false;
+            _helper.InitializeQuest("Infiltrate Manor", xp: Mathf.RoundToInt(600f * questDifficultyScalar));
 
-            onActiveState = new UnityEvent();
-            onComplete = new UnityEvent();
-            onInitialComplete = new UnityEvent();
-            onQuestBegin = new UnityEvent();
-            onQuestEnd = new UnityEvent<EQuestState>();
-            onTrackChange = new UnityEvent<bool>();
-#if MONO
-            this.SetGUID(Guid.NewGuid());
-#else
-            this.SetGUID(Il2CppSystem.Guid.NewGuid());
-#endif
-            Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
-            if (target != null)
-            {
-                this.transform.SetParent(target);
-            }
+            _investigateAction = (UnityAction)OnInvestigateComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_InvestigateWoods,
+                name: "InvestigateWoods",
+                title: "Investigate the hillside forest near Manor (0/4)",
+                new PoIConfig(true, false, false, poiPosition: new Vector3(164.96f, 3.10f, -32.65f)),
+                _investigateAction);
 
-            // UI related code and the benzies logo
-            base.IconPrefab = MakeIcon(this.transform);
-            base.PoIPrefab = MakePOI();
+            _returnToRayAction = (UnityAction)OnReturnToRayComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_ReturnToRay,
+                name: "ReturnToRay",
+                title: "Return to Ray and ask for more information",
+                new PoIConfig(true, false, false, poiPosition: new Vector3(77.30f, 1.46f, -12.85f)),
+                _returnToRayAction);
 
-            // Create the QuestEntry GameObjects and parent them.
+            _waitForNightAction = (UnityAction)OnWaitForNightComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_WaitForNight,
+                name: "WaitForNight",
+                title: "Wait for night time (22:00)",
+                new PoIConfig(false, false, false),
+                _waitForNightAction);
 
-            GameObject investigateWoodsObject = new GameObject("QuestEntry_InvestigateWoods");
-            investigateWoodsObject.transform.SetParent(this.transform);
+            _breakInAction = (UnityAction)OnBreakInComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_BreakIn,
+                name: "BreakIn",
+                title: "Break into Manor through the back door",
+                new PoIConfig(true, false, false, poiPosition: new Vector3(163.37f, 11.86f, -50.12f)),
+                _breakInAction);
 
-            GameObject returnToRayObject = new GameObject("QuestEntry_ReturnToRay");
-            returnToRayObject.transform.SetParent(this.transform);
+            _defeatGoonsAction = (UnityAction)OnDefeatGoonsComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_DefeatManorGoons,
+                name: "DefeatGoons",
+                title: "Defeat the Manor Goons",
+                new PoIConfig(false, false, false),
+                _defeatGoonsAction);
 
-            GameObject waitForNightObject = new GameObject("QuestEntry_WaitForNight");
-            waitForNightObject.transform.SetParent(this.transform);
+            _searchAction = (UnityAction)OnSearchResidenceCompete;
+            _helper.InitializeQuestEntry(ref QuestEntry_SearchResidence,
+                name: "SearchResidence",
+                title: "Investigate the upstairs rooms (0/4)",
+                new PoIConfig(true, false, false),
+                _searchAction);
 
-            GameObject breakInObject = new GameObject("QuestEntry_BreakIn");
-            breakInObject.transform.SetParent(this.transform);
-
-            GameObject defeatGoonsObject = new GameObject("QuestEntry_DefeatManorGoons");
-            defeatGoonsObject.transform.SetParent(this.transform);
-
-            GameObject searchResidenceObject = new GameObject("QuestEntry_SearchResidence");
-            searchResidenceObject.transform.SetParent(this.transform);
-
-            GameObject escapeManorObject = new GameObject("QuestEntry_EscapeManor");
-            escapeManorObject.transform.SetParent(this.transform);
-
-            QuestEntry investigate = investigateWoodsObject.AddComponent<QuestEntry>();
-            QuestEntry returnToRay = returnToRayObject.AddComponent<QuestEntry>();
-            QuestEntry waitForNight = waitForNightObject.AddComponent<QuestEntry>();
-            QuestEntry breakIn = breakInObject.AddComponent<QuestEntry>();
-            QuestEntry defeatGoons = defeatGoonsObject.AddComponent<QuestEntry>();
-            QuestEntry searchResidence = searchResidenceObject.AddComponent<QuestEntry>();
-            QuestEntry escapeManor = escapeManorObject.AddComponent<QuestEntry>();
-
-            Log("Setting Entries");
-            this.QuestEntry_InvestigateWoods = investigate;
-            this.QuestEntry_ReturnToRay = returnToRay;
-            this.QuestEntry_WaitForNight = waitForNight;
-            this.QuestEntry_BreakIn = breakIn;
-            this.QuestEntry_DefeatManorGoons = defeatGoons;
-            this.QuestEntry_SearchResidence = searchResidence;
-            this.QuestEntry_EscapeManor = escapeManor;
-
-            this.Entries = new();
-            this.Entries.Add(investigate);
-            this.Entries.Add(returnToRay);
-            this.Entries.Add(waitForNight);
-            this.Entries.Add(breakIn);
-            this.Entries.Add(defeatGoons);
-            this.Entries.Add(searchResidence);
-            this.Entries.Add(escapeManor);
-
-            investigate.SetEntryTitle("Investigate the hillside forest near Manor (0/4)");
-            investigate.ParentQuest = this;
-            investigate.CompleteParentQuest = false;
-            investigate.PoILocation = new GameObject("InvestigateEntry_POI").transform;
-            investigate.PoILocation.transform.SetParent(investigate.transform);
-            investigate.PoILocation.transform.position = new Vector3(164.96f, 3.10f, -32.65f);
-            investigate.AutoUpdatePoILocation = true;
-            investigate.SetState(EQuestState.Active, true);
-            UnityEngine.Events.UnityAction investigateCompleteAction = null;
-            void OnInvestigateComplete()
-            {
-                if (investigate != null && investigate.State == EQuestState.Failed) return;
-                if (returnToRay == null) return;
-
-                returnToRay.Begin();
-                UpdateQuestMapLogo(returnToRay);
-                returnToRay.SetPoILocation(ray.transform.position);
-
-                MelonCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete));
-                if (investigateCompleteAction != null)
-                {
-                    investigate.onComplete.RemoveListener(investigateCompleteAction);
-                    investigateCompleteAction = null;
-                }
-            }
-            investigateCompleteAction = (UnityEngine.Events.UnityAction)OnInvestigateComplete;
-            investigate.onComplete.AddListener(investigateCompleteAction);
-
-            returnToRay.SetEntryTitle("Return to Ray and ask for more information");
-            returnToRay.ParentQuest = this;
-            returnToRay.CompleteParentQuest = false;
-            returnToRay.PoILocation = new GameObject("ReturnToRayEntry_POI").transform;
-            returnToRay.PoILocation.transform.SetParent(returnToRay.transform);
-            returnToRay.PoILocation.transform.position = new Vector3(77.30f, 1.46f, -12.85f);
-            returnToRay.AutoUpdatePoILocation = true;
-            returnToRay.SetState(EQuestState.Inactive, false);
-            UnityEngine.Events.UnityAction returnToRayAction = null;
-            void OnReturnToRayComplete()
-            {
-                if (returnToRay != null && returnToRay.State == EQuestState.Failed) return;
-                if (waitForNight == null) return;
-
-                waitForNight.Begin();
-                if (waitForNight.compassElement != null)
-                    waitForNight.compassElement.Visible = false;
-                coros.Add(MelonCoroutines.Start(RandomManorGenerator.SetupManor()));
-                if (returnToRayAction != null)
-                {
-                    returnToRay.onComplete.RemoveListener(returnToRayAction);
-                    returnToRayAction = null;
-                }
-            }
-            returnToRayAction = (UnityEngine.Events.UnityAction)OnReturnToRayComplete;
-            returnToRay.onComplete.AddListener(returnToRayAction);
-
-            waitForNight.SetEntryTitle("Wait for night time (22:00)");
-            waitForNight.ParentQuest = this;
-            waitForNight.CompleteParentQuest = false;
-            waitForNight.AutoCreatePoI = false;
-            waitForNight.PoILocation = new GameObject("WaitForNightEntry_POI").transform;
-            waitForNight.PoILocation.transform.SetParent(waitForNight.transform);
-            waitForNight.SetState(EQuestState.Inactive, false);
-
-            UnityEngine.Events.UnityAction waitForNightAction = null;
-            void OnWaitForNightComplete()
-            {
-                if (waitForNight != null && waitForNight.State == EQuestState.Failed) return;
-                if (breakIn == null) return;
-
-                breakIn.Begin();
-                UpdateQuestMapLogo(breakIn);
-                if (waitForNightAction != null)
-                {
-                    waitForNight.onComplete.RemoveListener(waitForNightAction);
-                    waitForNightAction = null;
-                }
-            }
-            waitForNightAction = (UnityEngine.Events.UnityAction)OnWaitForNightComplete;
-            waitForNight.onComplete.AddListener(waitForNightAction);
-
-            breakIn.SetEntryTitle("Break into Manor through the back door");
-            breakIn.ParentQuest = this;
-            breakIn.CompleteParentQuest = false;
-            breakIn.PoILocation = new GameObject("BreakInEntry_POI").transform;
-            breakIn.PoILocation.transform.SetParent(breakIn.transform);
-            breakIn.PoILocation.transform.position = new Vector3(163.37f, 11.86f, -50.12f);
-            breakIn.SetState(EQuestState.Inactive, false);
-            UnityEngine.Events.UnityAction breakInAction = null;
-            void OnBreakInComplete()
-            {
-                if (breakIn != null && breakIn.State == EQuestState.Failed) return;
-                if (defeatGoons == null) return;
-
-                SpawnManorGoons();
-                defeatGoons.Begin();
-                if (defeatGoons.compassElement != null)
-                    defeatGoons.compassElement.Visible = false;
-                if (breakInAction != null)
-                {
-                    breakIn.onComplete.RemoveListener(breakInAction);
-                    breakInAction = null;
-                }
-            }
-            breakInAction = (UnityEngine.Events.UnityAction)OnBreakInComplete;
-            breakIn.onComplete.AddListener(breakInAction);
-
-            defeatGoons.SetEntryTitle("Defeat the Manor Goons");
-            defeatGoons.ParentQuest = this;
-            defeatGoons.CompleteParentQuest = false;
-            defeatGoons.PoILocation = new GameObject("DefeatGoonsEntry_POI").transform;
-            defeatGoons.PoILocation.transform.SetParent(defeatGoons.transform);
-            defeatGoons.AutoCreatePoI = false;
-            defeatGoons.SetState(EQuestState.Inactive, false);
-
-            UnityEngine.Events.UnityAction defeatGoonsAction = null;
-            void OnDefeatGoonsComplete()
-            {
-                if (defeatGoons != null && defeatGoons.State == EQuestState.Failed) return;
-                if (searchResidence == null) return;
-
-                searchResidence.Begin();
-                UpdateQuestMapLogo(searchResidence);
-                searchResidence.SetPoILocation(roomsPositions.Keys.FirstOrDefault());
-
-                if (defeatGoonsAction != null)
-                {
-                    defeatGoons.onComplete.RemoveListener(defeatGoonsAction);
-                    defeatGoonsAction = null;
-                }
-            }
-            defeatGoonsAction = (UnityEngine.Events.UnityAction)OnDefeatGoonsComplete;
-            defeatGoons.onComplete.AddListener(defeatGoonsAction);
-
-            searchResidence.SetEntryTitle("Investigate the upstairs rooms (0/4)");
-            searchResidence.ParentQuest = this;
-            searchResidence.CompleteParentQuest = false;
-            searchResidence.PoILocation = new GameObject("SearchResidenceEntry_POI").transform;
-            searchResidence.PoILocation.transform.SetParent(searchResidence.transform);
-            searchResidence.AutoUpdatePoILocation = true;
-            searchResidence.SetState(EQuestState.Inactive, false);
-            UnityEngine.Events.UnityAction searchResidenceAction = null;
-            void OnSearchResidenceComplete()
-            {
-                if (searchResidence != null && searchResidence.State == EQuestState.Failed) return;
-                if (escapeManor == null) return;
-                Log("Escape Begin");
-                escapeManor.Begin();
-                if (escapeManor.compassElement != null)
-                    escapeManor.compassElement.Visible = false;
-                Player.Local.CrimeData.SetPursuitLevel(PlayerCrimeData.EPursuitLevel.Investigating);
-                // Note: not promised that will dispatch
-#if MONO
-                PoliceStation.PoliceStations.FirstOrDefault().Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
-#else
-                PoliceStation.PoliceStations[0].Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
-#endif
-                if (searchResidenceAction != null)
-                {
-                    searchResidence.onComplete.RemoveListener(searchResidenceAction);
-                    searchResidenceAction = null;
-                }
-                Log("Escape Begun");
-                try
-                {
-                    if (activeJukebox.IsPlaying)
-                        OnJukeboxStateChange();
-                } 
-                catch (Exception ex) // Because it seems it can fail silently in mono?
-                {
-                    Log(ex.Message);
-                }
-            }
-            searchResidenceAction = (UnityEngine.Events.UnityAction)OnSearchResidenceComplete;
-            searchResidence.onComplete.AddListener(searchResidenceAction);
-
-            escapeManor.SetEntryTitle("Escape the Manor before the Police arrive");
-            escapeManor.ParentQuest = this;
-            escapeManor.CompleteParentQuest = false;
-            escapeManor.AutoCreatePoI = false;
-            escapeManor.PoILocation = new GameObject("EscapeManorEntry_POI").transform;
-            escapeManor.PoILocation.transform.SetParent(escapeManor.transform);
-            escapeManor.SetState(EQuestState.Inactive, false);
+            _helper.InitializeQuestEntry(ref QuestEntry_EscapeManor,
+                name: "EscapeManor",
+                title: "Escape the Manor before the Police arrive",
+                new PoIConfig(false, false, false));
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
             var action = (Action)OnMinPass;
 #if MONO
-            instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
+            instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(HourPass));
             instance.onMinutePass.Add(action);
 #else
-            instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
+            instance.onHourPass += (Il2CppSystem.Action)HourPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
-
-            StartQuestDetail();
-        }
-
-        private void StartQuestDetail()
-        {
-            SetupHUDUI();
-
-            if (hudUI != null)
-            {
-                if (hudUI.MainLabel != null)
-                    this.hudUI.MainLabel.text = "Infiltrate Manor";
-                this.hudUI.gameObject.SetActive(true);
-            }
-
-            SetIsTracked(true);
-            SetQuestState(EQuestState.Active);
-
-            UpdateQuestMapLogo(QuestEntry_InvestigateWoods);
-            return;
+            _helper.StartQuestFromEntry(QuestEntry_InvestigateWoods);
         }
 
         public void SpawnManorGoons()
@@ -488,7 +285,6 @@ namespace CartelEnforcer
 
                     if (goon.IsGoonSpawned && (goon.Health.IsDead || goon.Health.IsKnockedOut))
                     {
-                        goon.Health.Revive();
                         goon.Despawn();
                     }
                 }
@@ -513,7 +309,7 @@ namespace CartelEnforcer
 
                 SetupGoonWeapon(goon);
                 goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(500f * questDifficultyScalar, 1300f * questDifficultyScalar)));
-                goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
+                goon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
                 goon.Health.Health = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
 
                 UnityEngine.Events.UnityAction onGoonDiedAction = null;
@@ -529,11 +325,12 @@ namespace CartelEnforcer
                 onGoonDiedAction = (UnityEngine.Events.UnityAction)onGoonDie;
                 goon.Health.onDieOrKnockedOut.AddListener(onGoonDiedAction);
 
-                if (GiveUpRange == 0f)
+                if (!hasSavedCombatVariables)
                 {
                     GiveUpRange = goon.Behaviour.CombatBehaviour.GiveUpRange;
                     GiveUpAfterSuccessfulHits = goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
                     DefaultSearchTime = goon.Behaviour.CombatBehaviour.DefaultSearchTime;
+                    hasSavedCombatVariables = true;
                 }
 
                 goon.Behaviour.CombatBehaviour.GiveUpRange = 60f;
@@ -554,7 +351,6 @@ namespace CartelEnforcer
 
             return;
         }
-
         private void SetupGoonWeapon(CartelGoon goon)
         {
 
@@ -585,12 +381,8 @@ namespace CartelEnforcer
                     wep.CooldownDuration = Mathf.Lerp(0.7f, 1.2f, t);
                     wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
                 }
-                if (goon.Behaviour.CombatBehaviour.currentWeapon != null && goon.Behaviour.CombatBehaviour.DefaultWeapon == null)
-                    goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
-
             }
         }
-
         private void SpawnForestGoon()
         {
             if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Count == 0) return;
@@ -610,7 +402,7 @@ namespace CartelEnforcer
             }
 
             goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(500f * questDifficultyScalar, 1300f * questDifficultyScalar)));
-            goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
+            goon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
             goon.Health.Health = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
 
             goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
@@ -636,8 +428,6 @@ namespace CartelEnforcer
                     wep.Damage = Mathf.Round(Mathf.Lerp(dmgMin, dmgMax, t));
                 }
 
-                if (goon.Behaviour.CombatBehaviour.currentWeapon != null && goon.Behaviour.CombatBehaviour.DefaultWeapon == null)
-                    goon.Behaviour.CombatBehaviour.DefaultWeapon = goon.Behaviour.CombatBehaviour.currentWeapon;
             }
             goon.Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
             goon.Behaviour.CombatBehaviour.Enable_Networked();
@@ -646,31 +436,7 @@ namespace CartelEnforcer
             goon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, speed));
             goon.Movement.Agent.avoidancePriority = 30;
             goon.transform.localScale = new Vector3(0.81f, 0.81f, 0.81f);
-            coros.Add(MelonCoroutines.Start(DespawnForestGoon(goon)));
-        }
-        private IEnumerator DespawnForestGoon(CartelGoon goon)
-        {
-            int maxWaitMins = 2;
-            for (int i = 0; i < 60 * maxWaitMins; i++)
-            {
-                yield return Wait1;
-                if (!registered) yield break;
-                if (goon.Health.IsDead || goon.Health.IsKnockedOut) break;
-                if (goon.Behaviour.activeBehaviour == null || goon.Behaviour.activeBehaviour != goon.Behaviour.CombatBehaviour) break;
-            }
-            yield return Wait30;
-            goon.Health.MaxHealth = 100f;
-            goon.Health.Health = 100f;
-            goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
-            goon.Behaviour.ScheduleManager.EnableSchedule();
-            if (goon.Health.IsDead)
-                goon.Health.Revive();
-            if (goon.IsGoonSpawned)
-                goon.Despawn();
-            if (goon.Behaviour.CombatBehaviour.Active)
-                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-            goon.Movement.SpeedController.RemoveSpeedControl("combat");
-            yield break;
+            coros.Add(MelonCoroutines.Start(_helper.DespawnForestGoon(goon)));
         }
 
         public override void OnMinPass()
@@ -856,7 +622,6 @@ namespace CartelEnforcer
                 return;
             }
         }
-
         private void HourPass()
         {
             if (!registered || SaveManager.Instance.IsSaving || manorCompleted || this.State != EQuestState.Active) return;
@@ -875,15 +640,140 @@ namespace CartelEnforcer
             }
         }
 
+        private void OnInvestigateComplete()
+        {
+            if (QuestEntry_InvestigateWoods != null && QuestEntry_InvestigateWoods.State == EQuestState.Failed) return;
+            if (QuestEntry_ReturnToRay == null) return;
 
-        public QuestEntry QuestEntry_InvestigateWoods;
-        public QuestEntry QuestEntry_ReturnToRay;
-        public QuestEntry QuestEntry_WaitForNight;
-        public QuestEntry QuestEntry_BreakIn;
-        public QuestEntry QuestEntry_DefeatManorGoons;
-        public QuestEntry QuestEntry_SearchResidence;
-        public QuestEntry QuestEntry_EscapeManor;
+            QuestEntry_ReturnToRay.Begin();
+            UpdateQuestMapLogo(QuestEntry_ReturnToRay);
+            QuestEntry_ReturnToRay.SetPoILocation(ray.transform.position);
+
+            coros.Add(MelonCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete)));
+            if (_investigateAction != null)
+            {
+                QuestEntry_InvestigateWoods.onComplete.RemoveListener(_investigateAction);
+                _investigateAction = null;
+            }
+        }
+        private void OnReturnToRayComplete()
+        {
+            if (QuestEntry_ReturnToRay != null && QuestEntry_ReturnToRay.State == EQuestState.Failed) return;
+            if (QuestEntry_WaitForNight == null) return;
+
+            QuestEntry_WaitForNight.Begin();
+            if (QuestEntry_WaitForNight.compassElement != null)
+                QuestEntry_WaitForNight.compassElement.Visible = false;
+            coros.Add(MelonCoroutines.Start(RandomManorGenerator.SetupManor()));
+            if (_returnToRayAction != null)
+            {
+                QuestEntry_ReturnToRay.onComplete.RemoveListener(_returnToRayAction);
+                _returnToRayAction = null;
+            }
+        }
+        private void OnWaitForNightComplete()
+        {
+            if (QuestEntry_WaitForNight != null && QuestEntry_WaitForNight.State == EQuestState.Failed) return;
+            if (QuestEntry_BreakIn == null) return;
+
+            QuestEntry_BreakIn.Begin();
+            UpdateQuestMapLogo(QuestEntry_BreakIn);
+            if (_waitForNightAction != null)
+            {
+                QuestEntry_WaitForNight.onComplete.RemoveListener(_waitForNightAction);
+                _waitForNightAction = null;
+            }
+        }
+        private void OnBreakInComplete()
+        {
+            if (QuestEntry_BreakIn != null && QuestEntry_BreakIn.State == EQuestState.Failed) return;
+            if (QuestEntry_DefeatManorGoons == null) return;
+
+            SpawnManorGoons();
+            QuestEntry_DefeatManorGoons.Begin();
+            if (QuestEntry_DefeatManorGoons.compassElement != null)
+                QuestEntry_DefeatManorGoons.compassElement.Visible = false;
+            if (_breakInAction != null)
+            {
+                QuestEntry_BreakIn.onComplete.RemoveListener(_breakInAction);
+                _breakInAction = null;
+            }
+        }
+        private void OnDefeatGoonsComplete()
+        {
+            if (QuestEntry_DefeatManorGoons != null && QuestEntry_DefeatManorGoons.State == EQuestState.Failed) return;
+            if (QuestEntry_SearchResidence == null) return;
+
+            QuestEntry_SearchResidence.Begin();
+            UpdateQuestMapLogo(QuestEntry_SearchResidence);
+            QuestEntry_SearchResidence.SetPoILocation(roomsPositions.Keys.FirstOrDefault());
+
+            if (_defeatGoonsAction != null)
+            {
+                QuestEntry_DefeatManorGoons.onComplete.RemoveListener(_defeatGoonsAction);
+                _defeatGoonsAction = null;
+            }
+        }
+        private void OnSearchResidenceCompete()
+        {
+            if (QuestEntry_SearchResidence != null && QuestEntry_SearchResidence.State == EQuestState.Failed) return;
+            if (QuestEntry_EscapeManor == null) return;
+
+            QuestEntry_EscapeManor.Begin();
+            if (QuestEntry_EscapeManor.compassElement != null)
+                QuestEntry_EscapeManor.compassElement.Visible = false;
+            Player.Local.CrimeData.SetPursuitLevel(PlayerCrimeData.EPursuitLevel.Investigating);
+
+            // Note: not promised that will dispatch
+#if MONO
+            PoliceStation.PoliceStations.FirstOrDefault().Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
+#else
+            PoliceStation.PoliceStations[0].Dispatch(1, Player.Local, PoliceStation.EDispatchType.Auto, true);
+#endif
+            if (_searchAction != null)
+            {
+                QuestEntry_SearchResidence.onComplete.RemoveListener(_searchAction);
+                _searchAction = null;
+            }
+
+            Log("Escape Begun");
+            try
+            {
+                if (activeJukebox.IsPlaying)
+                    OnJukeboxStateChange();
+            }
+            catch (Exception ex) // Because it seems it can fail silently in mono?
+            {
+                Log(ex.Message);
+            }
+        }
 
     }
 
+    // Quest coroutine wrapper
+    public class InfiltrateManorHelper : QuestHelperBase<Quest_InfiltrateManor>
+    {
+        public InfiltrateManorHelper(Quest_InfiltrateManor quest) : base(quest) { }
+        public IEnumerator DespawnForestGoon(CartelGoon goon)
+        {
+            int maxWaitMins = 2;
+            for (int i = 0; i < 60 * maxWaitMins; i++)
+            {
+                yield return Wait1;
+                if (!registered) yield break;
+                if (goon.Health.IsDead || goon.Health.IsKnockedOut) break;
+                if (goon.Behaviour.activeBehaviour == null || goon.Behaviour.activeBehaviour != goon.Behaviour.CombatBehaviour) break;
+            }
+            yield return Wait30;
+            goon.NPCData.Health.MaxHealth = 100f;
+            goon.Health.Health = 100f;
+            goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
+            goon.Behaviour.ScheduleManager.EnableSchedule();
+            if (goon.IsGoonSpawned)
+                goon.Despawn();
+            goon.Movement.SpeedController.RemoveSpeedControl("combat");
+            yield break;
+        }
+
+    }
 }

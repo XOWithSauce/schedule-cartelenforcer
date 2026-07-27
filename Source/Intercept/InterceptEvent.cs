@@ -201,7 +201,7 @@ namespace CartelEnforcer
                     continue;
                 }
 
-                if (Player.GetClosestPlayer(customer.NPC.CenterPoint, out float distance) != null && distance < 40f)
+                if (PlayerManager.GetClosestPlayer(customer.NPC.CenterPoint, out float distance) != null && distance < 40f)
                 {
                     Log("Contract NPC is too close to player");
                     validContracts.RemoveAt(randomIndex);
@@ -468,6 +468,7 @@ namespace CartelEnforcer
 
         public static IEnumerator WaitForContractState(CartelDealer dealer, Contract contract, Customer customer, EMapRegion region, string cGuid, bool changeInfluence, int originalXP)
         {
+            // This never returned yes it never returns why
             Log("Wait for complete...");
 #if MONO
             yield return new WaitUntil(() => contractGuids[cGuid].CompletedByPlayer || contractGuids[cGuid].CompletedByCartel || !registered);
@@ -505,6 +506,7 @@ namespace CartelEnforcer
             interceptor = null;
         }
 
+        
         public static IEnumerator AssignContractSoon(Customer customer, Contract contract, int XP) 
         {
             yield return Wait01;
@@ -514,9 +516,11 @@ namespace CartelEnforcer
                 contract.SetQuestState(EQuestState.Active);
             customer.AssignContract(contract);
             customer.CurrentContract.CompletionXP = XP;
-            customer.ConfigureDealSignal(null, NetworkSingleton<TimeManager>.Instance.CurrentTime, true);
-            customer.DealSignal.SetContract(contract);
-            customer.DealSignal.Started();
+
+            customer.CurrentContract.DeliveryWindow.WindowStartTime = NetworkSingleton<TimeManager>.Instance.CurrentTime;
+
+            customer._attendDealBehaviour.SetContract(contract);
+            customer._attendDealBehaviour.Activate();
             customer.UpdateDealAttendance();
             customer.SetIsAwaitingDelivery(true);
             contract.SetIsTracked(true);

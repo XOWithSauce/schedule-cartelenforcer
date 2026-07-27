@@ -1,5 +1,4 @@
 ﻿using MelonLoader;
-using MelonLoader.Utils;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using UnityEngine;
@@ -10,14 +9,12 @@ using static CartelEnforcer.ModDataPaths;
 using static CartelEnforcer.StealBackCustomer;
 
 #if MONO
-using ScheduleOne.NPCs;
 using ScheduleOne.Economy;
 using ScheduleOne.Cartel;
 using ScheduleOne.Levelling;
 using ScheduleOne.ItemFramework;
 using ScheduleOne.Persistence;
 #else
-using Il2CppScheduleOne.NPCs;
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Levelling;
@@ -305,15 +302,15 @@ namespace CartelEnforcer
                 catch (JsonSerializationException ex)
                 {
                     config = new AmbushGeneralSettingsSerialized();
-                    config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
-                    config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+                    config.RangedWeapons = new List<string> { "m1911" };
+                    config.MeleeWeapons = new List<string> { "knife" };
                     MelonLogger.Error("Failed to deserialize CartelEnforcer Ambush/settings.json config: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
                     config = new AmbushGeneralSettingsSerialized();
-                    config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
-                    config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+                    config.RangedWeapons = new List<string> { "m1911" };
+                    config.MeleeWeapons = new List<string> { "knife" };
                     MelonLogger.Warning("Failed to read Ambush/settings.json config: " + ex);
                 }
             }
@@ -321,8 +318,8 @@ namespace CartelEnforcer
             {
                 MelonLogger.Warning("Could not find settings.json at Ambush/settings.json. Generating default template.");
                 config = new AmbushGeneralSettingsSerialized();
-                config.RangedWeaponAssetPaths = new List<string> { "Avatar/Equippables/M1911" };
-                config.MeleeWeaponAssetPaths = new List<string> { "Avatar/Equippables/Knife" };
+                config.RangedWeapons = new List<string> { "m1911" };
+                config.MeleeWeapons = new List<string> { "knife" };
 
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));

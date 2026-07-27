@@ -219,12 +219,12 @@ namespace CartelEnforcer
             {
                 if (startedCombat) return;
                 startedCombat = true;
-                Player p = Player.GetClosestPlayer(location.position, out float _);
+                Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                 foreach (CartelGoon goon in spawnedGatherGoons)
                 {
                     if (combatStartedAction != null)
                         goon.Behaviour.CombatBehaviour.onBegin.RemoveListener(combatStartedAction);
-                    goon.Behaviour.CombatBehaviour.DefaultWeapon = RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)];
+                    goon.Behaviour.CombatBehaviour.SetDefaultWeapon(RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)]);
                     goon.AttackEntity(p.GetComponent<ICombatTargetable>());
                 }
                 combatStartedAction = null;
@@ -244,7 +244,7 @@ namespace CartelEnforcer
                 if (DealerActivity.currentDealerActivity < 0f)
                 {
                     // increase hp
-                    spawnedGatherGoons[i].Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
+                    spawnedGatherGoons[i].NPCData.Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
                     spawnedGatherGoons[i].Health.Health = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
                 }
             }
@@ -286,7 +286,7 @@ namespace CartelEnforcer
                 void CombatStartedEndAct()
                 {
                     drinkAct.End();
-                    Player p = Player.GetClosestPlayer(location.position, out float _);
+                    Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                     spawnedGatherGoons[0].AttackEntity(p.GetComponent<ICombatTargetable>());
                     if (endDrinkAction != null)
                     {
@@ -305,7 +305,7 @@ namespace CartelEnforcer
                 void CombatStartedEndAct()
                 {
                     smokeAct.End();
-                    Player p = Player.GetClosestPlayer(location.position, out float _);
+                    Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                     spawnedGatherGoons[1].AttackEntity(p.GetComponent<ICombatTargetable>());
                     if (endSmokeAction != null)
                     {
@@ -397,7 +397,7 @@ namespace CartelEnforcer
                         if (distToP < distanceToAggroAt && !playerInBuilding)
                         {
                             // Player is nearby now we check that random one of the goons can see the player, very low dealer activity will trigger without los
-                            Player p = Player.GetClosestPlayer(location.position, out float _);
+                            Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                             int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                             spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position);
                             yield return Wait05;
@@ -441,14 +441,14 @@ namespace CartelEnforcer
 
                             if (annoyance == 1)
                             {
-                                Player p = Player.GetClosestPlayer(location.position, out float _);
+                                Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                                 int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                                 spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position, 1.4f);
                                 spawnedGatherGoons[randomIndex].PlayVO(EVOLineType.Annoyed, true);
                             }
                             else if (annoyance > 1)
                             {
-                                Player p = Player.GetClosestPlayer(location.position, out float _);
+                                Player p = PlayerManager.GetClosestPlayer(location.position, out float _);
                                 int randomIndex = UnityEngine.Random.Range(0, spawnedGatherGoons.Count);
                                 spawnedGatherGoons[randomIndex].Movement.FacePoint(p.CenterPointTransform.position, 1.4f);
                                 spawnedGatherGoons[randomIndex].PlayVO(EVOLineType.Angry, true);
@@ -595,7 +595,10 @@ namespace CartelEnforcer
             {
                 if (ShouldChangeInfluence(region))
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, influenceConfig.gatheringSuccess);
-                if (activeQuest != null && activeQuest.State == EQuestState.Active && activeQuest.QuestEntry_Investigate != null && activeQuest.QuestEntry_Investigate.State == EQuestState.Active && StageGatheringsDefeated == 0)
+                if (activeDefeatEnforcerQuest != null && activeDefeatEnforcerQuest.State == EQuestState.Active && 
+                    activeDefeatEnforcerQuest.QuestEntry_Investigate != null && 
+                    activeDefeatEnforcerQuest.QuestEntry_Investigate.State == EQuestState.Active 
+                    && StageGatheringsDefeated == 0)
                     StageGatheringsDefeated++;
             }
             else
@@ -617,10 +620,7 @@ namespace CartelEnforcer
             {
                 yield return Wait05;
                 if (!registered) yield break;
-
-                goon.Behaviour.CombatBehaviour.Disable_Networked(null);
-                goon.Health.MaxHealth = 100f;
-                goon.Health.Revive();
+                goon.NPCData.Health.MaxHealth = 100f;
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
             }

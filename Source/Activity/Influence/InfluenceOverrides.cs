@@ -6,7 +6,6 @@ using MelonLoader;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
-using static CartelEnforcer.StealBackCustomer;
 
 #if MONO
 using ScheduleOne.Graffiti;
@@ -119,8 +118,6 @@ namespace CartelEnforcer
         public float ambushDefeated = -0.100f;
         public float graffitiInfluenceReduction = -0.050f;
         public float customerUnlockInfluenceChange = -0.075f;
-
-
     }
 
     // Patch the cartel dealer on died to have modifiable influence
@@ -162,27 +159,39 @@ namespace CartelEnforcer
 
         public static IEnumerator OverMonitorAmbush(Vector3[] potentialSpawnPoints, List<CartelGoon> currentlySpawned, EMapRegion region)
         {
-            float preMaxElapsed = 0.3f;
-            float preElapsed = 0f;
             List<CartelGoon> ambushSpawned = new();
-
             // Detect the spawned goons
-
             // Theoretically its possible that this could detect for example a Spray Graffiti spawned goon
-            // OR a Cartel Dealer death spawned defender goon, if the events triggered within this 0.3s timeframe...
+            // OR a Cartel Dealer death spawned defender goon, if the events triggered within this timeframe...
             // very improbable but possible, todo fix in the future how...
-            while (registered && preElapsed < preMaxElapsed)
+            yield return Wait01;
+            if (!registered) yield break;
+            if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count != currentlySpawned.Count)
             {
-                yield return Wait01;
-                preElapsed += 0.1f;
-                if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Count != currentlySpawned.Count)
+                foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons)
                 {
-                    foreach (CartelGoon goon in NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons)
+                    if (!goon.IsGoonSpawned || goon.Health.IsDead || goon.Health.IsKnockedOut)
                     {
-                        if (!currentlySpawned.Contains(goon) && !ambushSpawned.Contains(goon) && !spawnedGatherGoons.Contains(goon))
-                        {
-                            ambushSpawned.Add(goon);
-                        }
+                        Log("Found invalid goon not in ambush");
+                        continue;
+                    }
+                    bool hasCombatFlag = false;
+                    if (goon.Behaviour.CombatBehaviour.Active && goon.Behaviour.CombatBehaviour.Target != null)
+                    {
+                        Log("Found active combat goon with target to player: " + goon.name);
+                        hasCombatFlag = true;
+                    }
+
+                    bool isSabotager = false;
+                    if (SabotageEvent.sabotager != null && goon == SabotageEvent.sabotager)
+                        isSabotager = true;
+
+                    if (!currentlySpawned.Contains(goon) && 
+                        !ambushSpawned.Contains(goon) && 
+                        !spawnedGatherGoons.Contains(goon) &&
+                        !isSabotager && hasCombatFlag)
+                    {
+                        ambushSpawned.Add(goon);
                     }
                 }
             }
@@ -193,7 +202,9 @@ namespace CartelEnforcer
                 Log("Ambush spawned nothing!!");
                 yield break;
             }
-
+            Log($"Detected ambush spawned: {ambushSpawned.Count}");
+            foreach (CartelGoon goon in ambushSpawned)
+                Log($"  {goon.name}");
             // Monitor same state as the original enumerator if there are spawned ambushers
             float maxAmbushElapsed = (float)Ambush.CANCEL_AMBUSH_AFTER_MINS;
             float elapsed = 0f;
@@ -229,12 +240,15 @@ namespace CartelEnforcer
 
             if ((ambushSpawned.Count == 0 || deadGoons.Count == spawnedCount) && InstanceFinder.IsServer)
             {
+                Log("Ambush defeated flip influence");
                 // flip the original influence and apply the mod one
                 float change = -(Ambush.AMBUSH_DEFEATED_INFLUENCE_CHANGE) + influenceConfig.ambushDefeated;
                 if (change != 0f)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(region, change);
             }
 
+            ambushSpawned.Clear();
+            deadGoons.Clear();
         }
 
     }
@@ -270,7 +284,7 @@ namespace CartelEnforcer
     {
         public static bool Prefix(Customer __instance, NPCRelationData.EUnlockType unlockType, bool notify)
         {
-            Log("Unlock invoke", "OnCustomerUnlocked");
+            //Log("Unlock invoke", "OnCustomerUnlocked");
             // based on source the influence is guarded as follows
             if (!notify || !NetworkSingleton<Cartel>.InstanceExists) return true;
 

@@ -1,8 +1,8 @@
 
 
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
+using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -35,19 +35,35 @@ using Il2CppInterop.Runtime.Injection;
 
 namespace CartelEnforcer
 {
-#if IL2CPP
     [RegisterTypeInIl2Cpp]
-#endif
-    public class Quest_TrucedRecruits : Quest
+    public class Quest_TrucedRecruits : ModQuestBase
     {
-#if IL2CPP
-        public Quest_TrucedRecruits(IntPtr ptr) : base(ptr) { }
-
+        protected readonly QuestHelperBase<Quest_TrucedRecruits> _helper;
+#if MONO
+        public Quest_TrucedRecruits()
+        {
+            _helper = new QuestHelperBase<Quest_TrucedRecruits>(this);
+        }
+#else
+        public Quest_TrucedRecruits(IntPtr ptr) : base(ptr) 
+        { 
+            _helper = new QuestHelperBase<Quest_TrucedRecruits>(this);
+        }
         public Quest_TrucedRecruits() : base(ClassInjector.DerivedConstructorPointer<Quest_TrucedRecruits>())
             => ClassInjector.DerivedConstructorBody(this);
 #endif
 
         private CartelDealer westvilleDealer = null;
+
+        public QuestEntry QuestEntry_FindCartel;
+        private UnityAction _findCartelAction;
+
+        public QuestEntry QuestEntry_GreetGoons;
+
+        public QuestEntry QuestEntry_PersuadeCartelDealer;
+        private UnityAction _persuadeCartelAction;
+
+        public QuestEntry QuestEntry_HireCartelDealer;
 
         #region Base Complete, Fail, End overrides
         // Because one of these throws il2cpp version ViolationAccessException or NullReferenceException and doesnt show stack / doesnt show stack outside of the below functions
@@ -125,71 +141,10 @@ namespace CartelEnforcer
 
         #endregion
 
-
         public void SetupSelf()
         {
-            Log("QuestInit");
-            this.name = "Quest_TrucedRecruits";
-            Expires = false;
-            title = "Truced Recruits";
-            CompletionXP = 200;
-            Description = "Persuade Cartel Dealers to work for you";
-            TrackOnBegin = true;
-            autoInitialize = false;
-            AutoCompleteOnAllEntriesComplete = false;
+            _helper.InitializeQuest("Truced Recruits", xp: 200);
 
-            onActiveState = new UnityEvent();
-            onComplete = new UnityEvent();
-            onInitialComplete = new UnityEvent();
-            onQuestBegin = new UnityEvent();
-            onQuestEnd = new UnityEvent<EQuestState>();
-            onTrackChange = new UnityEvent<bool>();
-#if MONO
-            this.SetGUID(Guid.NewGuid());
-#else
-            this.SetGUID(Il2CppSystem.Guid.NewGuid());
-#endif
-            Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
-            if (target != null)
-            {
-                this.transform.SetParent(target);
-            }
-
-            // UI related code and the benzies logo
-            base.IconPrefab = MakeIcon(this.transform);
-            base.PoIPrefab = MakePOI();
-
-            // Create the QuestEntry GameObjects and parent them.
-            GameObject findCartelObject = new GameObject("QuestEntry_FindCartel");
-            findCartelObject.transform.SetParent(this.transform);
-
-            // Opt entry for Greeting the goons
-            GameObject greetGoonsObject = new GameObject("QuestEntry_GreetGoons");
-            greetGoonsObject.transform.SetParent(this.transform);
-
-            GameObject persuadeCartelObject = new GameObject("QuestEntry_PersuadeCartelDealer");
-            persuadeCartelObject.transform.SetParent(this.transform);
-
-            GameObject hireCartelObject = new GameObject("QuestEntry_HireCartelDealer");
-            hireCartelObject.transform.SetParent(this.transform);
-
-            QuestEntry findCartel = findCartelObject.AddComponent<QuestEntry>();
-            QuestEntry greetGoons = greetGoonsObject.AddComponent<QuestEntry>();
-            QuestEntry persuadeCartel = persuadeCartelObject.AddComponent<QuestEntry>();
-            QuestEntry hireCartel = hireCartelObject.AddComponent<QuestEntry>();
-
-            this.QuestEntry_FindCartel = findCartel;
-            this.QuestEntry_GreetGoons = greetGoons;
-            this.QuestEntry_PersuadeCartelDealer = persuadeCartel;
-            this.QuestEntry_HireCartelDealer = hireCartel;
-
-            this.Entries = new();
-            this.Entries.Add(findCartel);
-            this.Entries.Add(greetGoons);
-            this.Entries.Add(persuadeCartel);
-            this.Entries.Add(hireCartel);
-
-            Log("Config Entries");
             foreach (CartelDealer d in UnityEngine.Object.FindObjectsOfType<CartelDealer>(true))
             {
                 if (d.Region == EMapRegion.Westville)
@@ -199,105 +154,40 @@ namespace CartelEnforcer
                 }
             }
 
-            findCartel.SetEntryTitle("Find the Westville Cartel Dealer");
-            findCartel.ParentQuest = this;
-            findCartel.CompleteParentQuest = false;
-            findCartel.PoILocation = new GameObject("FindCartelEntry_POI").transform;
-            findCartel.PoILocation.transform.SetParent(findCartel.transform);
-            findCartel.PoILocation.transform.position = westvilleDealer.CenterPoint;
-            findCartel.AutoUpdatePoILocation = true;
-            findCartel.SetState(EQuestState.Active, false);
+            _findCartelAction = (UnityEngine.Events.UnityAction)OnFindCartelComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_FindCartel,
+                name: "FindCartel",
+                title: "Find the Westville Cartel Dealer",
+                new PoIConfig(true, false, false, poiPosition: westvilleDealer.CenterPoint),
+                _findCartelAction);
 
-            UnityEngine.Events.UnityAction findCartelAction = null;
-            void OnFindCartelComplete()
-            {
-                if (findCartel != null && findCartel.State == EQuestState.Failed) return;
-                if (persuadeCartel == null) return;
+            _helper.InitializeQuestEntry(ref QuestEntry_GreetGoons,
+                name: "GreetGoons",
+                title: "(Optional) Say greetings to all 3 gathering goons",
+                new PoIConfig(true, false, false));
 
-                persuadeCartel.Begin();
-                UpdateQuestMapLogo(persuadeCartel);
+            _persuadeCartelAction = (UnityEngine.Events.UnityAction)OnPersuadeComplete;
+            _helper.InitializeQuestEntry(ref QuestEntry_PersuadeCartelDealer,
+                name: "PersuadeCartel",
+                title: "Try persuading the Westville Cartel Dealer",
+                new PoIConfig(true, true, true, westvilleDealer.transform, Vector3.zero),
+                _persuadeCartelAction);
 
-                if (findCartelAction != null)
-                {
-                    findCartel.onComplete.RemoveListener(findCartelAction);
-                    findCartelAction = null;
-                }
-            }
-            findCartelAction = (UnityEngine.Events.UnityAction)OnFindCartelComplete;
-            findCartel.onComplete.AddListener(findCartelAction);
-
-            greetGoons.SetEntryTitle("(Optional) Say greetings to all 3 gathering goons");
-            greetGoons.ParentQuest = this;
-            greetGoons.CompleteParentQuest = false;
-            greetGoons.PoILocation = new GameObject("GreetGoonsEntry_POI").transform;
-            greetGoons.PoILocation.transform.SetParent(greetGoons.transform);
-            greetGoons.AutoUpdatePoILocation = true;
-            greetGoons.SetState(EQuestState.Inactive, false);
-
-            persuadeCartel.SetEntryTitle("Try persuading the Westville Cartel Dealer");
-            persuadeCartel.ParentQuest = this;
-            persuadeCartel.CompleteParentQuest = false;
-            persuadeCartel.PoILocation = new GameObject("PersuadeCartelEntry_POI").transform;
-            persuadeCartel.PoILocation.SetParent(westvilleDealer.transform);
-            persuadeCartel.PoILocation.transform.localPosition = Vector3.zero;
-            persuadeCartel.AutoUpdatePoILocation = true;
-            persuadeCartel.SetState(EQuestState.Inactive, false);
-           
-            UnityEngine.Events.UnityAction persuadeCartelAction = null;
-            void OnPersuadeCartelComplete()
-            {
-                if (persuadeCartel != null && persuadeCartel.State == EQuestState.Failed) return;
-                if (hireCartel == null) return;
-
-                hireCartel.Begin();
-                UpdateQuestMapLogo(hireCartel);
-
-                if (persuadeCartelAction != null)
-                {
-                    persuadeCartel.onComplete.RemoveListener(persuadeCartelAction);
-                    persuadeCartelAction = null;
-                }
-            }
-            persuadeCartelAction = (UnityEngine.Events.UnityAction)OnPersuadeCartelComplete;
-            persuadeCartel.onComplete.AddListener(persuadeCartelAction);
-
-            hireCartel.SetEntryTitle("Hire the Westville Cartel Dealer");
-            hireCartel.ParentQuest = this;
-            hireCartel.CompleteParentQuest = false;
-            hireCartel.PoILocation = new GameObject("HireCartelEntry_POI").transform;
-            hireCartel.PoILocation.SetParent(westvilleDealer.transform);
-            hireCartel.PoILocation.transform.localPosition = Vector3.zero;
-            hireCartel.AutoUpdatePoILocation = true;
-            hireCartel.SetState(EQuestState.Inactive, false);
+            _helper.InitializeQuestEntry(ref QuestEntry_HireCartelDealer,
+                name: "HireCartel",
+                title: "Hire the Westville Cartel Dealer",
+                new PoIConfig(true, true, true, westvilleDealer.transform, Vector3.zero));
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
             var action = OnMinPass;
-
 #if MONO
             instance.onMinutePass.Add(new Action(action));
 #else
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
-            StartQuestDetail();
-        }
 
-        private void StartQuestDetail()
-        {
-            SetupHUDUI();
-
-            if (hudUI != null)
-            {
-                if (hudUI.MainLabel != null)
-                    this.hudUI.MainLabel.text = "Truced Recruits";
-                this.hudUI.gameObject.SetActive(true);
-            }
-
-            SetIsTracked(true);
-            SetQuestState(EQuestState.Active);
-
-            UpdateQuestMapLogo(QuestEntry_FindCartel);
-            return;
+            _helper.StartQuestFromEntry(QuestEntry_FindCartel);
         }
 
         public override void OnMinPass()
@@ -322,7 +212,6 @@ namespace CartelEnforcer
             base.OnMinPass();
 #endif
             if (westvilleDealer == null) return;
-
 
             // Check for optional greet gathering goons quest entry
             if (QuestEntry_GreetGoons != null && QuestEntry_GreetGoons.State == EQuestState.Active)
@@ -377,10 +266,36 @@ namespace CartelEnforcer
             }
         }
 
-        public QuestEntry QuestEntry_FindCartel;
-        public QuestEntry QuestEntry_GreetGoons;
-        public QuestEntry QuestEntry_PersuadeCartelDealer;
-        public QuestEntry QuestEntry_HireCartelDealer;
+        public void OnFindCartelComplete()
+        {
+            if (QuestEntry_FindCartel != null && QuestEntry_FindCartel.State == EQuestState.Failed) return;
+            if (QuestEntry_PersuadeCartelDealer == null) return;
 
+            QuestEntry_PersuadeCartelDealer.SetState(EQuestState.Active, false);
+            UpdateQuestMapLogo(QuestEntry_PersuadeCartelDealer);
+
+            if (_findCartelAction != null)
+            {
+                QuestEntry_FindCartel.onComplete.RemoveListener(_findCartelAction);
+                _findCartelAction = null;
+            }
+
+        }
+
+        public void OnPersuadeComplete()
+        {
+            if (QuestEntry_PersuadeCartelDealer != null && QuestEntry_PersuadeCartelDealer.State == EQuestState.Failed) return;
+            if (QuestEntry_HireCartelDealer == null) return;
+
+            QuestEntry_HireCartelDealer.Begin();
+            UpdateQuestMapLogo(QuestEntry_HireCartelDealer);
+
+            if (QuestEntry_PersuadeCartelDealer != null)
+            {
+                QuestEntry_PersuadeCartelDealer.onComplete.RemoveListener(_persuadeCartelAction);
+                _persuadeCartelAction = null;
+            }
+        }
     }
+
 }
