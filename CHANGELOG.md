@@ -1,6 +1,6 @@
 # Version 2.0.0
-- Updated mod code to match the latest game version 0.4.6f8, requiring alot of bug fixing and refactoring.
-- Updated Melon Loader version dependency to be (latest) 0.7.3 and higher upgraded from 0.7.0
+- Updated mod code to match the latest game version 0.4.6f11, requiring alot of bug fixing and refactoring.
+- Updated Melon Loader version dependency to be 0.7.2 and higher (prefer latest 0.7.3) upgraded from 0.7.0
 
 - Refactored mod added quest system to fix multiple issues:
     - Old quest system (since 1.5.0 changelogs) has had an issue with ActiveEntryCount in il2cpp backend tracing back bugs ever since 1st quest was added, fixed with prefixing getter instead of trying to override the class member.
@@ -17,8 +17,8 @@
 - Added new weapons compatibility to the dealer.json file allowing Cartel Dealers to equip 2 new weapons with `CartelDealerWeapon` as "goldenm1911" or "brokenbottle"
 
 - Changed the Unexpected Alliances quest to spawn the cartel brute to random locations, with Manny marking the position on map and removed the monologue with npc, soon to be refactored.
-- Added to Allied Supplies quest new loot table for the White Van (more specific in readme) with common, rare and legendary loot chance
-- Added to Allied Supplies quest new loot for the Barrels (more in readme)
+- Added to Allied Supplies quest new loot table for the White Van (more in wiki) with common, rare and legendary loot chance
+- Added to Allied Supplies quest new loot for the Barrels (more in wiki)
 - Added to True Brothers quest spawned ambush police appearance randomization to not have them all look the same
 
 - Tried to fix a bug with the Influence change override for Ambush events, where the patch would not correctly find the ambush spawned cartel goons and fails to apply user configuration indicated influence change after it
@@ -27,6 +27,7 @@
 - Fixed a bug in the True Brothers and Four Wheels quests where one of the spawned cars would clip through the floor in latest version
 - Fixed a bug in the True Brothers quest where sometimes rarely the cops would not exit vehicle after arriving
 - Fixed the MelonPreferences saving logic to only save the mod related category and to not log a message if the user changes config at runtime as it felt spammy in the logs
+- Removed from the logging from Mod config saving, when user changes the config through Melon Preferences sync
 - Fixed Debug mode rendered objects shaders to use URP Lit shaders instead of Unlit due to Unlit not being part of the built in shaders
 - Added to GitHub new [Projects roadmap](https://github.com/users/XOWithSauce/projects/5) for the Allied Extensions module that contains the recommended / planned / requested features
 - Moved Mod added quests information from Readme file to the GitHub [Quests wiki](https://github.com/XOWithSauce/schedule-cartelenforcer/wiki/Mod-Quests).

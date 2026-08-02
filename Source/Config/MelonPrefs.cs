@@ -92,7 +92,6 @@ namespace CartelEnforcer
 
                 void ThisEntryChanged(object objOld, object objNew)
                 {
-                    Log("Entry change wrapperd");
                     OnEntryChange(id, objOld, objNew);
                 }
                 modConfigCategory.Entries[i].OnEntryValueChangedUntyped.Subscribe(ThisEntryChanged);
@@ -119,7 +118,7 @@ namespace CartelEnforcer
                 field.SetValue(currentConfig, (bool)objNew);
             }
             // Instantly reflect the melon pref change in .json
-            ConfigLoader.Save(currentConfig);
+            ConfigLoader.Save(currentConfig, logResult: false);
         }
     }
 }

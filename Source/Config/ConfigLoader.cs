@@ -122,7 +122,7 @@ namespace CartelEnforcer
             }
             return config;
         }
-        public static void Save(ModConfig config)
+        public static void Save(ModConfig config, bool logResult = true)
         {
             try
             {
@@ -130,7 +130,8 @@ namespace CartelEnforcer
                 string json = JsonConvert.SerializeObject(config, Formatting.Indented);
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 File.WriteAllText(filePath, json);
-                DebugModule.Log($"CartelEnforcer basic mod config written to: {filePath}", "SaveModConfig");
+                if (logResult)
+                    DebugModule.Log($"CartelEnforcer basic mod config written to: {filePath}", "SaveModConfig");
             }
             catch (Exception ex)
             {

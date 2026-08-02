@@ -57,10 +57,10 @@ using Il2Cpp;
 
 #if MONO
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.MONO)]
-[assembly: MelonLoader.VerifyLoaderVersion("0.7.3", true)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.2", true)]
 #else 
 [assembly: MelonPlatformDomain(MelonPlatformDomainAttribute.CompatibleDomains.IL2CPP)]
-[assembly: MelonLoader.VerifyLoaderVersion("0.7.3", true)]
+[assembly: MelonLoader.VerifyLoaderVersion("0.7.2", true)]
 #endif
 
 namespace CartelEnforcer
@@ -135,7 +135,7 @@ namespace CartelEnforcer
             }
             if (hasChanged)
             {
-                ConfigLoader.Save(currentConfig);
+                ConfigLoader.Save(currentConfig, logResult: false);
             }
         }
         #endregion
@@ -402,13 +402,6 @@ namespace CartelEnforcer
                 GameObject clone = UnityEngine.Object.Instantiate(obj);
                 NetworkObject newNob = clone.GetComponent<NetworkObject>();
                 NPC npc = clone.GetComponent<NPC>();
-                if (npc == null)
-                    Log("Failed to find NPC Component from instantiated Goon!");
-                if (npc.Actions == null)
-                    Log("NPC does not have initialized actions!");
-                else
-                    npc.Actions._canUseUmbrella = false;
-
                 npc.GUID = GUIDManager.GenerateUniqueGUID();
                 if (GUIDManager.IsGUIDAlreadyRegistered(npc.GUID))
                 {

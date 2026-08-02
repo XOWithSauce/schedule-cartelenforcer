@@ -1,6 +1,7 @@
 
 using UnityEngine.AI;
 using System.Collections;
+using UnityEngine;
 
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelEnforcer;
@@ -10,6 +11,7 @@ using System.Reflection;
 using HarmonyLib;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.Framework;
+using ScheduleOne.Dialogue;
 using Behaviour = ScheduleOne.NPCs.Behaviour.Behaviour;
 using FishNet.Object;
 using FishNet.Managing;
@@ -19,6 +21,7 @@ using Il2CppScheduleOne.NPCs.Framework;
 using Behaviour = Il2CppScheduleOne.NPCs.Behaviour.Behaviour;
 using Il2CppFishNet.Object;
 using Il2CppFishNet.Managing;
+using Il2CppScheduleOne.Dialogue;
 #endif
 
 
@@ -160,6 +163,16 @@ namespace CartelEnforcer
             {
                 Log($"Failed to set network object networking to false: {ex}");
             }
+
+
+            // for some reason the interactable object keeps bugging out
+            // maybe due to some collider being in wrong laYer or something is unassigned
+            // to fix, increase sphere size here
+            DialogueController dg = newNob.GetComponentInChildren<DialogueController>();
+            Transform sphere = dg.IntObj.transform.Find("Sphere");
+            CapsuleCollider cc = sphere.GetComponent<CapsuleCollider>();
+            cc.height = 1.85f;
+            cc.radius = 0.5f;
         }
     }
 }
