@@ -1,7 +1,6 @@
 ﻿using System.Collections;
 using UnityEngine;
 using HarmonyLib;
-using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -79,7 +78,7 @@ namespace CartelEnforcer
         {
             if (influenceConfig.passiveInfluenceGainPerDay == 0f) return;
             Log("On Day Pass Change Passive Influence");
-            coros.Add(MelonCoroutines.Start(OnDayChangeApplyPassiveGain()));
+            ModCoroutines.Start(OnDayChangeApplyPassiveGain());
         }
     }
 
@@ -152,7 +151,7 @@ namespace CartelEnforcer
         {
             Log("Prefix Ambush");
             List<CartelGoon> currentlySpawned = [.. NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons];
-            coros.Add(MelonCoroutines.Start(OverMonitorAmbush(potentialSpawnPoints, currentlySpawned, __instance.Region)));
+            ModCoroutines.Start(OverMonitorAmbush(potentialSpawnPoints, currentlySpawned, __instance.Region));
             Log("Continue Ambush");
             return true;
         }
@@ -347,8 +346,6 @@ namespace CartelEnforcer
                 if (__instance.NPC.Region != EMapRegion.Northtown)
                     NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(__instance.NPC.Region, influenceConfig.customerUnlockInfluenceChange);
             }
-
-
 
             return true;
         }

@@ -1,5 +1,3 @@
-
-
 using MelonLoader.Utils;
 
 namespace CartelEnforcer

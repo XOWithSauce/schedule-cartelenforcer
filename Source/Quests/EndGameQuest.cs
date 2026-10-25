@@ -1,9 +1,10 @@
 using System.Collections;
 using MelonLoader;
-using HarmonyLib;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Events;
+using UnityEngine.AI;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -12,6 +13,7 @@ using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.AlliedExtension;
 using static CartelEnforcer.RandomManorGenerator;
 using static CartelEnforcer.NPCInitHelper;
+using static CartelEnforcer.DealerActivity;
 
 #if MONO
 using ScheduleOne.Law;
@@ -38,7 +40,6 @@ using ScheduleOne.NPCs.Behaviour;
 using ScheduleOne.Persistence;
 using ScheduleOne.Police;
 using ScheduleOne.Messaging;
-using ScheduleOne.AvatarFramework;
 using static ScheduleOne.Console;
 using FishNet;
 using FishNet.Object;
@@ -68,7 +69,6 @@ using Il2CppScheduleOne.NPCs.Behaviour;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.Police;
 using Il2CppScheduleOne.Messaging;
-using Il2CppScheduleOne.AvatarFramework;
 using static Il2CppScheduleOne.Console;
 using Il2CppFishNet;
 using Il2CppFishNet.Object;
@@ -133,27 +133,6 @@ namespace CartelEnforcer
         }
 
     }
-
-    // Fix the Il2Cpp backend having issues with the ActiveEntryCount LINQ
-    [HarmonyPatch(typeof(Quest), nameof(Quest.ActiveEntryCount), MethodType.Getter)]
-    public static class Quest_ActiveEntryCount_Get_Patch
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(Quest __instance, ref int __result)
-        {
-
-            if (__instance is not ModQuestBase)
-                return true;
-
-            Log($"ActiveEntryCount called in Quest {__instance.Title}");
-            int count = 0;
-            for (int i = 0; i < __instance.Entries.Count; i++)
-                if (__instance.Entries[i].State == EQuestState.Active)
-                    count++;
-            __result = count;
-            return false;
-        }
-    }
     public class ModQuestBase : Quest
     {
 #if IL2CPP
@@ -174,6 +153,7 @@ namespace CartelEnforcer
         protected string QuestTypeName => _quest.GetType().Name;
         public void InitializeQuest(string title, int xp, bool expires = false, GameDateTime expiry = default, bool trackOnBegin = true)
         {
+            Log("Begin base init");
             _quest.name = QuestTypeName;
             _quest.Expires = expires;
             _quest.title = title;
@@ -206,6 +186,9 @@ namespace CartelEnforcer
 #else
             _quest.Entries = new Il2CppSystem.Collections.Generic.List<QuestEntry>();
 #endif
+            // When instantiating the quest like this the entries pointer now is not the same as when called
+            // from the helper parent quest in il2cpp...
+            //Log($"Quest entry helper entries ptr: {_quest.Entries.Pointer} ({_quest.Entries.GetHashCode()})");
 
             Transform target = NetworkSingleton<QuestManager>.Instance.QuestContainer?.GetChild(0);
             if (target != null)
@@ -218,6 +201,7 @@ namespace CartelEnforcer
 #else
             _quest.SetGUID(Il2CppSystem.Guid.NewGuid());
 #endif
+            Log("Helper setup complete");
         }
 
         public void InitializeQuestEntry(ref QuestEntry targetEntry, string name, string title, PoIConfig poiSettings, UnityAction completeCallback = null)
@@ -267,8 +251,22 @@ namespace CartelEnforcer
             return;
         }
 
+#if IL2CPP
+        /* 
+         Fix a bug in Il2Cpp the Quest.Entries field and QuestHelperBase._quest.Entries have a different pointer
+         -> confirm with entryList.Pointer == _quest.Entries.Pointer
+         Seemingly this was the root cause of mod quest nullrefs, use-after frees, memory issues, etc.
+         Also indication of a bigger problem with the current mod quest framework, todo debug further wtf is going on
+         */
+        public void SyncEntriesField(ref Il2CppSystem.Collections.Generic.List<QuestEntry> entryList)
+        {
+            entryList = _quest.Entries;
+        }
+#endif
+
         public void StartQuestFromEntry(QuestEntry startEntry)
         {
+            Log("Start entry");
             _quest.SetupHUDUI();
             _quest.SetupJournalEntry();
 
@@ -317,8 +315,7 @@ namespace CartelEnforcer
         public static bool hasGeneratedDefeatEnforcerQuest = false;
         public static bool hasGeneratedManorQuest = false;
         public static bool hasGeneratedCarQuest = false;
-
-
+        
         public static bool CanEvaluate()
         {
             return !Singleton<DialogueCanvas>.Instance.IsOpen && !Singleton<HandoverScreen>.Instance.IsOpen && PlayerSingleton<PlayerCamera>.Instance.ActiveUIElementCount <= 0;
@@ -329,7 +326,7 @@ namespace CartelEnforcer
             yield return Wait10;
             if (!registered) yield break;
 
-            coros.Add(MelonCoroutines.Start(InitManorItemRef()));
+            ModCoroutines.Start(InitManorItemRef());
             Log("Evaluating End Game Quest Creation");
 
             DialogueController frankController;
@@ -349,13 +346,13 @@ namespace CartelEnforcer
                 {
                     Log("Fixer quest opt generated");
                     hasGeneratedDefeatEnforcerQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenDialogOption()));
+                    ModCoroutines.Start(GenDialogOption());
                 }
                 if (PreRequirementsMet() && !manorCompleted && !hasGeneratedManorQuest && activeManorQuest == null)
                 {
                     Log("Manor quest opt generated");
                     hasGeneratedManorQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenManorDialogOption()));
+                    ModCoroutines.Start(GenManorDialogOption());
                 }
 
                 bool inTimeWindowForCarQuest = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1559 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 1801);
@@ -364,7 +361,7 @@ namespace CartelEnforcer
                     // Gen quest opt in time window
                     Log("Car Quest opt generated");
                     hasGeneratedCarQuest = true;
-                    coros.Add(MelonCoroutines.Start(GenFrankOption()));
+                    ModCoroutines.Start(GenFrankOption());
                 }
                 else if (hasGeneratedCarQuest && !carMeetupCompleted && frankDiagIndex != -1 && !inTimeWindowForCarQuest && crankyFrank != null && activeCarMeetupQuest == null)
                 {
@@ -372,7 +369,7 @@ namespace CartelEnforcer
                     hasGeneratedCarQuest = false;
                     frankController = crankyFrank.DialogueHandler.gameObject.GetComponent<DialogueController>();
                     // Del quest opt out of time window when it exists and quest not generated
-                    coros.Add(MelonCoroutines.Start(DisposeFrankChoice(frankController)));
+                    ModCoroutines.Start(DisposeFrankChoice(frankController));
                 }
             }
 
@@ -478,9 +475,9 @@ namespace CartelEnforcer
             if (hasCash)
             {
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-5000f, true, false);
-                MelonCoroutines.Start(DisposeChoice(controller));
-                MelonCoroutines.Start(EventInstructions(controller));
-                MelonCoroutines.Start(GenerateQuestState());
+                ModCoroutines.Start(DisposeChoice(controller));
+                ModCoroutines.Start(EventInstructions(controller));
+                ModCoroutines.Start(GenerateQuestState());
             }
             else
             {
@@ -626,9 +623,9 @@ namespace CartelEnforcer
             if (bossGoon.IsGoonSpawned)
             {
                 // Reset all non default stats that would carry on modified
-                bossGoon.NPCData.Health.MaxHealth = 100f;
-                bossGoon.Health.Health = 100f;
-                bossGoon.Movement.MoveSpeedMultiplier = 0.8f;
+                bossGoon.Health.MaxHealth = 100f;
+                bossGoon.Health.RestoreHealth();
+                bossGoon.Movement.SpeedController.RemoveSpeedControl("boss_goon");
                 bossGoon.transform.localScale = new Vector3(1.0f, 1.0f, 1.0f);
                 bossGoon.Behaviour.ScheduleManager.EnableSchedule();
                 bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
@@ -692,9 +689,9 @@ namespace CartelEnforcer
             if (hasCash && inTimeWindow && isInPos)
             {
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-2500f, true, false);
-                MelonCoroutines.Start(DisposeRayChoice(controller));
-                MelonCoroutines.Start(EventManorInstructions(controller));
-                MelonCoroutines.Start(GenerateManorQuestState());
+                ModCoroutines.Start(DisposeRayChoice(controller));
+                ModCoroutines.Start(EventManorInstructions(controller));
+                ModCoroutines.Start(GenerateManorQuestState());
             }
             else
             {
@@ -828,8 +825,8 @@ namespace CartelEnforcer
         {
             controller.handler.ContinueSubmitted();
 
-            MelonCoroutines.Start(DisposeRaySecondChoice(controller));
-            MelonCoroutines.Start(PlaySecondRayDialog(controller, cb));
+            ModCoroutines.Start(DisposeRaySecondChoice(controller));
+            ModCoroutines.Start(PlaySecondRayDialog(controller, cb));
         }
         public static IEnumerator DisposeRaySecondChoice(DialogueController controller)
         {
@@ -844,7 +841,7 @@ namespace CartelEnforcer
             yield return Wait30;
             if (!registered) yield break;
 
-            coros.Add(MelonCoroutines.Start(ResetRayAFK()));
+            ModCoroutines.Start(ResetRayAFK());
             yield return null;
         }
 
@@ -1049,8 +1046,8 @@ namespace CartelEnforcer
             if (hasCash && inTimeWindow && isInPos)
             {
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-3500f, true, false);
-                MelonCoroutines.Start(DisposeFrankChoice(controller));
-                MelonCoroutines.Start(EventFrankInstructions(controller));
+                ModCoroutines.Start(DisposeFrankChoice(controller));
+                ModCoroutines.Start(EventFrankInstructions(controller));
             }
             else
             {
@@ -1128,7 +1125,7 @@ namespace CartelEnforcer
             if (!registered) yield break;
             controller.npc.Behaviour.ScheduleManager.EnableSchedule();
 
-            MelonCoroutines.Start(GenerateCarQuestState());
+            ModCoroutines.Start(GenerateCarQuestState());
             yield return null;
         }
 
@@ -1189,8 +1186,8 @@ namespace CartelEnforcer
             if (hasCash && inTimeWindow && isInPos && !playerHasPoliceAttention)
             {
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-6000f, true, false);
-                MelonCoroutines.Start(DisposeJeremyChoice(controller));
-                MelonCoroutines.Start(JeremyDialogue(controller, cb));
+                ModCoroutines.Start(DisposeJeremyChoice(controller));
+                ModCoroutines.Start(JeremyDialogue(controller, cb));
             }
             else
             {
@@ -1284,6 +1281,23 @@ namespace CartelEnforcer
         }
 
         #endregion
+
+        public static bool IsAnyAlliedQuestActive()
+        {
+            if (activeTruceIntro != null && activeTruceIntro.gameObject != null && activeTruceIntro.gameObject.activeSelf)
+                return true;
+
+            if ((activeTrueBrothersQuest != null && activeTrueBrothersQuest.gameObject != null && activeTrueBrothersQuest.gameObject.activeSelf) || encounterActive)
+                return true;
+
+            if (activeAlliedSupplies != null && alliedSuppliesActive)
+                return true;
+
+            if (activeCartelLogisticsQuest != null && activeCartelLogisticsQuest.gameObject != null && activeCartelLogisticsQuest.gameObject.activeSelf)
+                return true;
+
+            return false;
+        }
 
         #region Allied Intro Quest
         public static Quest_TrucedRecruits activeTruceIntro = null;
@@ -1397,7 +1411,6 @@ namespace CartelEnforcer
             } while (Player.Local.IsPointVisibleToPlayer(randomPoint));
 
             if (randomPoint == Vector3.zero) yield break;
-
             CartelGoon spawnedGoon = null;
 
             // Spawn the goon
@@ -1405,7 +1418,13 @@ namespace CartelEnforcer
             spawnedGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
             spawnedGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
             spawnedGoon.Behaviour.ScheduleManager.DisableSchedule();
-            spawnedGoon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, Quest_TrueBrothers.startGoonMoveSpeed));
+            spawnedGoon.Movement.SpeedController.AddSpeedControl("combat", Quest_TrueBrothers.startGoonMoveSpeed, 5);
+            // Avoid getting stuck after spawn so rewarp to navmesh
+            // happened in uptown forest where goon got spawned midair and stuck there?
+            yield return Wait01;
+            if (!spawnedGoon.Movement._agent.isOnNavMesh)
+                if (spawnedGoon.Movement.SmartSampleNavMesh(spawnedGoon.transform.position, out NavMeshHit hit, 1f, 15f, 3))
+                    spawnedGoon.Movement.Warp(hit.position);
 
             // create dialogue choices
 
@@ -1428,7 +1447,6 @@ namespace CartelEnforcer
             choiceRefuse.ChoiceText = $"{refuseText}";
             choiceRefuse.Enabled = true;
 
-
             bool accepted = false;
             bool refused = false;
 
@@ -1439,7 +1457,7 @@ namespace CartelEnforcer
                 controller.handler.ContinueSubmitted();
 
                 accepted = true;
-                coros.Add(MelonCoroutines.Start(SetupTrueBrothersQuest(spawnedGoon)));
+                ModCoroutines.Start(SetupTrueBrothersQuest(spawnedGoon));
 
                 //Remove Choices
                 controller.Choices = new();
@@ -1469,13 +1487,39 @@ namespace CartelEnforcer
             int traverseTime = 0;
             bool playerConversated = false;
 
+            // Warp to unstuck on demand
+            Vector3 pastPosition = spawnedGoon.transform.position;
+            int stuckMeter = 0;
+
             for (; ; )
             {
                 // While traversing to player (check proximity and conversate OR interrupt -> cancel despawn)
                 yield return Wait1;
                 if (!registered) yield break;
-
                 Log($"Goon Pos: {spawnedGoon.transform.position.x} {spawnedGoon.transform.position.y} {spawnedGoon.transform.position.z}");
+
+                float dist = Vector3.Distance(spawnedGoon.transform.position, pastPosition);
+                pastPosition = spawnedGoon.transform.position;
+                if (dist < 0.2f)
+                {
+                    Log("Traverse Stuck");
+                    stuckMeter++;
+                }
+                else
+                {
+                    stuckMeter = 0;
+                }
+
+                // Sample nearby and warp
+                if (stuckMeter > 7)
+                {
+                    if (spawnedGoon.Movement.SmartSampleNavMesh(spawnedGoon.transform.position, out NavMeshHit hit, 5f, 10f, 3))
+                    {
+                        Log("Warp out of stuck");
+                        spawnedGoon.Movement.Warp(hit.position);
+                    }
+                    continue;
+                }
 
                 if (traverseTime >= maxTraverseTime)
                 {
@@ -1485,6 +1529,7 @@ namespace CartelEnforcer
 
                 traverseTime++;
 
+
                 if (spawnedGoon == null || spawnedGoon.Health.IsDead || spawnedGoon.Health.IsKnockedOut || spawnedGoon.Behaviour.activeBehaviour == spawnedGoon.Behaviour.CombatBehaviour)
                     break;
 
@@ -1492,7 +1537,7 @@ namespace CartelEnforcer
                 {
                     spawnedGoon.Movement.EndSetDestination(NPCMovement.WalkResult.Success);
                     spawnedGoon.Movement.FacePoint(Player.Local.CenterPointTransform.position);
-                    spawnedGoon.Movement.PauseMovement();
+                    spawnedGoon.Movement.Stop();
                     controller.StartGenericDialogue(false);
                     Log("Start Conversate");
                     break;
@@ -1515,12 +1560,14 @@ namespace CartelEnforcer
                 else
                 {
                     Log("Traverse to player");
-                    if (!spawnedGoon.Movement.HasDestination)
+                    if (!spawnedGoon.Movement._hasDestination && Player.Local.CurrentProperty == null)
                     {
                         spawnedGoon.Movement.SetDestination(Player.Local.CenterPointTransform);
                     }
-                    if (spawnedGoon.Movement.IsPaused)
-                        spawnedGoon.Movement.ResumeMovement();
+                    if (Player.Local.CurrentProperty != null)
+                    {
+                        spawnedGoon.Movement.EndSetDestination(NPCMovement.WalkResult.Stopped);
+                    }
                 }
             }
 
@@ -1558,7 +1605,6 @@ namespace CartelEnforcer
                 if (accepted)
                 {
                     spawnedGoon.Movement.SetDestination(Quest_TrueBrothers.followDestination);
-                    spawnedGoon.Movement.ResumeMovement();
                     controller.handler.WorldspaceRend.ShowText("Follow me", 6f);
                 }
                 // if refused -> wait and despawn
@@ -1611,7 +1657,7 @@ namespace CartelEnforcer
         {
             yield return Wait10;
             if (activeTrueBrothersQuest.State == EQuestState.Completed)
-                coros.Add(MelonCoroutines.Start(RewardTrueBrothersQuest()));
+                ModCoroutines.Start(RewardTrueBrothersQuest());
 
             yield return Wait30;
             if (!registered) yield break;
@@ -1666,27 +1712,46 @@ namespace CartelEnforcer
 
         public static IEnumerator RewardTrueBrothersQuest()
         {
-            // SEnd 30k
-            NetworkSingleton<MoneyManager>.Instance.CreateOnlineTransaction("Business Investment", 30000f, 1f, string.Empty);
 
-            yield return Wait2;
-            // MSG Player inform unlocked new feature (TODO STILL)
-
-            string msg = $"Your help has been very valuable. If you need to launder some cash, I can help with bigger batches. But for now, I've wired you $30000 for your trouble.";
-            Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
-            if (thomas == null)
+            
+            if (!alliedQuests.ManorLaunderingState.manorLaunderingUnlocked)
             {
-                Log("Failed to find thomas obj");
-                yield break;
+                alliedQuests.ManorLaunderingState.manorLaunderingUnlocked = true;
+
+                // SEnd 30k
+                NetworkSingleton<MoneyManager>.Instance.CreateOnlineTransaction("Business Investment", 30000f, 1f, string.Empty);
+
+                yield return Wait2;
+                // MSG Player inform unlocked new feature (TODO STILL)
+
+                string msg = $"Your help has been very valuable. If you need to launder some cash, I can help with bigger batches. But for now, I've wired you $30000 for your trouble.";
+
+                Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
+                if (thomas == null)
+                {
+                    Log("Failed to find thomas obj");
+                    yield break;
+                }
+
+                thomas.MSGConversation.SendMessage(
+                    new Message(msg,
+                    Message.ESenderType.Other,
+                    true),
+                    notify: true,
+                    network: true);
             }
-
-            thomas.MSGConversation.SendMessage(
-                new Message(msg,
-                Message.ESenderType.Other,
-                true),
-                notify: true,
-                network: true);
-
+            else
+            {
+                foreach (CartelDealer cartelDealer in allCartelDealers)
+                {
+                    if (cartelDealer.IsRecruited)
+                    {
+                        cartelDealer.RelationData.ChangeRelationship(2f, true);
+                        // update so that the deal cuts are reduced
+                        AssignDealerConfig(cartelDealer);
+                    }
+                }
+            }
             yield break;
         }
         public static IEnumerator ReplicateCopNPC()
@@ -1696,33 +1761,39 @@ namespace CartelEnforcer
 
             PoliceOfficer officer = UnityEngine.Object.FindObjectOfType<PoliceOfficer>();
 
-            AvatarSettings copySettings = officer.Avatar.CurrentSettings;
-
             if (officer == null)
             {
                 Log("No officer found");
                 yield break;
             }
+            Log("Officer and network manager found");
             GameObject obj = officer.gameObject;
             obj.SetActive(false);
 
-            List<CartelGoon> clones = new();
             WaitForEndOfFrame frameEnd = new WaitForEndOfFrame();
 
             GameObject clone = UnityEngine.Object.Instantiate(obj);
             copBaseClone = clone;
-
+            Log("Cop spawned");
             clone.transform.position = Vector3.zero;
             clone.transform.rotation = Quaternion.identity;
 
             NPC npc = clone.GetComponent<NPC>();
             NetworkObject newNob = clone.GetComponent<NetworkObject>();
             PoliceOfficer offc = clone.GetComponent<PoliceOfficer>();
+            Log("Components got");
             offc.AutoDeactivate = false; // Prevent from returning to station and from being added to officer pool
 
+            Log($"Original offc has default tr parent assigned (true): {officer._defaultParent != null}");
+            if (officer._defaultParent != null)
+            {
+                clone.transform.parent = officer._defaultParent;
+                offc._defaultParent = officer._defaultParent;
+            }
             clone.name = $"RuntimeOfficer";
+            Log("Start initiate clone");
             yield return MelonCoroutines.Start(InitiateClone(newNob, netManager));
-
+            Log("Clone initiated");
             npc.NPCData.BasicInfo.ID = "officerPrefab";
 
             if (!NPCManager.NPCRegistry.Contains(npc))
@@ -1730,7 +1801,6 @@ namespace CartelEnforcer
             else
                 Log("NPC already registered in NPCRegistry");
 
-            npc.Avatar.LoadAvatarSettings(copySettings);
             offc.PursuitBehaviour.arrestingEnabled = false;
 
             Log("Spawn");
@@ -1744,8 +1814,16 @@ namespace CartelEnforcer
             }
 
             offc.Behaviour.ScheduleManager.DisableSchedule();
-            offc.Movement.PauseMovement();
-
+            offc.Movement.Stop();
+            if (offc.Awareness != null)
+            {
+                offc.Awareness.SetAwarenessActive(false);
+                Log("Awareness disabled");
+            }
+            else
+            {
+                Log("Awareness does not exist yet");
+            }
             obj.SetActive(true);
             Log("Finished replicating COP NPC");
             yield break;
@@ -1767,7 +1845,7 @@ namespace CartelEnforcer
             newQuestObject.SetActive(true);
             activeAlliedSupplies.enabled = true;
             activeAlliedSupplies.SetupSelf();
-            yield return null;
+            yield break;
         }
 
         public static IEnumerator CleanupTruceSuppliesQuest(SupplyLocation location)
@@ -1797,7 +1875,7 @@ namespace CartelEnforcer
             {
                 alliedGuard.Behaviour.ScheduleManager.EnableSchedule();
                 alliedGuard.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true); // set stayinside enable
-                alliedGuard.Movement.SpeedController.RemoveSpeedControl("combat");
+                alliedGuard.Movement.SpeedController.RemoveSpeedControl("goon_guard");
                 alliedGuard.Despawn();
                 alliedGuard = null;
             }
@@ -1845,14 +1923,218 @@ namespace CartelEnforcer
             Log("Cleanup of Supply Quest Completed");
             yield return null;
         }
-
         #endregion
+
+        #region Allied Logistics Quest
+        public static Quest_CartelLogistics activeCartelLogisticsQuest = null;
+        public static bool cartelLogisticsCompleted = false;
+        public static bool dealerRequestResponded = false;
+        public static bool cartelDealerMessageSent = false;
+
+        public static readonly List<string> CartelDealerMsgs = new()
+        {
+            "Fuuuck, boss man is making me move them boxes again. Help me out would you? I'll get you bigger cuts from the sales...",
+            "Big T is asking me to move his shit around. Will you run that errand for me? I'll get you more money from these deals if you do.",
+            "You know how to drive right? I got some shit to deal with and the boss is asking me to move his boxes around. Do that for me and I'll get you a bigger cut from deals."
+        };
+
+        public static void TryStartLogisticsQuest()
+        {
+            // already sent this session so once per save load attempt that player can accept or refuse
+            if (cartelDealerMessageSent == true)
+                return;
+            // saturdays and mondays only
+            if (!(NetworkSingleton<TimeManager>.Instance.CurrentDay == EDay.Saturday || NetworkSingleton<TimeManager>.Instance.CurrentDay == EDay.Monday))
+                return;
+
+            // early day 9am - 3pm only
+            if (!TimeManager.IsGivenTimeWithinRange(NetworkSingleton<TimeManager>.Instance.CurrentTime, 900, 1500))
+                return;
+            Log("Try start logistics quest");
+            // pre reqs
+            if (IsAnyAlliedQuestActive())
+                return;
+            if (!CartelLogisticsQuestPreRequirementsMet())
+                return;
+            Log("Prereqs met");
+            // and lastly chance based so within that timeframe approx 30% cumulative probability
+            if (!currentConfig.debugMode && UnityEngine.Random.Range(0, 100) > 5)
+                return;
+            Log("Chance hits");
+
+            // Select lowest rela hired dealer
+            CartelDealer selected = null;
+            float lowestRela = 5f;
+            foreach (CartelDealer dealer in allCartelDealers)
+            {
+                if (!dealer.IsRecruited)
+                    continue;
+                if (dealer.RelationData.RelationDelta < lowestRela)
+                {
+                    lowestRela = dealer.RelationData.RelationDelta;
+                    selected = dealer;
+                }
+            }
+            if (selected == null)
+            {
+                Log("No hired dealers available for quest");
+                return;
+            }
+
+            Log($"Selected dealer {selected.name} with relation {selected.RelationData.RelationDelta}");
+
+            if (selected.MSGConversation == null)
+            {
+                selected.CreateAndAssignDefaultMessageConversation();
+            }
+
+            MSGConversation msg = selected.MSGConversation;
+
+            msg.SendMessage(new(CartelDealerMsgs[UnityEngine.Random.Range(0,CartelDealerMsgs.Count)], Message.ESenderType.Other), true, false);
+            cartelDealerMessageSent = true;
+
+            SendableMessage sendableOptionAccept = msg.CreateSendableMessage("Fine.");
+            SendableMessage sendableOptionRefuse = msg.CreateSendableMessage("Not today.");
+
+            int sentDayDaysElapsed = NetworkSingleton<TimeManager>.Instance.ElapsedDays;
+            int sentTime = NetworkSingleton<TimeManager>.Instance.CurrentTime;
+
+            // Accept message setup
+            void RespondMessageAccept()
+            {
+                ModCoroutines.Start(CartelDealerResponse(msg, acceptedQuest: true));
+            }
+#if MONO
+            sendableOptionAccept.onSent += RespondMessageAccept;
+#else
+            sendableOptionAccept.onSent += (Il2CppSystem.Action)RespondMessageAccept;
+#endif
+
+            bool UnlockCheck(SendableMessage message)
+            {
+                // sent the same day and respond within 2 ingame hrs
+                // Pre requirements still needed and no other allied quest active
+                bool flag1 = TimeManager.AddMinutesTo24HourTime(sentTime, 120) >= NetworkSingleton<TimeManager>.Instance.CurrentTime;
+                bool flag2 = sentDayDaysElapsed == NetworkSingleton<TimeManager>.Instance.ElapsedDays;
+                bool flag3 = CartelLogisticsQuestPreRequirementsMet();
+                bool flag4 = !IsAnyAlliedQuestActive();
+                return flag1 && flag2 && flag3 && flag4 && !dealerRequestResponded;
+            }
+
+#if MONO
+            sendableOptionAccept.ShouldShowCheck = UnlockCheck;
+#else
+            SendableMessage.BoolCheck boolCheckInst = (SendableMessage.BoolCheck)UnlockCheck;
+            sendableOptionAccept.ShouldShowCheck = boolCheckInst;
+#endif
+            // Refuse message setup
+            void RespondMessageRefuse()
+            {
+                ModCoroutines.Start(CartelDealerResponse(msg, acceptedQuest: false));
+            }
+#if MONO
+            sendableOptionRefuse.onSent += RespondMessageRefuse;
+#else
+            sendableOptionRefuse.onSent += (Il2CppSystem.Action)RespondMessageRefuse;
+#endif
+
+#if MONO
+            sendableOptionRefuse.ShouldShowCheck = UnlockCheck;
+#else
+            sendableOptionAccept.ShouldShowCheck = boolCheckInst;
+#endif
+
+            Log("Finished creating Logistics quest message");
+            return;
+        }
+
+        public static IEnumerator CartelDealerResponse(MSGConversation msg, bool acceptedQuest)
+        {
+            dealerRequestResponded = true;
+            yield return Wait2;
+            if (!registered) yield break;
+            if (acceptedQuest)
+            {
+                msg.SendMessage(new("I sent you the details.", Message.ESenderType.Other), true, false);
+                ModCoroutines.Start(SetupCartelLogisticsQuest());
+            }
+            else
+            {
+                msg.SendMessage(new("No worries. I'll get it done.", Message.ESenderType.Other), true, false);
+            }
+            yield break;
+        }
+
+        public static IEnumerator SetupCartelLogisticsQuest()
+        {
+            Log("Generate Truce Supplies Quest");
+            GameObject newQuestObject = new GameObject();
+            activeCartelLogisticsQuest = newQuestObject.AddComponent<Quest_CartelLogistics>();
+            newQuestObject.SetActive(true);
+            activeCartelLogisticsQuest.enabled = true;
+            activeCartelLogisticsQuest.SetupSelf();
+            yield break;
+        }
+
+        public static bool CartelLogisticsQuestPreRequirementsMet()
+        {
+            if (!InstanceFinder.IsServer)
+                return false;
+#if MONO
+            if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                return false;
+#else
+            if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced)
+                return false;
+#endif
+
+            // Must have unlocked 2 cartel dealers
+            int numUnlocked = 0;
+            for (int i = 0; i < allCartelDealers.Length; i++)
+            {
+                if (allCartelDealers[i].IsRecruited)
+                {
+                    numUnlocked++;
+                }
+            }
+
+            if (numUnlocked < 2)
+                return false;
+
+            return true;
+        }
+
+        public static IEnumerator RewardCartelLogisticsQuest()
+        {
+#if MONO
+            List<EMapRegion> regions = Singleton<Map>.Instance.GetUnlockedRegions();
+            if (regions.Last() != Map.FINAL_REGION)
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(regions.Last(), -0.5f);
+#else
+            Il2CppSystem.Collections.Generic.List<EMapRegion> regions = Singleton<Map>.Instance.GetUnlockedRegions();
+            if (regions.Count > 1 && regions[regions.Count-1] != Map.FINAL_REGION)
+                NetworkSingleton<Cartel>.Instance.Influence.ChangeInfluence(regions[regions.Count - 1], -0.5f);
+#endif
+
+
+            foreach (CartelDealer cartelDealer in allCartelDealers)
+            {
+                if (cartelDealer.IsRecruited)
+                {
+                    cartelDealer.RelationData.ChangeRelationship(1f, true);
+                    // update so that the deal cuts are reduced
+                    AssignDealerConfig(cartelDealer);
+                }
+            }
+            yield break;
+        }
+#endregion
 
         // Shared UI related code
         #region Quest UI prefabs
         public static void UpdateQuestMapLogo(QuestEntry entry)
         {
-            coros.Add(MelonCoroutines.Start(WaitQuestUI(entry)));
+            ModCoroutines.Start(WaitQuestUI(entry));
         }
 
         public static IEnumerator WaitQuestUI(QuestEntry entry)

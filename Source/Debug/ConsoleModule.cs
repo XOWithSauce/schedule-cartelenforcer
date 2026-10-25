@@ -1,17 +1,19 @@
-using MelonLoader;
-
-using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelGathering;
 using static CartelEnforcer.EndGameQuest;
+using static CartelEnforcer.ManorLaunder;
+
 
 #if MONO
+using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.GameTime;
 using ScheduleOne.NPCs;
 using ScheduleOne.NPCs.CharacterClasses;
 using ScheduleOne.Dialogue;
 #else
+using ECartelStatus = Il2Cpp.ECartelStatus;
+using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.GameTime;
 using Il2CppScheduleOne.NPCs;
@@ -48,7 +50,10 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputStartRob()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                    ModCoroutines.Start(OnInputStartRob());
                 return;
             }
         }
@@ -59,7 +64,10 @@ namespace CartelEnforcer
             public override CommandSupport SupportedMethods => CommandSupport.Start;
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputStartDriveBy()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                    ModCoroutines.Start(OnInputStartDriveBy());
                 return;
             }
         }
@@ -71,7 +79,10 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputGiveMiniQuest()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                    ModCoroutines.Start(OnInputGiveMiniQuest());
                 return;
             }
         }
@@ -83,7 +94,10 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputInterceptContract()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                    ModCoroutines.Start(OnInputInterceptContract());
                 return;
             }
         }
@@ -95,8 +109,14 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                hoursUntilNextGathering = 1;
-                coros.Add(MelonCoroutines.Start(TryStartGathering()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                {
+                    hoursUntilNextGathering = 1;
+                    ModCoroutines.Start(TryStartGathering());
+                }
+                    
                 return;
             }
         }
@@ -108,7 +128,10 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputStartSabotage()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                    ModCoroutines.Start(OnInputStartSabotage());
                 return;
             }
         }
@@ -120,10 +143,35 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputStealNearestCustomer()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                {
+                    LogRelease("Starting steal back customer");
+                    ModCoroutines.Start(OnInputStealNearestCustomer());
+                }
                 return;
             }
         }
+
+        public class ManorLaunderProcessTarget : ConsoleCommandBase
+        {
+            public override string Name => "manorlaunder";
+            public override CommandSupport SupportedMethods => CommandSupport.Start;
+            public override void Start()
+            {
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                    LogRelease("Change Cartel Status to TRUCED before running this command!");
+                else
+                {
+                    LogRelease("Starting manor laundering");
+                    LogRelease("Park a VEEPER vehicle with cash/gold in storage to the manor gate BEFORE running this command!");
+                    ModCoroutines.Start(GenerateLaunderProcess());
+                }
+                return;
+            }
+        }
+
 
         #endregion
 
@@ -136,7 +184,12 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedSupplyQuest()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                    LogRelease("Change Cartel Status to TRUCED before running this command!");
+                else
+                {
+                    ModCoroutines.Start(OnInputGenerateAlliedSupplyQuest());
+                }
                 return;
             }
         }
@@ -148,7 +201,12 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(OnInputGenerateAlliedIntroQuest()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                    LogRelease("Change Cartel Status to TRUCED before running this command!");
+                else
+                {
+                    ModCoroutines.Start(OnInputGenerateAlliedIntroQuest());
+                }
                 return;
             }
         }
@@ -160,7 +218,30 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                coros.Add(MelonCoroutines.Start(SummonConversateGoon()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                    LogRelease("Change Cartel Status to TRUCED before running this command!");
+                else
+                {
+                    LogRelease("Starting true brothers quest");
+                    ModCoroutines.Start(SummonConversateGoon());
+                }
+                return;
+            }
+        }
+        public class AlliedLogisticsTarget : ConsoleCommandBase
+        {
+            public override string Name => "cartellogistics";
+            public override CommandSupport SupportedMethods => CommandSupport.Start;
+
+            public override void Start()
+            {
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Truced)
+                    LogRelease("Change Cartel Status to TRUCED before running this command!");
+                else
+                {
+                    LogRelease("Starting cartel logistics quest");
+                    ModCoroutines.Start(SetupCartelLogisticsQuest());
+                }
                 return;
             }
         }
@@ -172,9 +253,14 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                hasGeneratedDefeatEnforcerQuest = true;
-                EndGameQuest.fixer = UnityEngine.Object.FindObjectOfType<Fixer>(true);
-                coros.Add(MelonCoroutines.Start(GenerateQuestState()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                else
+                {
+                    hasGeneratedDefeatEnforcerQuest = true;
+                    EndGameQuest.fixer = UnityEngine.Object.FindObjectOfType<Fixer>(true);
+                    ModCoroutines.Start(GenerateQuestState());
+                }
                 return;
             }
         }
@@ -186,8 +272,13 @@ namespace CartelEnforcer
 
             public override void Start()
             {
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                {
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                    return;
+                }
                 hasGeneratedManorQuest = true;
-                NetworkSingleton<TimeManager>.Instance.SetTimeAndSync(1816);
+                NetworkSingleton<TimeManager>.Instance.SetTime(1816);
 #if MONO
                 NPC npc = UnityEngine.Object.FindObjectOfType<ScheduleOne.NPCs.CharacterClasses.Ray>(true);
 #else
@@ -203,10 +294,13 @@ namespace CartelEnforcer
                         break;
                     }
                 }
-                var oldChoices = controller.Choices;
-                oldChoices.RemoveAt(choiceIndex);
-                controller.Choices = oldChoices;
-                coros.Add(MelonCoroutines.Start(GenerateManorQuestState()));
+                if (choiceIndex != -1)
+                {
+                    var oldChoices = controller.Choices;
+                    oldChoices.RemoveAt(choiceIndex);
+                    controller.Choices = oldChoices;
+                }
+                ModCoroutines.Start(GenerateManorQuestState());
                 return;
             }
         }
@@ -218,9 +312,16 @@ namespace CartelEnforcer
 
             public override void Start()
             {
-                hasGeneratedCarQuest = true;
-                NetworkSingleton<TimeManager>.Instance.SetTimeAndSync(1700);
-                coros.Add(MelonCoroutines.Start(GenerateCarQuestState()));
+                if (NetworkSingleton<Cartel>.Instance.Status != ECartelStatus.Hostile)
+                {
+                    LogRelease("Change Cartel Status to HOSTILE before running this command!");
+                }
+                else
+                {
+                    hasGeneratedCarQuest = true;
+                    NetworkSingleton<TimeManager>.Instance.SetTime(2050);
+                    ModCoroutines.Start(GenerateCarQuestState());
+                }
                 return;
             }
         }

@@ -1,7 +1,6 @@
-using HarmonyLib;
-using MelonLoader;
-using UnityEngine;
 using System.Collections;
+using UnityEngine;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -89,7 +88,7 @@ namespace CartelEnforcer
             if (DialogueHandler.ActiveDialogue == null) return;
 
             // Cant think of a better way to get this to work, choice index 0 is recruit choice...
-            if (__instance.shownChoices.Contains(__instance.Dealer.recruitChoice) && choiceLabel == "GENERIC_CHOICE_0")
+            if (__instance._shownChoices.Contains(__instance.Dealer.recruitChoice) && choiceLabel == "GENERIC_CHOICE_0")
             {
                 if (!IsHireChoiceValid(__instance.Dealer, out invalidReason))
                 {
@@ -120,7 +119,7 @@ namespace CartelEnforcer
                     {
                         invalidReason = $"<color=#DE3F31>On cooldown: {persuadeCooldown}</color>";
                         // Update the cooldown text while the dialogue is open
-                        coros.Add(MelonCoroutines.Start(UpdatePersuadeCooldownText()));
+                        ModCoroutines.Start(UpdatePersuadeCooldownText());
                         __result = false;
                     }
                     else
@@ -154,6 +153,8 @@ namespace CartelEnforcer
             __instance.Dealer.HasBeenRecommended = true;
             __instance.handler.EndDialogue();
             __instance.Dealer.DialogueController.DialogueEnabled = false;
+            __instance.Dealer.RelationData.ChangeRelationship(-2.5f, true);
+
             yield return Wait1;
             if (!registered) yield break;
 
@@ -166,11 +167,11 @@ namespace CartelEnforcer
 
             if (__instance.Dealer.recruitChoice != null)
             {
-                void DisableInventoryClear()
+                void RecruitChoiceCallback()
                 {
-                    coros.Add(MelonCoroutines.Start(DisableInventoryClearDelayed(__instance.Dealer)));
+                    ModCoroutines.Start(OnRecruitChosen(__instance.Dealer));
                 }
-                __instance.Dealer.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)DisableInventoryClear);
+                __instance.Dealer.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)RecruitChoiceCallback);
             }
             else
             {
@@ -218,13 +219,13 @@ namespace CartelEnforcer
             yield break;
         }
 
-        public static IEnumerator DisableInventoryClearDelayed(Dealer d)
+        public static IEnumerator OnRecruitChosen(Dealer d)
         {
-            // Check after dialogue choice was choosen if its now recruited
-            // just incase
-            yield return Wait2;
-            if (d.IsRecruited)
-                d.NPCData.Inventory.ClearInventoryOnNewDay = false;
+            yield return Wait1;
+            d.NPCData.Inventory.ClearInventoryOnNewDay = false;
+            MakeMapPoI(d);
+            if (!d.MSGConversation.IsSenderKnown)
+                d.MSGConversation.SetIsKnown(true);
             yield break;
         }
 
@@ -304,7 +305,7 @@ namespace CartelEnforcer
                     {
                         Log("Eval chance hits!");
                         string label = choiceLabel;
-                        coros.Add(MelonCoroutines.Start(EnableDelayed(__instance, label)));
+                        ModCoroutines.Start(EnableDelayed(__instance, label));
                         Log("Enable delayed past");
                     }
                     else

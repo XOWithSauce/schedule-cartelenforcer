@@ -1,7 +1,7 @@
-﻿using MelonLoader;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 using UnityEngine;
+using MelonLoader;
 
 using static CartelEnforcer.CartelInventory;
 using static CartelEnforcer.DriveByEvent;
@@ -893,6 +893,16 @@ namespace CartelEnforcer
             public int timesPersuaded = 0;
             public int hoursUntilNextSupplies = 48;
             public int daysPassedSinceEncounter = 0; // Tracks true brothers quest starting encounter
+            public ManorLaundering ManorLaunderingState = new();
+        }
+        
+        [Serializable]
+        public class ManorLaundering
+        {
+            public bool manorLaunderingUnlocked = false; // prereq complete truebrothers quest
+            public int manorWeeklyLaunderCap = ManorLaunder.baseWeeklyLaunderCap; // current amount in save, resets weekly, total grows overtime with quests?
+            public int daysUntilComplete = -1; // -1 notactive, at 0 resets to -1 and rewards total launder value, otherwise decrease each day
+            public int totalLaunderValue = 0;
         }
 
         public static CartelAlliedQuests LoadAlliedQuests() 
@@ -1053,7 +1063,7 @@ namespace CartelEnforcer
                     bool isValidConfig = true;
                     if (cooldowns.SabotageCooldowns != null)
                     {
-                        if (cooldowns.SabotageCooldowns.Count != 3)
+                        if (cooldowns.SabotageCooldowns.Count != 4)
                             isValidConfig = false;
 
                         if (!cooldowns.SabotageCooldowns.Keys.Contains("Laundromat"))
@@ -1064,15 +1074,14 @@ namespace CartelEnforcer
 
                         if (!cooldowns.SabotageCooldowns.Keys.Contains("Taco Ticklers"))
                             isValidConfig = false;
-                    }
-                    else
-                    {
-                        isValidConfig = false;
+
+                        if (!cooldowns.SabotageCooldowns.Keys.Contains("Hyland Medical"))
+                            isValidConfig = false;
                     }
 
                     if (!isValidConfig)
                     {
-                        MelonLogger.Error("Cartel Enforcer Frequency persistent data has incorrect sagotage cooldowns. Resetting values");
+                        MelonLogger.Error("Cartel Enforcer Cooldowns persistent data has incorrect sagotage cooldowns. Resetting values for update.");
                         int sabotageHrs = FrequencyOverrides.GetActivityHours("Sabotage");
                         sabotageHrs = sabotageHrs != 0 ? sabotageHrs : UnityEngine.Random.Range(16, 64);
                         cooldowns.SabotageCooldowns = new()
@@ -1080,25 +1089,27 @@ namespace CartelEnforcer
                             {"Laundromat", sabotageHrs },
                             {"Post Office", sabotageHrs },
                             {"Taco Ticklers", sabotageHrs },
+                            {"Hyland Medical", sabotageHrs },
                         };
+                        Save(cooldowns);
                     }
                 }
                 catch (JsonSerializationException ex)
                 {
                     cooldowns = new();
                     cooldowns.InitializeDefault();
-                    MelonLogger.Error("Failed to deserialize CartelEnforcer Frequency persistent data: " + ex.Message);
+                    MelonLogger.Error("Failed to deserialize CartelEnforcer Cooldowns persistent data: " + ex.Message);
                 }
                 catch (Exception ex)
                 {
                     cooldowns = new();
                     cooldowns.InitializeDefault();
-                    MelonLogger.Warning("Failed to read CartelEnforcer Frequency persistent data: " + ex);
+                    MelonLogger.Warning("Failed to read CartelEnforcer Cooldowns persistent data: " + ex);
                 }
             }
             else
             {
-                MelonLogger.Warning("Missing CartelEnforcer Frequency persistent data, creating directory and template.");
+                MelonLogger.Warning("Missing CartelEnforcer Cooldowns persistent data, creating directory and template.");
                 cooldowns = new();
                 cooldowns.InitializeDefault();
                 Save(cooldowns);
@@ -1120,7 +1131,7 @@ namespace CartelEnforcer
             }
             catch (Exception ex)
             {
-                MelonLogger.Warning("Failed to save CartelEnforcer Frequency persistent data: " + ex);
+                MelonLogger.Warning("Failed to save CartelEnforcer Cooldowns persistent data: " + ex);
             }
         }
         #endregion

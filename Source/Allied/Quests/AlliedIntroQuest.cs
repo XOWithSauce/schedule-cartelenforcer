@@ -1,5 +1,3 @@
-
-
 using UnityEngine;
 using UnityEngine.Events;
 using MelonLoader;
@@ -51,6 +49,10 @@ namespace CartelEnforcer
         }
         public Quest_TrucedRecruits() : base(ClassInjector.DerivedConstructorPointer<Quest_TrucedRecruits>())
             => ClassInjector.DerivedConstructorBody(this);
+
+        public new string title;
+        public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
 
         private CartelDealer westvilleDealer = null;
@@ -120,12 +122,11 @@ namespace CartelEnforcer
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-                var action = (Action)OnMinPass;
-
                 if (instance == null) return;
 #if MONO
-                instance.onMinutePass.Remove(action);
+                instance.onMinutePass -= this.OnMinPass;
 #else
+                var action = (Action)OnMinPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
                 Log("Quest_TrucedRecruits: Base End method finished successfully.");
@@ -178,12 +179,16 @@ namespace CartelEnforcer
                 title: "Hire the Westville Cartel Dealer",
                 new PoIConfig(true, true, true, westvilleDealer.transform, Vector3.zero));
 
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
+#endif
+
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-            var action = OnMinPass;
 #if MONO
-            instance.onMinutePass.Add(new Action(action));
+            instance.onMinutePass += this.OnMinPass;
 #else
+            var action = (Action)this.OnMinPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
 

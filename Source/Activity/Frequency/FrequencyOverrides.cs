@@ -1,5 +1,5 @@
-using HarmonyLib;
 using UnityEngine;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -184,6 +184,7 @@ namespace CartelEnforcer
                 {"Laundromat", sabotageHrs },
                 {"Post Office", sabotageHrs },
                 {"Taco Ticklers", sabotageHrs },
+                {"Hyland Medical", sabotageHrs },
             };
         }
     }
@@ -293,10 +294,12 @@ namespace CartelEnforcer
             int hoursMax = Mathf.RoundToInt((float)freq.CooldownHours * (1f + freq.RandomTimeRangePercentage));
             int hoursMin = Mathf.Clamp(Mathf.RoundToInt((float)freq.CooldownHours * (1f - freq.RandomTimeRangePercentage)), 1, hoursMax-1);
 
-            // Use game default or mod defined default value if 0, else mod AND config defined random range
+            // Use game default or mod defined default value if 0
+            // else mod AND config defined random range as result
             int result = freq.CooldownHours == 0 ? freq.CooldownHours : UnityEngine.Random.Range(hoursMin, hoursMax);
             Log($"New activity cooldown for {identifier} with result: {result}");
-
+            // all function refs should consider 0 as default 
+            // fall back to custom calculation
             return result;
         }
 
@@ -320,15 +323,53 @@ namespace CartelEnforcer
 
     // Harmony patch to override the hours until next deal request time
     // with custom time, IF the returned value is not set to 0
+    // needs both complete and expire since they are the main toggles for the 
+    // deal state
+
     [HarmonyPatch(typeof(CartelDealManager), "CompleteDeal")]
     public static class CartelDealManager_CompleteDeal_Patch
     {
         [HarmonyPostfix]
         public static void Postfix(CartelDealManager __instance)
         {
+            if (!currentConfig.alliedExtensions) return;
+
+            Log($"Set Cartel deal manager cooldown pre: {__instance.HoursUntilNextDealRequest}");
             int hours = FrequencyOverrides.GetActivityHours("CartelPlayerDeal");
             __instance.HoursUntilNextDealRequest = hours != 0 ? hours : __instance.HoursUntilNextDealRequest;
+            Log($"Set Cartel Player Deal hours: {__instance.HoursUntilNextDealRequest}");
             return;
+        }
+    }
+
+    // Patch the Cartel Deal Manager while Truced to avoid changing the cartel status to hostile upon expiry
+    [HarmonyPatch(typeof(CartelDealManager), "ExpireDeal")]
+    public static class CartelDealManager_ExpireDeal_Patch
+    {
+        [HarmonyPrefix]
+        public static bool Prefix(CartelDealManager __instance)
+        {
+            // If the allied extensions features not enabled dont patch this method
+            if (!currentConfig.alliedExtensions) return true;
+
+            __instance.DealQuest.Expire(true);
+
+            // commented message out because it gets spammy
+            // real fast with thomas sending "ur working against us.."
+            // after every expire...
+            //__instance.SendExpiryMessage();
+
+            __instance.ActiveDeal = null;
+
+            // Block the original because it has the hostile change function call
+            // NetworkSingleton<Cartel>.Instance.SetStatus(null, ECartelStatus.Hostile, true);
+
+            // Mod additional, this case also needs to reset cooldown (in addition to CompleteDeal func)
+            Log($"ExpireDeal hours until next cartel deal req: {__instance.HoursUntilNextDealRequest}");
+            int hours = FrequencyOverrides.GetActivityHours("CartelPlayerDeal");
+            __instance.HoursUntilNextDealRequest = hours != 0 ? hours : __instance.HoursUntilNextDealRequest;
+            Log($"ExpireDeal Set Cartel Player Deal hours: {__instance.HoursUntilNextDealRequest}");
+            return false;
         }
     }
 

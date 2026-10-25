@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -33,7 +32,6 @@ using Il2CppScheduleOne.Messaging;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.Levelling;
-using Il2CppScheduleOne.NPCs.CharacterClasses;
 #endif
 
 namespace CartelEnforcer
@@ -112,7 +110,7 @@ namespace CartelEnforcer
                         // User wants to use default value for cooldown
                         hoursUntilInterceptEvent = UnityEngine.Random.Range(2, 8);
                     }
-                    coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
+                    ModCoroutines.Start(StartInterceptDeal());
                 }
 
             }
@@ -317,8 +315,8 @@ namespace CartelEnforcer
             customer.NPC.MSGConversation.SendMessage(new Message(text, Message.ESenderType.Other, true, -1), true, true);
             interceptingDeal = true;
             interceptor = selected;
-            coros.Add(MelonCoroutines.Start(QuestUIEffect(randomContract)));
-            coros.Add(MelonCoroutines.Start(BeginIntercept(selected, randomContract, customer, region, cGuid)));
+            ModCoroutines.Start(QuestUIEffect(randomContract));
+            ModCoroutines.Start(BeginIntercept(selected, randomContract, customer, region, cGuid));
             yield return null;
         }
 
@@ -403,7 +401,7 @@ namespace CartelEnforcer
                 // Check first for failed contract if true return
                 if (state == EQuestState.Failed && (dealer.Health.IsDead || dealer.Health.IsKnockedOut))
                 {
-                    coros.Add(MelonCoroutines.Start(AssignContractSoon(customer, contract, originalXP)));
+                    ModCoroutines.Start(AssignContractSoon(customer, contract, originalXP));
                     if (contractGuids.Keys.Contains(cGuid))
                         contractGuids.Remove(cGuid);
 
@@ -420,12 +418,12 @@ namespace CartelEnforcer
                 // Else if contract completed
                 else if (state == EQuestState.Completed)
                 {
-                    coros.Add(MelonCoroutines.Start(WaitForContractState(dealer, contract, customer, region, cGuid, changeInfluence, originalXP)));
+                    ModCoroutines.Start(WaitForContractState(dealer, contract, customer, region, cGuid, changeInfluence, originalXP));
                 }
                 // Else any other contract state
                 else
                 {
-                    Log("Encountered unexpected state");
+                    Log($"Encountered unexpected state: {state}");
                     if (contractGuids.Keys.Contains(cGuid))
                         contractGuids.Remove(cGuid);
 
@@ -456,10 +454,12 @@ namespace CartelEnforcer
             Log("Dealer Check attend start");
             dealer.CheckAttendStart();
 
+            Log($"Dealer has contract {dealer.currentContract != null}");
             // Set the dealer to null because player wont be able to complete the deal otherwise, locked because its reserved for "Rival Dealer"
             // The dealer will have the contract too and try to complete it, but this way player can do it too
             if (customer.CurrentContract != null)
             {
+                Log("Reset current contract dealer");
                 if (customer.CurrentContract.Dealer != null)
                     customer.CurrentContract.Dealer = null;
             }
@@ -473,10 +473,13 @@ namespace CartelEnforcer
 #if MONO
             yield return new WaitUntil(() => contractGuids[cGuid].CompletedByPlayer || contractGuids[cGuid].CompletedByCartel || !registered);
 #else
+            Log($"completed by player: {contractGuids[cGuid].CompletedByPlayer}");
+            Log($"completed by cartel: {contractGuids[cGuid].CompletedByCartel}");
             yield return new WaitUntil((Il2CppSystem.Func<bool>)(() => contractGuids[cGuid].CompletedByPlayer || contractGuids[cGuid].CompletedByCartel || !registered));
 #endif
             if (!registered) yield break;
 
+            Log("Proceed");
             if (contractGuids[cGuid].CompletedByPlayer)
             {
                 Log("Player Stopped Cartel Intercept");
@@ -565,11 +568,24 @@ namespace CartelEnforcer
 
         public static IEnumerator FetchUIElementsInit()
         {
-            yield return Wait5;
+            yield return Wait1;
             if (!registered) yield break;
-            Thomas thomas = UnityEngine.Object.FindObjectOfType<Thomas>(true);
-            benziesLogo = thomas.GetMessagingIcon();
-            yield return null;
+            Log("Inspecting loaded resources for benzies logo...");
+            Sprite[] allSprites = Resources.FindObjectsOfTypeAll<Sprite>();
+            for (int i = 0; i < allSprites.Length; i++)
+            {
+                if (allSprites[i].name == "Benzies logo")
+                {
+                    Log("Found benzies logo");
+                    benziesLogo = allSprites[i];
+                    break;
+                }
+            }
+
+            if (benziesLogo == null)
+                Log("Failed to locate Benzies logo from resources...");
+
+            yield break;
         }
 
         public static IEnumerator QuestUIEffect(Contract contract)
@@ -599,7 +615,7 @@ namespace CartelEnforcer
             Image background = backgroundTr.GetComponent<Image>();
             questIconBack = background.color;
 
-            coros.Add(MelonCoroutines.Start(LerpQuestColor(background)));
+            ModCoroutines.Start(LerpQuestColor(background));
 
             Transform fillImgTr = contractIcon.Find("Fill");
             if (fillImgTr == null)
@@ -612,7 +628,7 @@ namespace CartelEnforcer
             contract.hudUI.BopIcon();
             fillImg.overrideSprite = benziesLogo;
 
-            coros.Add(MelonCoroutines.Start(ResetQuestUIEffect(fillImg, background)));
+            ModCoroutines.Start(ResetQuestUIEffect(fillImg, background));
             yield return null;
         }
 

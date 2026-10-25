@@ -1,3 +1,31 @@
+# Version 2.1.0
+- Updated mod code to match the latest game version 0.4.7f12 with following changes
+- Added a new quest that is available when cartel is allied, 'Cartel Logistics' quest can be started when 2 cartel dealers have been hired succesfully. More in [Quests wiki page](https://github.com/XOWithSauce/schedule-cartelenforcer/wiki/Mod-Quests)
+- Added a new feature while Truced with Cartel you can now launder money through Thomas after completing the pre-requirement quest 'True Brothers'. This allows you message Thomas and request for a custom laundering scheme with the Cartel that accepts cash and gold bars.
+- Added Hyland Medical building to the supported Cartel Sabotage event locations, so that cartel can blow it up while hostile if player owns it...
+- Changed all truced mod added quests to only have 1 mod quest active at a time at maximum to make sure that nothing bugs out, since those quests are starting to stack up in frequency now.
+- Changed all Hired Cartel Dealers to have their Payment Cuts reduced based on the relations data with player. Good relations can lower the payment cuts of all hired cartel dealers down to 15% from their initial values which are defined at Allied/config.json file. 
+- Changed True Brothers quest encounters to be more rare since it was way too common with the ingame hour evaluation speed
+- Changed True Brothers quest reward to increase the relations of Hired Cartel Dealers with player, so that overtime completing quests makes player earn more money from the cartel dealers deals
+- Changed the Thomas product requests when truced to not send the warning message as overtime they send the message over and over again since failing the quest doesn't break the agreement.
+- Changed the cartel dealer persuade mechanic 'threathening' dialogue option to have a lower chance of success for all weapons
+- Changed the mod console commands to check for Cartel status and prevent running Hostile mod events while Truced and vice versa
+- Changed the way which the mod gets the Benzies cartel logo in runtime because it no longer existed accessible within the scene but was still in the game resources loadable
+- Changed the Infiltrate Manor quest goons to be less lethal overall
+- Changed the Dealer Robbery mechanic to not award influence reduction whenever player doesnt defend the dealer during the robbery
+- Added motor oil to allied supplies quest loot pool for blue barrels supply type
+- Tried fixing again the cartel goons array spawn->respawn cycle because it was bugged because of the mod logic in this update especially in il2cpp backend
+- Fixed bugs related to the new avatar clothing changes, in the mods cartel dealer persuade mechanic and also avatar randomization in True Brothers quest and Unexpected Alliances quest
+- Fixed a bug in il2cpp backend where mod quests would have their 'Entries' field pointer set to incorrect address
+- Fixed a bug in the cloned cartel goon objects where they would be ragdolled on spawn
+- Fixed a bug that caused hired cartel dealers to not save message conversations, inventories, relations, etc. in to the game default NPC json save file. Now saves cartel dealers with id: 'carteldealer_region'.
+- Fixed a bug in the true brothers quest where the cloned police objects would have their avatar bugged consistently
+- Fixed a bug in the true brothers quest where the quest inviting cartel goon would get spawned in invalid locations
+- Fixed a bug where the map marker for hired cartel dealer would not be instantiated if the dealer was hired in the same session and required a save reload to show up
+- Fixed a bug that allowed players hired dealers failing contracts that were assigned stolen to a cartel dealer
+- tried fixing a bug that caused hired cartel dealers to not show the name and benzies icon..  though unsuccesfully so its bogged now
+- Fixed the debug mode spawned cyan beams having colliders that blocked cars and npcs
+
 # Version 2.0.0
 - Updated mod code to match the latest game version 0.4.6f11, requiring alot of bug fixing and refactoring.
 - Updated Melon Loader version dependency to be 0.7.2 and higher (prefer latest 0.7.3) upgraded from 0.7.0

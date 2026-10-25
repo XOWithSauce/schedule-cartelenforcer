@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using MelonLoader;
 using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
@@ -428,7 +427,7 @@ namespace CartelEnforcer
 
                     if (!driveByActive)
                     {
-                        coros.Add(MelonCoroutines.Start(BeginDriveBy(kvp.Key)));
+                        ModCoroutines.Start(BeginDriveBy(kvp.Key));
                         break;
                     }
                 }
@@ -458,7 +457,7 @@ namespace CartelEnforcer
             if (thomasInstance.HasUmbrella)
                 thomasInstance.HasUmbrella = false;
 
-            coros.Add(MelonCoroutines.Start(DriveByShooting(player)));
+            ModCoroutines.Start(DriveByShooting(player));
             yield return null;
         }
 
@@ -565,7 +564,7 @@ namespace CartelEnforcer
             driveByVeh.Park_Networked(null, driveByParking);
             thomasInstance.gameObject.SetActive(false);
             Log("Drive By Complete");
-            coros.Add(MelonCoroutines.Start(ResetDriveByHours()));
+            ModCoroutines.Start(ResetDriveByHours());
         }
 
         public static IEnumerator ResetDriveByHours()

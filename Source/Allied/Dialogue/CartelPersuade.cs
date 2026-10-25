@@ -1,6 +1,6 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using System.Collections;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -10,23 +10,25 @@ using static CartelEnforcer.AlliedExtension;
 #if MONO
 using ScheduleOne.Economy;
 using ScheduleOne.PlayerScripts;
-using ScheduleOne.AvatarFramework;
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Dialogue;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.UI;
 using ScheduleOne.ItemFramework;
+using ScheduleOne.Core.Avatar;
+using ScheduleOne.Core.Avatar.Properties;
 #else
 using Il2CppScheduleOne.Economy;
 using Il2CppScheduleOne.PlayerScripts;
-using Il2CppScheduleOne.AvatarFramework;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.ItemFramework;
+using Il2CppScheduleOne.Core.Avatar;
+using Il2CppScheduleOne.Core.Avatar.Properties;
 #endif
 
 
@@ -59,7 +61,7 @@ namespace CartelEnforcer
                 persuadeCooldown--;
         }
 
-        public static DialogueContainer InitPersuadeContainer()
+        public static Conversation InitPersuadeContainer()
         {
             string GetGuid()
             {
@@ -71,7 +73,7 @@ namespace CartelEnforcer
             }
             // assing this same to all cartel dealers override container
             // assign it only when the cartel dealer has not been recommended!
-            DialogueContainer persuadeOverride = ScriptableObject.CreateInstance<DialogueContainer>();
+            Conversation persuadeOverride = ScriptableObject.CreateInstance<Conversation>();
             persuadeOverride.name = "CARTEL_ENFORCER_PERSUADE"; // Object.name
             persuadeOverride.allowExit = true;
             persuadeOverride.BranchNodeData = new(); // Can leave empty
@@ -215,80 +217,50 @@ namespace CartelEnforcer
             int totalApparel = 0;
             int apparelMatched = 0;
 
-            if (Player.Local.Avatar.CurrentSettings == null)
+            if (Player.Local.Avatar.Appearance == null)
             {
                 Log("Could not find player avatar settings");
                 return 0f;
             }
-            AvatarSettings playerSettings = Player.Local.Avatar.CurrentSettings;
-            // For each dealer body layer setting, check each player body layer setting
-            for (int i = 0; i < d.Avatar.CurrentSettings.BodyLayerSettings.Count; i++)
+#if MONO
+            List<AvatarObject> playerSettings = Player.Local.Avatar.Appearance._wornObjects;
+
+#else
+            Il2CppSystem.Collections.Generic.List<AvatarObject> playerSettings = Player.Local.Avatar.Appearance._wornObjects;
+#endif
+            // For each dealer worn object check each player worn object
+
+            for (int i = 0; i < d.Avatar.Appearance._wornObjects.Count; i++)
             {
-               
-                AvatarSettings.LayerSetting setting = d.Avatar.CurrentSettings.BodyLayerSettings[i];
-                if (setting.layerPath == null || setting.layerPath == string.Empty)
+                AvatarObject setting = d.Avatar.Appearance._wornObjects[i];
+                if (setting._name == null || setting._name == string.Empty)
                     continue; // go next
 
                 totalApparel++;
 
-                for (int j = 0; j < playerSettings.BodyLayerSettings.Count; j++)
+                for (int j = 0; j < playerSettings.Count; j++)
                 {
                     bool currentColorMatched = false;
                     bool currentPathMatched = false;
-                    AvatarSettings.LayerSetting playerSetting = playerSettings.BodyLayerSettings[j];
-                    if (playerSetting.layerPath == null || setting.layerPath == string.Empty)
+
+                    AvatarObject playerSetting = playerSettings[j];
+                    if (playerSetting._name == null || playerSetting._name == string.Empty)
                         continue; // go next
 
-                    if (CalculateColorSimilarity(setting.layerTint, playerSetting.layerTint) > colorSimilarityThreshold)
+                    Log($"Calculate color similarity ({setting._name}) for {setting._properties._colors.Length} num colors");
+
+                    Log($"Cartel: {setting._name} - Player: {playerSetting._name}");
+
+                    if (CalculateColorSimilarity(setting._properties, playerSetting._properties) > colorSimilarityThreshold)
                         currentColorMatched = true;
-                    if (ClothingPathMatches(setting.layerPath, playerSetting.layerPath))
+
+                    if (ClothingPathMatches(setting._name, playerSetting._name))
                         currentPathMatched = true;
 
                     if (currentPathMatched && currentColorMatched)
                     {
                         apparelMatched++;
                         break; // Go check the next dealer body layer
-                    }
-                }
-            }
-
-            // For each dealer accessory setting, check each player accessory setting
-            for (int i = 0; i < d.Avatar.appliedAccessories.Length; i++)
-            {
-                if (d.Avatar.appliedAccessories[i] == null) continue;
-
-                totalApparel++;
-
-                Accessory setting = d.Avatar.appliedAccessories[i];
-                for (int j = 0; j < Player.Local.Avatar.CurrentSettings.AccessorySettings.Count; j++)
-                {
-                    if (Player.Local.Avatar.CurrentSettings.AccessorySettings[j] == null) continue;
-
-                    bool currentColorMatched = false;
-                    bool currentPathMatched = false;
-                    AvatarSettings.AccessorySetting playerSetting = Player.Local.Avatar.CurrentSettings.AccessorySettings[j];
-
-                    // For color in the accessory it has to first check what color is in use in both
-                    Color dealerAccessoryColor = Color.black;
-
-                    // parse one possible color from the first mesh
-                    if (setting.meshesToColor.Count() > 0)
-                        dealerAccessoryColor = setting.meshesToColor[0].material.color;
-                    else if (setting.skinnedMeshesToColor.Length > 0)
-                        dealerAccessoryColor = setting.skinnedMeshesToBind[0].material.color;
-                    else
-                        Log("no mesh color found");
-
-                    if (CalculateColorSimilarity(dealerAccessoryColor, playerSetting.color) < colorSimilarityThreshold)
-                        currentColorMatched = true;
-                    
-                    if (ClothingPathMatches(setting.AssetPath, playerSetting.path))
-                        currentPathMatched = true;
-
-                    if (currentPathMatched && currentColorMatched)
-                    {
-                        apparelMatched++;
-                        break; // Go check the next dealer accessory layer
                     }
                 }
             }
@@ -304,11 +276,25 @@ namespace CartelEnforcer
             return probability;
         }
 
-        public static float CalculateColorSimilarity(Color a, Color b)
+        public static float CalculateColorSimilarity(AvatarPropertyCollection aCollection, AvatarPropertyCollection bCollection)
         {
             // at 0f they are equal of color
             // at 1f they are opposite color
-            float result = Vector3.Distance(new Vector3(a.r, a.g, a.b), new Vector3(b.r, b.g, b.b)) / Mathf.Sqrt(3f);
+            float result = 1f;
+            // Because this can be null the color is probably custom clothing texture
+            ColorProperty propertyA = aCollection.GetFirstColorProperty();
+            ColorProperty propertyB = bCollection.GetFirstColorProperty();
+            if (propertyA != null && propertyB != null)
+            {
+                Color a = aCollection.GetFirstColorProperty().Value;
+                Color b = bCollection.GetFirstColorProperty().Value;
+                result = Vector3.Distance(new Vector3(a.r, a.g, a.b), new Vector3(b.r, b.g, b.b)) / Mathf.Sqrt(3f);
+            }
+            else
+            {
+                Log("Color property does not exist in clothing!");
+            }
+
             Log("Clothing color diff: " + result);
             return result;
         }
@@ -316,11 +302,7 @@ namespace CartelEnforcer
         public static bool ClothingPathMatches(string a, string b)
         {
             // Where string a is the cartel member clothing and b is the player clothing
-            if (a == "Avatar/Layers/Top/Tucked T-Shirt") // Because tucked t shirt doesnt exist in shop, player cant buy
-                a = "Avatar/Layers/Top/T-Shirt";
-            // Otherwise this should work to check the paths of clothing
             Log($"Clothing path same: {(a==b)}\n    {a}\n    {b}");
-
             return a == b;
         }
 
@@ -371,31 +353,35 @@ namespace CartelEnforcer
             switch (id)
             {
                 case "baseballbat":
-                    weaponThreath = 0.2f;
+                    weaponThreath = 0.05f;
                     break;
 
                 case "fryingpan":
-                    weaponThreath = 0.3f;
+                    weaponThreath = 0.09f;
                     break;
 
                 case "machete":
-                    weaponThreath = 0.5f;
+                    weaponThreath = 0.18f;
                     break;
 
                 case "revolver":
-                    weaponThreath = 0.65f;
+                    weaponThreath = 0.35f;
                     break;
 
                 case "m1911":
-                    weaponThreath = 0.8f;
+                    weaponThreath = 0.4f;
                     break;
 
                 case "pumpshotgun":
-                    weaponThreath = 0.95f;
+                    weaponThreath = 0.5f;
+                    break;
+
+                case "goldenm1911":
+                    weaponThreath = 0.75f;
                     break;
 
                 default:
-                    weaponThreath = 0.1f;
+                    weaponThreath = 0.01f;
                     break;
 
             }
@@ -410,7 +396,7 @@ namespace CartelEnforcer
                 probability = 0.99f;
             return probability;
         }
-        #endregion
+#endregion
     }
 
 }

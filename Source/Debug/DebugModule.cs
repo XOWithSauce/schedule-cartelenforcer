@@ -47,7 +47,7 @@ namespace CartelEnforcer
         public static Transform debugVisualParent;
 
 
-        [Conditional("DEBUG")] // Strips out of build the 30kb worth of strings from debug logging
+        [Conditional("DEBUG")] // Strips out of build the ~100kb worth of strings from debug logging
         public static void Log(string msg, [CallerMemberName] string memberName = "")
         {
             if (currentConfig.debugMode)
@@ -72,11 +72,13 @@ namespace CartelEnforcer
             { "gathering", new GatheringTarget() },
             { "sabotage", new SabotageTarget() },
             { "stealback", new StealBackCustomerTarget() },
+            { "manorlaunder", new ManorLaunderProcessTarget() },
 
             // Quests
             { "alliedsupplies", new AlliedSuppliesTarget() },
             { "alliedintro", new AlliedIntroTarget() },
             { "truebrothers", new AlliedTrueBrothersTarget() },
+            { "cartellogistics", new AlliedLogisticsTarget() },
             { "unexpectedalliances", new UnexpectedAlliancesTarget() },
             { "infiltratemanor", new InfiltrateManorTarget() },
             { "fourwheels", new FourWheelsTarget() },
@@ -155,7 +157,7 @@ namespace CartelEnforcer
         {
             if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null)
             {
-                coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
+                ModCoroutines.Start(SetupTruceIntroQuest());
             }
             Log("Generated Allied Intro Quest");
             yield break;
@@ -166,7 +168,7 @@ namespace CartelEnforcer
             // if the quest is not been activated
             if (activeAlliedSupplies == null && !alliedSuppliesActive)
             {
-                coros.Add(MelonCoroutines.Start(SetupTruceSuppliesQuest()));
+                ModCoroutines.Start(SetupTruceSuppliesQuest());
             }
             // else quest already exists and can be reactivated
             else if (activeAlliedSupplies != null && !alliedSuppliesActive)
@@ -193,7 +195,7 @@ namespace CartelEnforcer
                     nearest = distanceTo;
                 }
             }
-            coros.Add(MelonCoroutines.Start(BeginDriveBy(trig)));
+            ModCoroutines.Start(BeginDriveBy(trig));
             yield break;
         }
 
@@ -244,7 +246,7 @@ namespace CartelEnforcer
         // Start Cartel Intercept Contract
         public static IEnumerator OnInputInterceptContract()
         {
-            coros.Add(MelonCoroutines.Start(StartInterceptDeal()));
+            ModCoroutines.Start(StartInterceptDeal());
             LogRelease("Started Intercept Deals event");
             yield break;
         }
@@ -268,7 +270,7 @@ namespace CartelEnforcer
             yield return Wait10;
             if (!registered) yield break;
 
-            coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
+            ModCoroutines.Start(GoonPlantBomb(selected));
             yield break;
         }
 
@@ -380,6 +382,13 @@ namespace CartelEnforcer
                     foreach (Transform tr in loc.AmbushPoints)
                     {
                         GameObject capsule = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                        CapsuleCollider capCol = capsule.GetComponent<CapsuleCollider>();
+                        if (capCol != null)
+                        {
+                            // the capsules for sewer ambush spawns
+                            // are ground level basically and block cars/npcs/etc
+                            UnityEngine.Object.Destroy(capCol);
+                        }
                         MeshRenderer mrc = capsule.GetComponent<MeshRenderer>();
                         mrc.material = capsuleMaterial;
                         mrc.receiveShadows = false;

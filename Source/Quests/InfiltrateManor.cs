@@ -1,7 +1,7 @@
 using System.Collections;
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
+using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -19,7 +19,6 @@ using ScheduleOne.Quests;
 using ScheduleOne.DevUtilities;
 using ScheduleOne.Persistence;
 using ScheduleOne.Levelling;
-using ScheduleOne.NPCs;
 using FishNet;
 #else
 using Il2CppScheduleOne.PlayerScripts;
@@ -32,7 +31,6 @@ using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Persistence;
 using Il2CppScheduleOne.Levelling;
-using Il2CppScheduleOne.NPCs;
 using Il2CppFishNet;
 using Il2CppInterop.Runtime.Injection;
 #endif
@@ -62,6 +60,7 @@ namespace CartelEnforcer
 
         public new string title;
         public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
 
         private float questDifficultyScalar = 1f;
@@ -82,12 +81,6 @@ namespace CartelEnforcer
             { new Vector3(160.65f, 15.61f, -61.00f), false },
             { new Vector3(166.58f, 15.61f, -61.00f), false }
         };
-
-        // store the combat variables
-        public bool hasSavedCombatVariables = false;
-        public float GiveUpRange = 0f;
-        public int GiveUpAfterSuccessfulHits = 0;
-        public float DefaultSearchTime = 0f;
 
         // store bool flag for spawning randomly 1 goon in forest
         private bool forestGoonSpawned = false;
@@ -175,12 +168,11 @@ namespace CartelEnforcer
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
 
-                var action = (Action)OnMinPass;
-
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
-                instance.onMinutePass.Remove(action);
+                instance.onMinutePass -= this.OnMinPass;
 #else
+                var action = (Action)OnMinPass;
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
@@ -258,12 +250,16 @@ namespace CartelEnforcer
                 title: "Escape the Manor before the Police arrive",
                 new PoIConfig(false, false, false));
 
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
+#endif
+
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-            var action = (Action)OnMinPass;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(HourPass));
-            instance.onMinutePass.Add(action);
+            instance.onMinutePass += this.OnMinPass;
 #else
+            var action = (Action)OnMinPass;
             instance.onHourPass += (Il2CppSystem.Action)HourPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
@@ -309,8 +305,8 @@ namespace CartelEnforcer
 
                 SetupGoonWeapon(goon);
                 goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(500f * questDifficultyScalar, 1300f * questDifficultyScalar)));
-                goon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
-                goon.Health.Health = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
+                goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(150f, 300f, questDifficultyScalar - 1f));
+                goon.Health.RestoreHealth();
 
                 UnityEngine.Events.UnityAction onGoonDiedAction = null;
                 void onGoonDie()
@@ -325,24 +321,11 @@ namespace CartelEnforcer
                 onGoonDiedAction = (UnityEngine.Events.UnityAction)onGoonDie;
                 goon.Health.onDieOrKnockedOut.AddListener(onGoonDiedAction);
 
-                if (!hasSavedCombatVariables)
-                {
-                    GiveUpRange = goon.Behaviour.CombatBehaviour.GiveUpRange;
-                    GiveUpAfterSuccessfulHits = goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
-                    DefaultSearchTime = goon.Behaviour.CombatBehaviour.DefaultSearchTime;
-                    hasSavedCombatVariables = true;
-                }
-
-                goon.Behaviour.CombatBehaviour.GiveUpRange = 60f;
-                goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 60;
-                goon.Behaviour.CombatBehaviour.DefaultSearchTime = 120f;
-
                 goon.Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
                 goon.Behaviour.CombatBehaviour.Enable_Networked();
 
                 float speed = Mathf.Lerp(UnityEngine.Random.Range(0.42f, 0.55f), 0.67f, questDifficultyScalar - 1f);
-                goon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, speed));
-                goon.Movement.Agent.avoidancePriority = 30;
+                goon.Movement.SpeedController.AddSpeedControl("combat", speed, 5);
                 manorGoons.Add(goon);
                 manorGoonGuids.Add(goon.GUID.ToString());
             }
@@ -365,15 +348,15 @@ namespace CartelEnforcer
 #endif
                 if (wep != null)
                 {
-                    float dmgMin = 26f;
-                    float dmgMax = 45f;
+                    float dmgMin = 20f;
+                    float dmgMax = 38f;
                     float t = Mathf.Clamp01(questDifficultyScalar - 1f);
                     wep.CanShootWhileMoving = true;
-                    wep.AimTime_Max = 0.3f;
-                    wep.AimTime_Min = 0.1f;
-                    wep.HitChance_MaxRange = 65f;
-                    wep.HitChance_MinRange = 85f;
-                    wep.MaxFireRate = Mathf.Lerp(0.7f, 1.2f, t);
+                    wep.AimTime_Max = 0.8f;
+                    wep.AimTime_Min = 0.4f;
+                    wep.HitChance_MaxRange = 55f;
+                    wep.HitChance_MinRange = 75f;
+                    wep.MaxFireRate = Mathf.Lerp(0.9f, 1.7f, t);
                     wep.MaxMovingShotsBeforeReposition = 3;
                     wep.MaxStationaryShotsBeforeReposition = 1;
                     wep.MaxUseRange = 7f;
@@ -402,8 +385,8 @@ namespace CartelEnforcer
             }
 
             goon.Inventory.AddCash(Mathf.Round(UnityEngine.Random.Range(500f * questDifficultyScalar, 1300f * questDifficultyScalar)));
-            goon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
-            goon.Health.Health = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
+            goon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(35f, 85f, questDifficultyScalar - 1f));
+            goon.Health.RestoreHealth();
 
             goon.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/Knife");
 
@@ -433,10 +416,10 @@ namespace CartelEnforcer
             goon.Behaviour.CombatBehaviour.Enable_Networked();
 
             float speed = Mathf.Lerp(UnityEngine.Random.Range(0.55f, 0.76f), 0.86f, questDifficultyScalar - 1f);
-            goon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, speed));
-            goon.Movement.Agent.avoidancePriority = 30;
+            goon.Movement.SpeedController.AddSpeedControl("combat", speed, 5);
+            Vector3 originalScale = goon.transform.localScale;
             goon.transform.localScale = new Vector3(0.81f, 0.81f, 0.81f);
-            coros.Add(MelonCoroutines.Start(_helper.DespawnForestGoon(goon)));
+            ModCoroutines.Start(_helper.DespawnForestGoon(goon, originalScale));
         }
 
         public override void OnMinPass()
@@ -489,7 +472,7 @@ namespace CartelEnforcer
                 {
                     manorCompleted = true;
                     QuestEntry_InvestigateWoods.SetState(EQuestState.Failed);
-                    coros.Add(MelonCoroutines.Start(ResetRayAFK()));
+                    ModCoroutines.Start(ResetRayAFK());
                     this.Fail();
                     return;
                 }
@@ -502,7 +485,7 @@ namespace CartelEnforcer
                 {
                     manorCompleted = true;
                     QuestEntry_ReturnToRay.SetState(EQuestState.Failed);
-                    coros.Add(MelonCoroutines.Start(ResetRayAFK()));
+                    ModCoroutines.Start(ResetRayAFK());
                     this.Fail();
                     return;
                 }
@@ -518,7 +501,7 @@ namespace CartelEnforcer
                 {
                     manorCompleted = true;
 
-                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    ModCoroutines.Start(CleanupManor());
                     this.Fail();
                     return;
                 }
@@ -532,7 +515,7 @@ namespace CartelEnforcer
                     manorCompleted = true;
                     QuestEntry_DefeatManorGoons.SetState(EQuestState.Failed);
                     Log("Fail Timeout Manor Infiltration Quest");
-                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    ModCoroutines.Start(CleanupManor());
                     this.Fail();
                     return;
                     // Means that from state start you have atleast 6 hours to complete from 22:00 to 3:59
@@ -585,7 +568,7 @@ namespace CartelEnforcer
                     manorCompleted = true;
                     QuestEntry_SearchResidence.SetState(EQuestState.Failed);
                     Log("Fail Timeout Manor Infiltration Quest");
-                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    ModCoroutines.Start(CleanupManor());
                     this.Fail();
                     return;
                     // Means that from state start you have atleast 6 hours to complete from 22:00 to 3:59
@@ -601,8 +584,8 @@ namespace CartelEnforcer
                     {
                         manorCompleted = true;
                         // Far enough escaped from the back door position
-                        coros.Add(MelonCoroutines.Start(CleanupManor()));
-                        coros.Add(MelonCoroutines.Start(QuestManorReward()));
+                        ModCoroutines.Start(CleanupManor());
+                        ModCoroutines.Start(QuestManorReward());
                         this.Complete();
                         return;
                     }
@@ -614,7 +597,7 @@ namespace CartelEnforcer
 
                     QuestEntry_EscapeManor.SetState(EQuestState.Failed);
                     // Not none and not investigating means that player has been spotted by police atleast once
-                    coros.Add(MelonCoroutines.Start(CleanupManor()));
+                    ModCoroutines.Start(CleanupManor());
                     this.Fail();
                     return;
                 }
@@ -649,7 +632,7 @@ namespace CartelEnforcer
             UpdateQuestMapLogo(QuestEntry_ReturnToRay);
             QuestEntry_ReturnToRay.SetPoILocation(ray.transform.position);
 
-            coros.Add(MelonCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete)));
+            ModCoroutines.Start(GenRaySecondDialog(QuestEntry_ReturnToRay.Complete));
             if (_investigateAction != null)
             {
                 QuestEntry_InvestigateWoods.onComplete.RemoveListener(_investigateAction);
@@ -664,7 +647,7 @@ namespace CartelEnforcer
             QuestEntry_WaitForNight.Begin();
             if (QuestEntry_WaitForNight.compassElement != null)
                 QuestEntry_WaitForNight.compassElement.Visible = false;
-            coros.Add(MelonCoroutines.Start(RandomManorGenerator.SetupManor()));
+            ModCoroutines.Start(RandomManorGenerator.SetupManor());
             if (_returnToRayAction != null)
             {
                 QuestEntry_ReturnToRay.onComplete.RemoveListener(_returnToRayAction);
@@ -754,7 +737,7 @@ namespace CartelEnforcer
     public class InfiltrateManorHelper : QuestHelperBase<Quest_InfiltrateManor>
     {
         public InfiltrateManorHelper(Quest_InfiltrateManor quest) : base(quest) { }
-        public IEnumerator DespawnForestGoon(CartelGoon goon)
+        public IEnumerator DespawnForestGoon(CartelGoon goon, Vector3 origScale)
         {
             int maxWaitMins = 2;
             for (int i = 0; i < 60 * maxWaitMins; i++)
@@ -765,8 +748,9 @@ namespace CartelEnforcer
                 if (goon.Behaviour.activeBehaviour == null || goon.Behaviour.activeBehaviour != goon.Behaviour.CombatBehaviour) break;
             }
             yield return Wait30;
-            goon.NPCData.Health.MaxHealth = 100f;
-            goon.Health.Health = 100f;
+            goon.transform.localScale = origScale;
+            goon.Health.MaxHealth = 100f;
+            goon.Health.RestoreHealth();
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
             if (goon.IsGoonSpawned)

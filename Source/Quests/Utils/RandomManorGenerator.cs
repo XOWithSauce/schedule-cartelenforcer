@@ -1,4 +1,3 @@
-using MelonLoader;
 using System.Collections;
 using UnityEngine;
 
@@ -201,9 +200,9 @@ namespace CartelEnforcer
             {
                 if (activeManorQuest.QuestEntry_BreakIn.State == EQuestState.Active)
                 {
-                    coros.Add(MelonCoroutines.Start(LerpDoorRotation(doorContainer, activeManorQuest.QuestEntry_BreakIn.Complete, open, close)));
-                    coros.Add(MelonCoroutines.Start(DoorEnterAnimation(enterBuilding: true)));
-                    coros.Add(MelonCoroutines.Start(OnDoorFirstEntered()));
+                    ModCoroutines.Start(LerpDoorRotation(doorContainer, activeManorQuest.QuestEntry_BreakIn.Complete, open, close));
+                    ModCoroutines.Start(DoorEnterAnimation(enterBuilding: true));
+                    ModCoroutines.Start(OnDoorFirstEntered());
 
                     if (doorInteractedAction != null)
                     {
@@ -222,8 +221,8 @@ namespace CartelEnforcer
             {
                 if (activeManorQuest.QuestEntry_EscapeManor.State == EQuestState.Active || activeManorQuest.QuestEntry_SearchResidence.State == EQuestState.Active || activeManorQuest.QuestEntry_DefeatManorGoons.State == EQuestState.Active)
                 {
-                    coros.Add(MelonCoroutines.Start(LerpDoorRotation(doorContainer, null, open, close)));
-                    coros.Add(MelonCoroutines.Start(DoorEnterAnimation(enterBuilding: false)));
+                    ModCoroutines.Start(LerpDoorRotation(doorContainer, null, open, close));
+                    ModCoroutines.Start(DoorEnterAnimation(enterBuilding: false));
 
                     if (interiorDoorInteractedAction != null)
                     {
@@ -267,10 +266,10 @@ namespace CartelEnforcer
                 }
             }
 
-            onSafeBuilt = new Action(() => { coros.Add(MelonCoroutines.Start(PrepareSafe())); });
+            onSafeBuilt = new Action(() => { ModCoroutines.Start(PrepareSafe()); });
 
             Log("Base Setup rooms done, generating content");
-            coros.Add(MelonCoroutines.Start(GenerateRooms()));
+            ModCoroutines.Start(GenerateRooms());
 
             yield break;
         }
@@ -428,7 +427,7 @@ namespace CartelEnforcer
 
             // Start instantiating
             foreach (RoomDesignBase room in roomsGenerated)
-                coros.Add(MelonCoroutines.Start(room.SpawnDesign()));
+                ModCoroutines.Start(room.SpawnDesign());
 
             // Generate the downstair corridor which is always the same design, clock and a painting
             NetworkObject clock = UnityEngine.Object.Instantiate<NetworkObject>(buildablesMap["GrandfatherClock"]);
@@ -647,12 +646,8 @@ namespace CartelEnforcer
                 yield return Wait05;
                 if (!registered) yield break;
 
-                goon.NPCData.Health.MaxHealth = 100f;
-                goon.Health.Health = 100f;
-
-                goon.Behaviour.CombatBehaviour.GiveUpRange = activeManorQuest.GiveUpRange;
-                goon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = activeManorQuest.GiveUpAfterSuccessfulHits;
-                goon.Behaviour.CombatBehaviour.DefaultSearchTime = activeManorQuest.DefaultSearchTime;
+                goon.Health.MaxHealth = 100f;
+                goon.Health.RestoreHealth();
 
                 goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
                 goon.Behaviour.ScheduleManager.EnableSchedule();
@@ -1257,9 +1252,9 @@ namespace CartelEnforcer
 #endif
                 if (storable != null)
                 {
-                    if (storable.StoredItem != null)
+                    if (storable.StoredItemPrefab != null)
                     {
-                        GameObject template = storable.StoredItem.transform.Find("Gold bar").gameObject;
+                        GameObject template = storable.StoredItemPrefab.transform.Find("Gold bar").gameObject;
                         if (template != null)
                             goldBarTemplate = UnityEngine.Object.Instantiate(template);
                     }

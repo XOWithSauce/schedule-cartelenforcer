@@ -22,6 +22,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 * [Allied Extensions](#allied-extensions)
     * [Persuade Cartel Dealers](#persuade-cartel-dealers)
     * [Greet the Gathering Goons](#greet-the-gathering-goons)
+    * [Truced Cartel Laundering](#truced-cartel-laundering)
 * [Modifying Configs](#modifying-configs-and-spawns)
     * [Modifying Event Frequency](#modifying-event-frequency)
     * [Modifying Cartel Dealers](#modifying-cartel-dealers)
@@ -34,6 +35,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
     * [Modifying Cartel Stolen Customers](#modifying-cartel-stolen-customers)
     * [Modifying Influence Changing Events](#modifying-influence-changing-events)
     * [Modifying Allied Settings](#modifying-allied-settings)
+      * [Modifying Allied Quest Data](#modifying-allied-quest-data)
 * [Console Commands & Debug Mode](#console-commands-and-debug-mode)
 * [In Multiplayer](#in-multiplayer)
 
@@ -47,7 +49,7 @@ Cartel Enforcer adds new features and challenges to the Cartel, including new am
 - **Realistic Robberies:** Overhauled dealer robberies where a robber actually spawns to fight the dealer. Defend the dealer to reclaim stolen items and money, or chase down the escaping robber.
 - **Drive-By Events:** Experience drive-by attacks by Thomas in designated areas when the Cartel is hostile.
 - **Mini-Quests:** Take on missions from select NPCs to find Cartel dead drops and weaken their regional influence.
-- **End Game Quests:** 6 New Quests where you get to fight against the cartel when Hostile and collaborate when Truced!
+- **End Game Quests:** Adds New Quests where you get to fight against the cartel when Hostile and collaborate when Truced!
 - **Intercept Deals:** A new event where a Cartel Dealer attempts to intercept player deals and additionally sends Cartel Dealers to deal more often.
 - **Steal Back Customers:** While hostile with the Cartel your customers might be stolen back by the Cartel, requiring you to re-unlock them with free samples!
 - **Cartel Gatherings:** Group of 3 Cartel Goons will spawn during day time at random locations to gather and chill. Killing Cartel Dealers will make the gatherings hostile. Gatherings frequency and hostility is dynamic based on the amount of Cartel Dealers killed. Gatherings will only use unlocked regions and they unlock new locations with player progression.
@@ -336,6 +338,20 @@ After hiring a succesfully persuaded Cartel Dealer the regions Cartel Influence 
 While a Cartel Goon Gathering is active, greeting all 3 goons in a short timeframe will award the player with influence reduction in the respective region.
 
 - The influence reduction can be changed from `XO_WithSauce-CartelEnforcer/Influence/influence.json` by changing the `trucedGreetingChallenge` value
+
+---
+
+
+### Truced Cartel Laundering
+
+After choosing Truce and completing the [True Brothers](https://github.com/XOWithSauce/schedule-cartelenforcer/wiki/Mod-Quests#true-brothers) quest, you unlock the ability to launder up to $125000 weekly through the cartel.
+
+- Message Thomas to enable the event:
+  1. Buy a Veeper and fill the storage with Cash or Gold bars
+  2. Drive the Veeper to the Manor gate and leave it there overnight
+  3. Wait for the transaction to complete (3 ingame days by default)
+
+- Truced Cartel Laundering data is saved for each save in the `XO_WithSauce-CartelEnforcer/Allied/QuestData` folder at the key `"ManorLaunderingState"`
 
 ---
 
@@ -770,6 +786,43 @@ Note: Due to the way which the mod handles some of the influence changes, someti
 - **SupplyQuestCooldownHours**: Hours in-game that the player must wait until the Supply Quest can trigger again
     - Note: Must be an Integer without decimal point.
 
+#### Modifying Allied Quest Data
+1. Open `XO_WithSauce-CartelEnforcer/Allied/QuestData/(save slot)_(organisation name).json`.
+2. The Allied Extensions features and quests save their data in these files for each save.
+3. You can change the values here but read the descriptions first before tweaking so that you dont break anything.
+
+4. The file content changes based on the save state and progression with the truced cartel interactions, example:
+
+```json
+{
+  "alliedIntroCompleted": true,
+  "timesPersuaded": 0,
+  "hoursUntilNextSupplies": 0,
+  "daysPassedSinceEncounter": 0,
+  "ManorLaunderingState": {
+    "manorLaunderingUnlocked": true,
+    "manorWeeklyLaunderCap": 125000,
+    "daysUntilComplete": 0,
+    "totalLaunderValue": 16000
+  }
+}
+```
+
+- **alliedIntroCompleted**: When player completes the Allied Intro quest by hiring Westville cartel dealer this goes from `false` to `true`
+- **timesPersuaded**: How many times any Cartel Dealer has been persuaded while truced, increases the odds of succesful persuasion with successive attempts.
+  - Note: Must be above or equal to 0
+- **hoursUntilNextSupplies**: How many hours until the Allied Supplies quest starts again
+  - Note Must be above or equal to 0
+- **daysPassedSinceEncounter**: Days passed since the True Brothers quest pre-requirements were unlocked and a Cartel Goon has not spawned to invite player to the quest
+  - Note Must be above or equal to 0
+- **ManorLaunderingState**: Contains all the Manor Laundering related logic;
+  - **manorLaunderingUnlocked**: After completing True Brothers quest this will be set to true (default false)
+  - **manorWeeklyLaunderCap**: Amount of money that can be laundered through the cartel weekly (resets each monday to 125000)
+  - **daysUntilComplete**: Days until the active launder process will be finished
+    - Note: When at -1 it means there is NO launder process, at 0-3 there is a process active and decrements each day.
+  - **totalLaunderValue**: How much money in cash / gold bars player delivered in the van storage
+
+---
 
 ## Console Commands and Debug Mode
 
@@ -792,10 +845,12 @@ In debug mode, you can see various visual cues and use console commands to test 
     - `cartelenforcer start gathering`: Instantly spawn a Cartel Gathering at a random location
     - `cartelenforcer start sabotage`: Start a Sabotage Event at nearest supported business
     - `cartelenforcer start stealback`: Steal back the nearest customer to the player
+    - `cartelenforcer start manorlaunder`: (Truced) Start a manor launder process instantly from the nearest van at the manor gate
   - **QUESTS**
     - `cartelenforcer start alliedintro`: (Truced) Start the Allied Intro Quest
     - `cartelenforcer start alliedsupplies`: (Truced) Start the Allied Supplies Quest 
     - `cartelenforcer start truebrothers`: (Truced) Start the True Brothers Quest 
+    - `cartelenforcer start cartellogistics`: (Truced) Start the Cartel Logistics Quest 
     - `cartelenforcer start unexpectedalliances`: (Hostile) Start the Unexpected Alliances Quest
     - `cartelenforcer start infiltratemanor`: (Hostile) Start the Infiltrate Manor Quest
     - `cartelenforcer start fourwheels`: (Hostile) Start the Four Wheels Quest

@@ -84,6 +84,8 @@ namespace CartelEnforcer
 
         static readonly int fireTicks = 2;
 
+
+        // Note: when adding new ones remember to go to frequency overrides file to update sabotageCooldowns keys...
         public static void PopulateBombLocations()
         {
             foreach (Business business in Business.Businesses)
@@ -142,6 +144,27 @@ namespace CartelEnforcer
                         }
                     ));
                 }
+                else if (business.PropertyName == "Hyland Medical")
+                {
+                    locations.Add(new SabotageEventLocation(
+                        business,
+                        new Tuple<Vector3, Vector3>(
+                            new Vector3(105.75f, 1.25f, 64.25f), new Vector3(90f, 90f, 0f)
+                        ),
+                        new Tuple<Vector3, Vector3>(
+                            new Vector3(106f, 0.5f, 66.75f), new Vector3(0f, 0f, 0f)
+                        ),
+                        new List<Vector3>()
+                        {
+                            new Vector3(116.2f, 1f, 78.4f),
+                            new Vector3(110.1f, 0.4057f, 86.45f),
+                            new Vector3(97.4f, 1f, 68.6f)
+                        },
+                        // goon fails to pathfind if the destination is inside the buildable
+                        // part of the property, so this is nearest good position for it
+                        destinationOverride: new Vector3(105f, 0.84f, 63f)
+                    ));
+                }
                 else
                 {
                     continue;
@@ -198,9 +221,9 @@ namespace CartelEnforcer
 #else
             storable = bombInstance.TryCast<StorableItemInstance>();
 #endif
-            if (storable != null && storable.StoredItem != null)
+            if (storable != null && storable.StoredItemPrefab != null)
             {
-                bombGo = storable.StoredItem.gameObject;
+                bombGo = storable.StoredItemPrefab.gameObject;
             }
             Log($" bombGo is null {bombGo == null}");
             // Instantiate new Bomb object, preparing for int object
@@ -227,7 +250,7 @@ namespace CartelEnforcer
                     bombLight.color = Color.green;
                     bombCubeMat.color = Color.green;
                     bombDefused = true;
-                    coros.Add(MelonCoroutines.Start(DespawnBombSoon()));
+                    ModCoroutines.Start(DespawnBombSoon());
                 }
             }
             bombInteractable.onInteractStart.AddListener((UnityEngine.Events.UnityAction)OnBombInteract);
@@ -381,7 +404,7 @@ namespace CartelEnforcer
 
                 // pass
                 sabotageEventActive = true;
-                coros.Add(MelonCoroutines.Start(GoonPlantBomb(selected)));
+                ModCoroutines.Start(GoonPlantBomb(selected));
             }
         }
 
@@ -391,13 +414,17 @@ namespace CartelEnforcer
             Vector3 randomPoint = location.sabotagerSpawns[UnityEngine.Random.Range(0, location.sabotagerSpawns.Count)];
             CartelGoon goon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(randomPoint);
             sabotager = goon;
-            goon.Movement.WarpToNavMesh();
             Log($"Sabotager spawned at {goon.CenterPointTransform.position}");
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
             goon.Behaviour.ScheduleManager.DisableSchedule();
-            goon.Movement.SetDestination(location.bombLocation.Item1);
 
-            goon.Movement.MoveSpeedMultiplier = 1.3f;
+            if (location.alternateDestination != default)
+                goon.Movement.SetDestination(location.alternateDestination);
+            else
+                goon.Movement.SetDestination(location.bombLocation.Item1);
+
+            goon.Movement.SpeedController.AddSpeedControl("plant_bomb", 0.55f, 20);
+            Log("Added speed");
 
             float distanceToBombLoc = 50f;
             int n = 0;
@@ -412,7 +439,7 @@ namespace CartelEnforcer
                     Log("Goon killed while traverse");
                     EventEnded(location, influenceConfig.sabotageGoonKilled);
                     sabotageEventActive = false;
-                    coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
+                    ModCoroutines.Start(DespawnGoonSoon(goon));
                     yield break;
                 }
 
@@ -423,7 +450,7 @@ namespace CartelEnforcer
             {
                 Log("Failed traverse timeout");
                 sabotageEventActive = false;
-                coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
+                ModCoroutines.Start(DespawnGoonSoon(goon));
                 yield break;
             }
 
@@ -438,7 +465,7 @@ namespace CartelEnforcer
                 Log("Goon killed while planting");
                 EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
-                coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
+                ModCoroutines.Start(DespawnGoonSoon(goon));
                 yield break;
             }
 
@@ -451,7 +478,7 @@ namespace CartelEnforcer
                 Log("Goon killed while planting");
                 EventEnded(location, influenceConfig.sabotageGoonKilled);
                 sabotageEventActive = false;
-                coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
+                ModCoroutines.Start(DespawnGoonSoon(goon));
                 yield break;
             }
 
@@ -470,14 +497,12 @@ namespace CartelEnforcer
             if (!registered) yield break;
 
             goon.Avatar.Animation.SetCrouched(false);
-            // should walk back inside on its own, but doesnt on long render distances
+            // should walk back inside on its own
             goon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
             goon.Behaviour.ScheduleManager.EnableSchedule();
             Log($"Goon planted bomb now at pos: {goon.CenterPoint}");
 
-            goon.Movement.MoveSpeedMultiplier = 1.6f;
-
-            coros.Add(MelonCoroutines.Start(DespawnGoonSoon(goon)));
+            ModCoroutines.Start(DespawnGoonSoon(goon));
 
             yield return null;
         }
@@ -493,7 +518,7 @@ namespace CartelEnforcer
             intBomb.SetActive(true);
             bombInteractable.message = $"x {interactionsUntilDefuse} - Defuse bomb";
 
-            coros.Add(MelonCoroutines.Start(BombActivated(location)));
+            ModCoroutines.Start(BombActivated(location));
             return;
         }
 
@@ -567,7 +592,7 @@ namespace CartelEnforcer
                 yield break;
             }
 
-            coros.Add(MelonCoroutines.Start(ExplosionEvent(location)));
+            ModCoroutines.Start(ExplosionEvent(location));
 
             yield return null;
         }
@@ -769,8 +794,8 @@ namespace CartelEnforcer
             goon.Behaviour.ScheduleManager.EnableSchedule();
 
             goon.Despawn();
+            goon.Movement.SpeedController.RemoveSpeedControl("plant_bomb");
 
-            goon.Movement.MoveSpeedMultiplier = 1f;
             sabotager = null;
             yield return null;
         }
@@ -807,9 +832,11 @@ namespace CartelEnforcer
             public Tuple<Vector3, Vector3> bombLocation { get; private set; }
             public Tuple<Vector3, Vector3> fireLocation { get; private set; }
 
+            public Vector3 alternateDestination = default;
+
             public List<Vector3> sabotagerSpawns { get; private set; }
 
-            public SabotageEventLocation(Business business, Tuple<Vector3, Vector3> bombLocation, Tuple<Vector3, Vector3> fireLocation, List<Vector3> sabotagerSpawns)
+            public SabotageEventLocation(Business business, Tuple<Vector3, Vector3> bombLocation, Tuple<Vector3, Vector3> fireLocation, List<Vector3> sabotagerSpawns, Vector3 destinationOverride = default)
             {
                 this.business = business;
                 this.bombLocation = bombLocation;
@@ -826,6 +853,8 @@ namespace CartelEnforcer
                 int maxHrs = Mathf.RoundToInt(Mathf.Lerp(38f, 64f, allInfluenceNormalized));
                 */
                 this.hoursUntilEnabled = eventCooldowns.SabotageCooldowns.First(x => x.Key == business.PropertyName).Value;
+
+                this.alternateDestination = destinationOverride;
             }
 
             public void HourPass()
@@ -871,7 +900,7 @@ namespace CartelEnforcer
             }
             if (!inCollision.Contains(playerComp))
                 inCollision.Add(playerComp);
-            coros.Add(MelonCoroutines.Start(SabotageEvent.SetPlayerBurning(playerComp, other)));
+            ModCoroutines.Start(SabotageEvent.SetPlayerBurning(playerComp, other));
         }
 
         private void OnTriggerExit(Collider other)

@@ -1,8 +1,9 @@
 ﻿using System.Collections;
-using HarmonyLib;
-using MelonLoader;
-using UnityEngine;
 using System.Reflection;
+using UnityEngine;
+using UnityEngine.Events;
+using MelonLoader;
+using HarmonyLib;
 
 using static CartelEnforcer.AmbushOverrides;
 using static CartelEnforcer.CartelInventory;
@@ -33,6 +34,7 @@ using ScheduleOne.UI.MainMenu;
 using ScheduleOne.UI;
 using ScheduleOne.NPCs.Framework;
 using ScheduleOne.Dialogue;
+using ScheduleOne.NPCs.Other;
 using FishNet.Managing;
 using FishNet.Object;
 #else
@@ -45,6 +47,7 @@ using Il2CppScheduleOne.UI.MainMenu;
 using Il2CppScheduleOne.UI;
 using Il2CppScheduleOne.NPCs.Framework;
 using Il2CppScheduleOne.Dialogue;
+using Il2CppScheduleOne.NPCs.Other;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Object;
 using Il2Cpp;
@@ -71,7 +74,7 @@ namespace CartelEnforcer
         public const string Description = "Cartel - Modded and configurable";
         public const string Author = "XOWithSauce";
         public const string Company = null;
-        public const string Version = "2.0.0";
+        public const string Version = "2.1.0";
         public const string DownloadLink = null;
     }
 
@@ -82,7 +85,6 @@ namespace CartelEnforcer
         public static ModConfig currentConfig;
         public static InfluenceConfig influenceConfig;
         public static CurrentEventCooldowns eventCooldowns;
-        public static List<object> coros = new();
         public static bool registered = false;
         private bool firstTimeLoad = false;
         public static bool isSaving = false;
@@ -207,7 +209,7 @@ namespace CartelEnforcer
             if (registered) return;
             registered = true;
 
-            coros.Add(MelonCoroutines.Start(Setup()));
+            MelonCoroutines.Start(Setup());
             return;
         }
 
@@ -235,11 +237,11 @@ namespace CartelEnforcer
             PopulateBombLocations();
             PrepareBombFXObjects();
 
-            coros.Add(MelonCoroutines.Start(FetchUIElementsInit()));
+            ModCoroutines.Start(FetchUIElementsInit());
 
-            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateDriveBy()));
+            ModCoroutines.Start(InitializeAndEvaluateDriveBy());
 
-            coros.Add(MelonCoroutines.Start(InitializeAmbush()));
+            ModCoroutines.Start(InitializeAmbush());
 
             InitFrequencyOverrides();
 
@@ -249,45 +251,45 @@ namespace CartelEnforcer
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassReduceCartelRegActHours;
 #endif
 
-            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateMiniQuest()));
+            ModCoroutines.Start(InitializeAndEvaluateMiniQuest());
 
-            coros.Add(MelonCoroutines.Start(EvaluateCartelIntercepts()));
+            ModCoroutines.Start(EvaluateCartelIntercepts());
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onHourPass += HourPassInterceptCooldown;
 #else
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)HourPassInterceptCooldown;
 #endif
 
-            coros.Add(MelonCoroutines.Start(InitializeEndGameQuest()));
+            ModCoroutines.Start(InitializeEndGameQuest());
 
-            coros.Add(MelonCoroutines.Start(EvaluateDealerState()));
+            ModCoroutines.Start(EvaluateDealerState());
 
-            coros.Add(MelonCoroutines.Start(SetupAlliedExtension()));
+            ModCoroutines.Start(SetupAlliedExtension());
 
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTryGather;
 #else
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTryGather;
 #endif
-            coros.Add(MelonCoroutines.Start(InitializeAndEvaluateSabotage()));
+            ModCoroutines.Start(InitializeAndEvaluateSabotage());
 
 #if MONO
-            NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnDayPassTrySteal;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += OnDayPassTrySteal;
 #else
-            NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnDayPassTrySteal;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += (Il2CppSystem.Action)OnDayPassTrySteal;
 #endif
 
             if (currentConfig.debugMode)
             {
-                coros.Add(MelonCoroutines.Start(GodMode()));
-                MelonCoroutines.Start(MakeUI());
+                ModCoroutines.Start(GodMode());
+                ModCoroutines.Start(MakeUI());
             }
 
             // needed for true brothers quest only
             if (currentConfig.endGameQuest && currentConfig.alliedExtensions)
-                coros.Add(MelonCoroutines.Start(ReplicateCopNPC()));
+                ModCoroutines.Start(ReplicateCopNPC());
 
-            coros.Add(MelonCoroutines.Start(ExtendGoonPool()));
+            ModCoroutines.Start(ExtendGoonPool());
 
             yield break;
         }
@@ -315,7 +317,7 @@ namespace CartelEnforcer
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)ReduceDriveByHours;
 #endif
 
-            coros.Add(MelonCoroutines.Start(EvaluateDriveBy()));
+            ModCoroutines.Start(EvaluateDriveBy());
             if (currentConfig.debugMode)
                 yield return MelonCoroutines.Start(SpawnDriveByAreaVisual());
             yield break;
@@ -342,7 +344,7 @@ namespace CartelEnforcer
 #else
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)SabotageEvent.ReduceSabotageHours;
 #endif
-            coros.Add(MelonCoroutines.Start(EvaluateBombEvent()));
+            ModCoroutines.Start(EvaluateBombEvent());
 
             yield break;
         }
@@ -352,13 +354,13 @@ namespace CartelEnforcer
             yield return Wait10;
             if (!registered) yield break;
 
-            yield return InitMiniQuest();
+            yield return MelonCoroutines.Start(InitMiniQuest());
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onDayPass += OnDayPassNewDiag;
 #else
             NetworkSingleton<TimeManager>.Instance.onDayPass += (Il2CppSystem.Action)OnDayPassNewDiag;
 #endif
-            coros.Add(MelonCoroutines.Start(EvaluateMiniQuestCreation()));
+            ModCoroutines.Start(EvaluateMiniQuestCreation());
 
             yield break;
         }
@@ -410,9 +412,23 @@ namespace CartelEnforcer
                 }
                 clone.transform.position = Vector3.zero;
                 clone.transform.rotation = Quaternion.identity;
-
+                clone.transform.parent = goon._defaultParent;
+                npc._defaultParent = goon._defaultParent;
                 clone.name = $"CartelGoon ({i})";
                 yield return MelonCoroutines.Start(InitiateClone(newNob, netManager, templateData));
+
+                // the cartel goons have mixamorig hips rb component setup for some reason
+                // and then in create ragdoll function if that happens there is null ref so it bugs
+                // tthe function assumes no rigidbody on the hips transform
+                Transform hipsTr = npc.Avatar._ragdollRoot;
+                if (hipsTr.gameObject.TryGetComponent<Rigidbody>(out Rigidbody rb))
+                {
+                    // constant force class has it required so remove that first?
+                    ConstantForce force = hipsTr.gameObject.GetComponent<ConstantForce>();
+                    if (force != null)
+                        UnityEngine.Object.Destroy(force);
+                    UnityEngine.Object.Destroy(rb);
+                }
 
                 Log("Spawn");
                 netManager.ServerManager.Spawn(newNob);
@@ -432,7 +448,7 @@ namespace CartelEnforcer
                     else
                         controller.Choices.Clear();
                 }
-                    
+                clone.gameObject.SetActive(true);
 
                 clones.Add(newGoonComp);
 
@@ -479,6 +495,19 @@ namespace CartelEnforcer
             {
                 Log($"Failed to extend goon pool array:{ex}");
             }
+
+            foreach (CartelGoon listedGoon in NetworkSingleton<Cartel>.Instance.GoonPool.goons)
+            {
+                // Partially fixes the logic with non-daypass despawn-respawn cycle for pooling the goons
+                // so that more than 10 can spawn a day with revive function
+                UnityAction action = (UnityAction)listedGoon.Despawn;
+                listedGoon.Health.onRevive.RemoveListener(action);
+
+                // umbrella seems to overlap in alot of cases where the goon is spawned
+                // e.g. equips umbrella + wep... note: doesnt seem to always work why
+                listedGoon.HasUmbrella = false;
+            }
+
             yield break;
         }
 
@@ -489,13 +518,7 @@ namespace CartelEnforcer
         {
             //MelonLogger.Msg("Pre-Exit Task");
             registered = false;
-            foreach (object coro in coros)
-            {
-                if (coro != null)
-                    MelonCoroutines.Stop(coro);
-            }
-
-            coros.Clear();
+            ModCoroutines.StopAll();
             // Now mostly just the different mod related lists that got populated in init, reset and clear to repopulate everything on new load
             driveByLocations.Clear();
             regActivityHours.Clear();
@@ -531,7 +554,7 @@ namespace CartelEnforcer
             isSaving = false;
 
             // Now the created states and any boolean flags for events
-            // QUests
+            // hostile QUests
             activeDefeatEnforcerQuest = null;
             defeatEnforcerCompleted = false;
             activeManorQuest = null;
@@ -556,6 +579,13 @@ namespace CartelEnforcer
             activeTrueBrothersQuest = null;
             trueBrothersCompleted = false;
             encounterActive = false;
+
+            activeCartelLogisticsQuest = null;
+            cartelLogisticsCompleted = false;
+            dealerRequestResponded = false;
+            cartelDealerMessageSent = false;
+
+            ManorLaunder.ResetManorLaunder();
 
             // quest npcs
             fixer = null;
@@ -698,52 +728,78 @@ namespace CartelEnforcer
 
         Then because the StayInside behaviour forces the cartel goons to navigate to 
         the nearest valid building but the the cartel goon starts attempting to go inside
-        constantly invoking despawn.
+        constantly invoking despawn...
          */
-         
-        [HarmonyPatch(typeof(CartelGoon), "Spawn")]
-        public static class CartelGoon_Spawn_Patch
+
+        // HarmonyPatch fails to target CartelGoon.Spawn in Il2Cpp backend in newer versions (works in mono tho)
+        // so patch the main spawn function instead to run as a prefixer that doesnt return (so identical + the prev prefix)
+        [HarmonyPatch(typeof(GoonPool), nameof(GoonPool.SpawnGoon))]
+        public static class GoonPool_SpawnGoon_Patch
         {
-            [HarmonyPostfix]
-            public static void Postfix(CartelGoon __instance)
+            [HarmonyPrefix]
+            public static bool Prefix(GoonPool __instance, Vector3 spawnPoint, ref CartelGoon __result)
             {
-                coros.Add(MelonCoroutines.Start(AfterSpawnEvaluate(__instance)));
-                return;
-            }
+                // Identical to game source
+                if (__instance.unspawnedGoons.Count == 0)
+                {
+                    //Log("No unspawned goons available to spawn.");
+                    return false;
+                }
+                CartelGoon cartelGoon = __instance.unspawnedGoons[0];
+                __instance.unspawnedGoons.RemoveAt(0);
+                __instance.spawnedGoons.Add(cartelGoon);
 
-            public static IEnumerator AfterSpawnEvaluate(CartelGoon __instance)
-            {
-                yield return Wait01;
-                if (!registered) yield break;
+                // here is the previously CartelGoon.Spawn prefix part that doesnt work
+                // in il2cpp anymore so this patch works both mono and il2cpp
+                //Log($"SPAWN GOON: {cartelGoon.gameObject.name}");
+                if (cartelGoon.Avatar.Ragdolled)
+                {
+                    //Log("Ragdolled pre spawn reset");
+                    cartelGoon.Avatar.DisableRagdoll();
+                }
 
-                if (!__instance.IsGoonSpawned)
-                    __instance.IsGoonSpawned = true;
+                if (cartelGoon.Movement._agent.isStopped)
+                {
+                    //Log("Resume movement");
+                    cartelGoon.Movement._agent.isStopped = false;
+                }
 
-                if (NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Contains(__instance))
-                    NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Remove(__instance);
+                if (cartelGoon.Health.IsDead)
+                {
+                    //Log("REVIVE");
+                    cartelGoon.Health.Revive();
+                }
 
-                if (!NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(__instance))
-                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Add(__instance);
+                UseUmbrella umbrellaAct = cartelGoon.transform.Find("Aux/UseUmbrella")?.GetComponent<UseUmbrella>();
+                if (umbrellaAct != null && umbrellaAct._equippedItemHandler != null)
+                {
+                    umbrellaAct._equippedItemHandler.Unequipped();
+                }
 
-                if (__instance.Movement.IsPaused)
-                    __instance.Movement.ResumeMovement();
+                if (!cartelGoon.Awareness.IsAwarenessActive)
+                {
+                    cartelGoon.Awareness.SetAwarenessActive(true);
+                }
 
-                if (!__instance.Movement.Agent.enabled)
-                    __instance.Movement.Agent.enabled = true;
+                cartelGoon.Behaviour.ScheduleManager.EnableSchedule();
 
-                if (!__instance.isVisible)
-                    __instance.SetVisible(true, false);
 
-                if (!__instance.Awareness.enabled)
-                    __instance.Awareness.SetAwarenessActive(true);
+                Transform hipsTr = cartelGoon.Avatar._ragdollRoot;
+                if (hipsTr.gameObject.TryGetComponent<Rigidbody>(out Rigidbody rb))
+                {
+                    //Log($"npc has rigidbody component in _ragdoll root removing it!");
+                    // constant force class has it required so remove that first?
+                    ConstantForce force = hipsTr.gameObject.GetComponent<ConstantForce>();
+                    if (force != null)
+                        UnityEngine.Object.Destroy(force);
+                    UnityEngine.Object.Destroy(rb);
+                }
 
-                if (__instance.goonMates.Count > 0)
-                    __instance.goonMates.Clear();
-
-                if (!__instance.gameObject.activeSelf)
-                    __instance.gameObject.SetActive(true);
-
-                yield break;
+                // then spawn as intended
+                cartelGoon.Spawn(__instance, spawnPoint);
+                //Log("FINISHED SPAWN");
+                __result = cartelGoon;
+                return false;
             }
         }
 
@@ -753,44 +809,39 @@ namespace CartelEnforcer
             [HarmonyPostfix]
             public static void Postfix(CartelGoon __instance)
             {
-                coros.Add(MelonCoroutines.Start(AfterDespawnEvaluate(__instance)));
+                //Log($"Despawn : {__instance.gameObject.name}");
+                // Upon (non daypass) respawn goon will retain target + state
+                if (__instance.Behaviour.CombatBehaviour.Enabled)
+                {
+                    //Log("Reset combat");
+                    // should revert to follow schedule if its enabled in stack
+                    __instance.Behaviour.CombatBehaviour.Disable_Networked(null);
+                }
+
+                // Remain stationary while despawned?
+                if (!__instance.Movement._agent.isStopped)
+                {
+                    //Log("Set move stopped");
+                    __instance.Movement._agent.isStopped = true;
+                }
+
+                // Set inactive because they might target player otherwise invis
+                if (__instance.Awareness.IsAwarenessActive)
+                {
+                    //Log("Disable awareness");
+                    __instance.Awareness.SetAwarenessActive(false);
+                }
+
+                // Because if cartel goons despawn at a door they will automatically
+                // attempt to enter the door while inactive causing them to invoke despawn
+                // constantly for no reason
+                __instance.Behaviour.ScheduleManager.DisableSchedule();
+
                 return;
             }
-
-            public static IEnumerator AfterDespawnEvaluate(CartelGoon __instance)
-            {
-                yield return Wait01;
-                if (!registered) yield break;
-
-                if (__instance.IsGoonSpawned)
-                    __instance.IsGoonSpawned = false;
-
-                if (NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Contains(__instance))
-                    NetworkSingleton<Cartel>.Instance.GoonPool.spawnedGoons.Remove(__instance);
-
-                if (!NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Contains(__instance))
-                    NetworkSingleton<Cartel>.Instance.GoonPool.unspawnedGoons.Add(__instance);
-
-                if (!__instance.Movement.IsPaused)
-                    __instance.Movement.PauseMovement();
-
-                if (__instance.Movement.Agent.enabled)
-                    __instance.Movement.Agent.enabled = false;
-
-                if (__instance.isVisible)
-                    __instance.SetVisible(false, false);
-
-                if (__instance.Awareness.enabled)
-                    __instance.Awareness.SetAwarenessActive(false);
-
-                if (__instance.goonMates.Count > 0)
-                    __instance.goonMates.Clear();
-
-                yield break;
-            }
         }
-        #endregion
 
+        #endregion
 
 
     }

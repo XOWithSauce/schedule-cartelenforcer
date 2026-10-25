@@ -1,9 +1,9 @@
 using System.Collections;
 using MelonLoader;
-using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.AI;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -11,6 +11,8 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.NPCInitHelper;
 
 #if MONO
+using ScheduleOne.Core.Avatar;
+using ScheduleOne.Core.Avatar.Properties;
 using ScheduleOne.PlayerScripts;
 using ScheduleOne.Combat;
 using ScheduleOne.Interaction;
@@ -33,13 +35,13 @@ using ScheduleOne.Vehicles.AI;
 using ScheduleOne.Dialogue;
 using ScheduleOne.VoiceOver;
 using ScheduleOne.AvatarFramework.Equipping;
-using ScheduleOne.AvatarFramework;
-using static ScheduleOne.AvatarFramework.AvatarSettings;
 using FishNet;
 using FishNet.Managing;
 using FishNet.Managing.Object;
 using FishNet.Object;
 #else
+using Il2CppScheduleOne.Core.Avatar;
+using Il2CppScheduleOne.Core.Avatar.Properties;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.Interaction;
@@ -62,8 +64,6 @@ using Il2CppScheduleOne.Vehicles.AI;
 using Il2CppScheduleOne.Dialogue;
 using Il2CppScheduleOne.VoiceOver;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
-using Il2CppScheduleOne.AvatarFramework;
-using static Il2CppScheduleOne.AvatarFramework.AvatarSettings;
 using Il2CppFishNet;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
@@ -92,6 +92,9 @@ namespace CartelEnforcer
         public Quest_TrueBrothers() : base(ClassInjector.DerivedConstructorPointer<Quest_TrueBrothers>())
             => ClassInjector.DerivedConstructorBody(this);
 
+        public new string title;
+        public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
         public readonly List<Vector3> pileBasePos = new()
         {
@@ -111,7 +114,7 @@ namespace CartelEnforcer
         public static readonly Vector3 followDestination = new Vector3(-32.68f, -2.54f, 168.73f);
 
         public CartelGoon startGoon; // must be spawned before quest setup and assigned
-        public static readonly float startGoonMoveSpeed = 0.40f;
+        public static readonly float startGoonMoveSpeed = 0.75f;
         public List<CartelGoon> alliedGoons = new(); // 3 - 4
 
         public List<PoliceOfficer> ambushCops = new(); // waves of cops
@@ -121,6 +124,7 @@ namespace CartelEnforcer
         public StorageEntity destinationStorage = null;
         public LandVehicle spawnedVehicle = null;
 
+        public InteractableObject palletInteractable = null;
         // Each interactable press retracts from top of piles
         // Track the piles instantiated objects in order
         public List<List<GameObject>> spawnedBrickPiles = new();
@@ -202,15 +206,15 @@ namespace CartelEnforcer
 
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-                var action = (Action)OnMinPass;
 
                 if (instance == null) return;
 #if MONO
-                instance.onMinutePass.Remove(action);
+                instance.onMinutePass -= this.OnMinPass;
 #else
+                Action action = (Action)OnMinPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
-                coros.Add(MelonCoroutines.Start(CleanupTrueBrothersQuest()));
+                ModCoroutines.Start(CleanupTrueBrothersQuest());
                 Log("Quest_TrueBrothers: Base End method finished successfully.");
             }
             catch (Exception ex)
@@ -226,7 +230,7 @@ namespace CartelEnforcer
 
         public void SetupSelf()
         {
-            _helper.InitializeQuest("Allied Supplies", xp: 1500);
+            _helper.InitializeQuest("True Brothers", xp: 1500);
 
             _followGoonAction = (UnityAction)OnFollowGoonComplete;
             _helper.InitializeQuestEntry(ref QuestEntry_FollowGoon,
@@ -247,25 +251,29 @@ namespace CartelEnforcer
                 title: "Defeat the police ambush",
                 new PoIConfig(false, false, false));
 
-            TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-
-            var action = OnMinPass;
-#if MONO
-            instance.onMinutePass.Add(new Action(action));
-#else
-            instance.onMinutePass += (Il2CppSystem.Action)action;
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
 #endif
 
+            TimeManager instance = NetworkSingleton<TimeManager>.Instance;
+
+#if MONO
+            instance.onMinutePass += this.OnMinPass;
+#else
+            Action action = (Action)OnMinPass;
+            instance.onMinutePass += (Il2CppSystem.Action)action;
+#endif
             _helper.StartQuestFromEntry(QuestEntry_FollowGoon);
 
             // Player must not get arrested during quest
             Player.Local.onArrested += (Action)OnPlayerArrested;
 
             // Start spawning immediate
-            coros.Add(MelonCoroutines.Start(_helper.SpawnCarMeetup()));
+            ModCoroutines.Start(_helper.SpawnCarMeetup());
         }
         public override void OnMinPass()
         {
+            Log("Minpass");
             if (!registered || SaveManager.Instance.IsSaving || trueBrothersCompleted || this.State != EQuestState.Active) return;
 
             if (!InstanceFinder.IsServer)
@@ -288,6 +296,8 @@ namespace CartelEnforcer
 
             if (preCompleteQueued) return;
 
+            Log("Pass precheck");
+
             // When time passes 4am OR when player sleeps while quest is active fail
             if (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 359 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 701)
             {
@@ -296,25 +306,31 @@ namespace CartelEnforcer
             }
 
             // Update follow poi location pos and check proximity to target
-            if (QuestEntry_FollowGoon != null && startGoon != null && QuestEntry_FollowGoon.State == EQuestState.Active)
+            if (QuestEntry_FollowGoon != null && QuestEntry_FollowGoon.State == EQuestState.Active)
             {
+                Log("Follow goon entry");
+                if (startGoon == null)
+                {
+                    Log("Start goon is null return");
+                    return;
+                }
                 // If the goon dies or goes into combat, fail quest
                 if (startGoon.Health.IsDead || startGoon.Health.IsKnockedOut || (startGoon.Behaviour.activeBehaviour != null && startGoon.Behaviour.activeBehaviour == startGoon.Behaviour.CombatBehaviour))
                 {
                     Fail();
                 }
 
+                Log("Set poi");
                 QuestEntry_FollowGoon.PoILocation.transform.position = startGoon.transform.position;
-                if (Vector3.Distance(Player.Local.CenterPointTransform.position, followDestination) < 5f)
+                Log($"{Vector3.Distance(Player.Local.CenterPointTransform.position, followDestination)}");
+                if (Vector3.Distance(Player.Local.CenterPointTransform.position, followDestination) < 7f)
                 {
                     QuestEntry_FollowGoon.Complete();
                     return;
                 }
 
-                if (!startGoon.Movement.HasDestination)
+                if (!startGoon.Movement._hasDestination)
                     startGoon.Movement.SetDestination(followDestination);
-                if (startGoon.Movement.IsPaused)
-                    startGoon.Movement.ResumeMovement();
             }
 
             if (QuestEntry_MoveCocaine != null && QuestEntry_MoveCocaine.State == EQuestState.Active)
@@ -340,7 +356,7 @@ namespace CartelEnforcer
 
                         foreach (CartelGoon goon in alliedGoons)
                         {
-                            goon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.75f));
+                            goon.Movement.SpeedController.AddSpeedControl("combat", 0.75f, 5);
                             goon.AttackEntity(combatTargetable);
                         }
                     }
@@ -349,7 +365,7 @@ namespace CartelEnforcer
 
             if (QuestEntry_PoliceAmbush != null && QuestEntry_PoliceAmbush.State == EQuestState.Active)
             {
-
+                Log("Ambush minpass");
                 // Ensure cops target cartel + player
                 List<int> currentAliveIndices = new();
 
@@ -422,14 +438,15 @@ namespace CartelEnforcer
                             goon.Behaviour.CombatBehaviour.Enable_Networked();
                     }
                 }
-
+                Log("Eval pursuit state");
                 if (Player.Local.CrimeData.CurrentPursuitLevel == PlayerCrimeData.EPursuitLevel.None && ambushDefeated)
                 {
+                    Log("Ambush defeat checked");
                     if (!preCompleteQueued)
                     {
                         Log("Queue Pre Complete");
                         preCompleteQueued = true;
-                        coros.Add(MelonCoroutines.Start(_helper.PreComplete()));
+                        ModCoroutines.Start(_helper.PreComplete());
                         return;
                     }
                 }
@@ -446,16 +463,14 @@ namespace CartelEnforcer
             if (QuestEntry_FollowGoon != null && QuestEntry_FollowGoon.State == EQuestState.Failed) return;
             if (QuestEntry_MoveCocaine == null) return;
 
+            palletInteractable.SetInteractableState(InteractableObject.EInteractableState.Default);
             QuestEntry_MoveCocaine.Begin();
-            if (QuestEntry_MoveCocaine != null)
+            if (QuestEntry_MoveCocaine.compassElement != null)
+                QuestEntry_MoveCocaine.compassElement.Visible = false;
+            else
             {
-                if (QuestEntry_MoveCocaine.compassElement != null)
-                    QuestEntry_MoveCocaine.compassElement.Visible = false;
-                else
-                {
-                    QuestEntry_MoveCocaine.CreateCompassElement();
-                    QuestEntry_MoveCocaine.compassElement.Visible = false;
-                }
+                QuestEntry_MoveCocaine.CreateCompassElement();
+                QuestEntry_MoveCocaine.compassElement.Visible = false;
             }
 
             if (_followGoonAction != null)
@@ -470,15 +485,12 @@ namespace CartelEnforcer
             if (QuestEntry_PoliceAmbush == null) return;
 
             QuestEntry_PoliceAmbush.Begin();
-            if (QuestEntry_PoliceAmbush != null)
+            if (QuestEntry_PoliceAmbush.compassElement != null)
+                QuestEntry_PoliceAmbush.compassElement.Visible = false;
+            else
             {
-                if (QuestEntry_PoliceAmbush.compassElement != null)
-                    QuestEntry_PoliceAmbush.compassElement.Visible = false;
-                else
-                {
-                    QuestEntry_PoliceAmbush.CreateCompassElement();
-                    QuestEntry_PoliceAmbush.compassElement.Visible = false;
-                }
+                QuestEntry_PoliceAmbush.CreateCompassElement();
+                QuestEntry_PoliceAmbush.compassElement.Visible = false;
             }
 
             if (QuestEntry_MoveCocaine != null)
@@ -487,7 +499,7 @@ namespace CartelEnforcer
                 _moveCocaineAction = null;
             }
 
-            coros.Add(MelonCoroutines.Start(_helper.SpawnPoliceAmbush()));
+            ModCoroutines.Start(_helper.SpawnPoliceAmbush());
         }
         public void OnPlayerArrested()
         {
@@ -514,30 +526,31 @@ namespace CartelEnforcer
 
         public static List<string> randomFaceLayers = new()
         {
-            "Avatar/Layers/Face/Face_SmugPout",
-            "Avatar/Layers/Face/Face_SlightSmile",
-            "Avatar/Layers/Face/Face_Neutral",
-            "Avatar/Layers/Face/Face_NeutralPout",
+            "smugpout",
+            "slightsmile",
+            "neutralface",
+            "openmouthsmile",
+            "slightfrown",
         };
 
         public static List<string> randomMaleHairLayers = new()
         {
-            "Avatar/Hair/Balding/Balding",
-            "Avatar/Hair/BuzzCut/BuzzCut",
-            "Avatar/Hair/Peaked/Peaked",
-            "Avatar/Hair/DoubleTopKnot/DoubleTopKnot",
+            "balding",
+            "buzzcut",
         };
 
         public static List<string> randomFacialHairLayers = new()
         {
-            "Avatar/Layers/Face/FacialHair_Swirl",
-            "Avatar/Layers/Face/FacialHair_Goatee"
+            "beardbushy",
+            "beardfull",
+            "goatee",
+            "swirlymustache",
         };
         public static List<string> randomFemaleHairLayers = new()
         {
-            "Avatar/Hair/MidFringe/MidFringe",
-            "Avatar/Hair/LowBun/LowBun",
-            "Avatar/Hair/DoubleTopKnot/DoubleTopKnot"
+            "midfringe",
+            "lowbun",
+            "doubletopknot"
         };
 
         public static List<Color> randomHairColors = new()
@@ -554,102 +567,95 @@ namespace CartelEnforcer
         public void SetRandomOfficerAvatar(PoliceOfficer offc)
         {
             Log("Start random");
-            AvatarSettings newSettings = ScriptableObject.CreateInstance<AvatarSettings>();
 
-            var originalAccessorySettings = offc.Avatar.CurrentSettings.AccessorySettings;
-            var originalBodySettings = offc.Avatar.CurrentSettings.BodyLayerSettings;
-
-#if MONO
-            List<LayerSetting> faceSettings = SetRandomLook(newSettings);
-
-            newSettings.AccessorySettings = new(originalAccessorySettings);
-            newSettings.BodyLayerSettings = new(originalBodySettings);
-#else
-            Il2CppSystem.Collections.Generic.List<LayerSetting> faceSettings = SetRandomLook(newSettings);
-
-            newSettings.AccessorySettings = new();
-            for (int i = 0; i < originalAccessorySettings.Count; i++)
-                newSettings.AccessorySettings.Add(originalAccessorySettings[i]);
-
-            newSettings.BodyLayerSettings = new();
-            for (int i = 0; i < originalBodySettings.Count; i++)
-                newSettings.BodyLayerSettings.Add(originalBodySettings[i]);
-#endif
-            newSettings.FaceLayerSettings = faceSettings;
+            NakedAppearance nakedAppearance = offc.Avatar.Appearance.AppliedNakedAppearance.Clone();
+            SetRandomLook(ref nakedAppearance);
             Log("Load settings");
-            offc.Avatar.LoadAvatarSettings(newSettings);
+            offc.Avatar.Appearance.ApplyNakedAppearance(nakedAppearance);
         }
-#if MONO
-        public static List<LayerSetting> SetRandomLook(AvatarSettings newSettings)
-#else
-        public static Il2CppSystem.Collections.Generic.List<LayerSetting> SetRandomLook(AvatarSettings newSettings)
-#endif
+
+        /*
+         Does cause following error??
+        NullReferenceException: Object reference not set to an instance of an object
+        at ScheduleOne.Core.Avatar.AttachmentColorApplicator.Start () 0x11
+         */
+        public static void SetRandomLook(ref NakedAppearance original)
         {
             Log("Set random look");
-#if MONO
-            List<LayerSetting> faceSettings = new();
-            for (int i = 0; i < 6; i++) faceSettings.Add(new LayerSetting() { layerPath = "", layerTint = Color.white });
+            List<SerializedAvatarObject> createdObjects = new();
 
-#else
-            var faceSettings = new Il2CppSystem.Collections.Generic.List<LayerSetting>();
-            for (int i = 0; i < 6; i++) faceSettings.Add(new LayerSetting() { layerPath = "", layerTint = Color.white });
-#endif
+            SerializedColorProperty[] face0Properties = new SerializedColorProperty[1];
+            face0Properties[0] = new SerializedColorProperty("MainColor", new Color(0f, 0f, 0f, 1f));
+            SerializedAvatarObject face0 = new(randomFaceLayers[UnityEngine.Random.Range(0, randomFaceLayers.Count)], face0Properties);
+            createdObjects.Add(face0);
 
-            var face0 = faceSettings[0];
-            face0.layerPath = randomFaceLayers[UnityEngine.Random.Range(0, randomFaceLayers.Count)];
-            face0.layerTint = new Color(0f, 0f, 0f, 1f);
-            faceSettings[0] = face0;
+            original.Gender = UnityEngine.Random.Range(0f, 1f);
 
-            newSettings.Gender = UnityEngine.Random.Range(0f, 1f);
-
-            if (UnityEngine.Random.Range(0f, 1f) > 0.6f && newSettings.Gender < 0.5f)
+            if (UnityEngine.Random.Range(0f, 1f) > 0.6f && original.Gender < 0.5f)
             {
-                var face1 = faceSettings[1];
-                face1.layerPath = randomFacialHairLayers[UnityEngine.Random.Range(0, randomFacialHairLayers.Count)];
-                face1.layerTint = new Color(0f, 0f, 0f, 1f);
-                faceSettings[1] = face1;
+                SerializedColorProperty[] face1Properties = new SerializedColorProperty[1];
+                face1Properties[0] = new SerializedColorProperty("MainColor", new Color(0f, 0f, 0f, 1f));
+                SerializedAvatarObject face1 = new(randomFacialHairLayers[UnityEngine.Random.Range(0, randomFacialHairLayers.Count)], face1Properties);
+                createdObjects.Add(face1);
             }
 
-            var face3 = faceSettings[3];
-            face3.layerPath = "Avatar/Layers/Face/EyeShadow";
-            face3.layerTint = new Color(0f, 0f, 0f, 0.96f);
-            faceSettings[3] = face3;
+            SerializedColorProperty[] face2Properties = new SerializedColorProperty[1];
+            face2Properties[0] = new SerializedColorProperty("MainColor", new Color(0f, 0f, 0f, 0.8223f));
+            SerializedAvatarObject face2 = new("eyeshadow", face2Properties);
+            createdObjects.Add(face2);
 
             if (UnityEngine.Random.Range(0f, 1f) > 0.3f)
             {
-                var face4 = faceSettings[4];
-                string faceLayerPath = "";
+                string faceLayerID = "";
+                Color faceLayerColor;
                 if (UnityEngine.Random.Range(0f, 1f) > 0.5f)
-                    faceLayerPath = "Avatar/Layers/Face/OldPersonWrinkles";
+                {
+                    faceLayerID = "oldpersonwrinkles";
+                    faceLayerColor = new(0f, 0f, 0f, 1f);
+                }
                 else
-                    faceLayerPath = "Avatar/Layers/Face/Freckles";
-                face4.layerPath = faceLayerPath;
-                face4.layerTint = new Color(0f, 0f, 0f, 0.55f);
-                faceSettings[4] = face4;
+                {
+                    faceLayerID = "freckles";
+                    faceLayerColor = new(1f, 1f, 1f, 1f);
+                }
+                SerializedColorProperty[] face3Properties = new SerializedColorProperty[1];
+                face3Properties[0] = new SerializedColorProperty("MainColor", faceLayerColor);
+                SerializedAvatarObject face3 = new(faceLayerID, face3Properties);
+                createdObjects.Add(face3);
             }
 
-            newSettings.UseCombinedLayer = false;
+            original.HairColor = randomHairColors[UnityEngine.Random.Range(0, randomHairColors.Count)];
 
-            newSettings.EyebrowScale = UnityEngine.Random.Range(1f, 1.1f);
-            newSettings.EyebrowThickness = UnityEngine.Random.Range(1f, 1.4f);
-            newSettings.EyebrowRestingHeight = UnityEngine.Random.Range(-1f, -1.40f);
-            newSettings.EyeBallTint = new Color(1f, 1f, 1f);
-            newSettings.EyeballMaterialIdentifier = "Default";
-            newSettings.Height = UnityEngine.Random.Range(0.96f, 1f);
-            newSettings.HairColor = randomHairColors[UnityEngine.Random.Range(0, randomHairColors.Count)];
-            if (newSettings.Gender < 0.5f)
-                newSettings.HairPath = randomMaleHairLayers[UnityEngine.Random.Range(0, randomMaleHairLayers.Count)];
+            float scale = UnityEngine.Random.Range(1f, 1.1f);
+            float thickness = UnityEngine.Random.Range(1f, 1.4f);
+            float restHeight = UnityEngine.Random.Range(-1f, -1.40f);
+            EyebrowSettings eyebrowSetting = new(scale, thickness, restHeight, 0f, original.HairColor);
+
+            string hairID = "";
+            if (original.Gender < 0.5f)
+                hairID = randomMaleHairLayers[UnityEngine.Random.Range(0, randomMaleHairLayers.Count)];
             else
-                newSettings.HairPath = randomFemaleHairLayers[UnityEngine.Random.Range(0, randomFemaleHairLayers.Count)];
-            newSettings.Weight = UnityEngine.Random.Range(0.3f, 0.7f);
-            newSettings.PupilDilation = 0.55f;
-            newSettings.RightEyeLidColor = new Color(0.4118f, 0.3216f, 0.2471f);
-            newSettings.LeftEyeLidColor = new Color(0.4118f, 0.3216f, 0.2471f);
-            newSettings.RightEyeRestingState = new Eye.EyeLidConfiguration() { bottomLidOpen = 0.2719f, topLidOpen = 0.4313f };
-            newSettings.LeftEyeRestingState = new Eye.EyeLidConfiguration() { bottomLidOpen = 0.2719f, topLidOpen = 0.4313f };
-            newSettings.SkinColor = skinColors[UnityEngine.Random.Range(0, skinColors.Count)];
+                hairID = randomFemaleHairLayers[UnityEngine.Random.Range(0, randomFemaleHairLayers.Count)];
+            SerializedColorProperty[] hairProperties = new SerializedColorProperty[1];
+            hairProperties[0] = new SerializedColorProperty("MainColor", original.HairColor);
+            SerializedAvatarObject hair = new(hairID, hairProperties);
+            createdObjects.Add(hair);
+
+            original.Height = UnityEngine.Random.Range(1.6f, 1.8f);
+            original.Weight = UnityEngine.Random.Range(0.3f, 0.7f);
+
+            original.RightEyebrowSettings = eyebrowSetting;
+            original.LeftEyebrowSettings = eyebrowSetting;
+            original.RightEyelidSettings = EyelidSettings.Default;
+            original.LeftEyelidSettings = EyelidSettings.Default;
+            original.RightEyeSettings = EyeSettings.Default;
+            original.LeftEyeSettings = EyeSettings.Default;
+
+            original.SkinColor = skinColors[UnityEngine.Random.Range(0, skinColors.Count)];
+            original.AvatarObjects = createdObjects.ToArray();  
+
             Log("Ret face settings");
-            return faceSettings;
+            return;
         }
         #endregion
     }
@@ -719,7 +725,7 @@ namespace CartelEnforcer
                 else
                     Log("Brick definition is null");
 
-                if (product.StoredItem != null && product.StoredItem is FilledPackaging_StoredItem storedItemInst)
+                if (product.StoredItemPrefab != null && product.StoredItemPrefab is FilledPackaging_StoredItem storedItemInst)
                 {
                     Log("Parsing Brick");
                     GameObject brickOriginal = storedItemInst.Visuals.CocaineVisuals.VisualsContainer.gameObject;
@@ -746,9 +752,9 @@ namespace CartelEnforcer
                 else
                     Log("Brick definition is null");
 
-                if (product.StoredItem != null)
+                if (product.StoredItemPrefab != null)
                 {
-                    FilledPackaging_StoredItem storedItemInst = product.StoredItem.TryCast<FilledPackaging_StoredItem>();
+                    FilledPackaging_StoredItem storedItemInst = product.StoredItemPrefab.TryCast<FilledPackaging_StoredItem>();
                     if (storedItemInst != null)
                     {
                         Log("Parsing Brick");
@@ -798,7 +804,6 @@ namespace CartelEnforcer
 
             boxSuv2.transform.parent = Map.Instance.transform;
             boxSuv2.gameObject.SetActive(true);
-            //boxSuv2.transform.SetPositionAndRotation(new Vector3(-20.2015f, -3.9164f, 167.2993f), Quaternion.Euler(2.5122f, 79.6851f, 359.3438f));
             yield return Wait05;
             if (!registered || _quest.State != EQuestState.Active) yield break;
 
@@ -823,11 +828,11 @@ namespace CartelEnforcer
             BoxCollider bc = colliderObj.AddComponent<BoxCollider>();
             bc.size = new Vector3(0.5f, 2f, 0.5f);
 
-            InteractableObject palletInteractable = pallet.AddComponent<InteractableObject>();
+            _quest.palletInteractable = pallet.AddComponent<InteractableObject>();
 
-            palletInteractable.message = "Pick Up";
-            palletInteractable.displayLocationCollider = bc;
-
+            _quest.palletInteractable.message = "Pick Up";
+            _quest.palletInteractable.displayLocationCollider = bc;
+            _quest.palletInteractable.SetInteractableState(InteractableObject.EInteractableState.Disabled);
             void OnPalletInteracted()
             {
                 // Check inventory has space
@@ -870,10 +875,11 @@ namespace CartelEnforcer
                 // remove interactable
                 if (_quest.spawnedBrickPiles.Count == 0)
                 {
-                    UnityEngine.Object.Destroy(palletInteractable);
+                    UnityEngine.Object.Destroy(_quest.palletInteractable);
+                    _quest.palletInteractable = null;
                 }
             }
-            palletInteractable.onInteractStart.AddListener((UnityEngine.Events.UnityAction)OnPalletInteracted);
+            _quest.palletInteractable.onInteractStart.AddListener((UnityEngine.Events.UnityAction)OnPalletInteracted);
 
             // spawn bricks into tr pallet
             for (int i = 0; i < _quest.pileBasePos.Count; i++)
@@ -1014,9 +1020,10 @@ namespace CartelEnforcer
 
         public IEnumerator InstantiateAmbushNPCs()
         {
+            yield return Wait01;
             for (int i = 0; i < 3; i++)
             {
-                Log("Spawn1");
+                Log($"Spawn {i}");
                 NetworkManager netManager = UnityEngine.Object.FindObjectOfType<NetworkManager>(true);
 
                 GameObject copNet = UnityEngine.Object.Instantiate<GameObject>(copBaseClone);
@@ -1025,6 +1032,7 @@ namespace CartelEnforcer
                 offc.AutoDeactivate = false; // Prevent from returning to station and from being added to officer pool
 
                 copNet.name = $"RuntimeOfficer_{i}";
+                Log("Init clone");
                 yield return MelonCoroutines.Start(InitiateClone(newNob, netManager));
 
                 NPC myNpc = copNet.gameObject.GetComponent<NPC>();
@@ -1032,7 +1040,6 @@ namespace CartelEnforcer
                 myNpc.NPCData.BasicInfo.FirstName = "Officer";
                 myNpc.NPCData.BasicInfo.LastName = "";
                 myNpc.NPCData.Inventory.CanBePickpocketed = false;
-                myNpc.transform.parent = NPCManager.Instance.NPCContainer;
 
                 if (!NPCManager.NPCRegistry.Contains(myNpc))
                     NPCManager.NPCRegistry.Add(myNpc);
@@ -1045,20 +1052,98 @@ namespace CartelEnforcer
                 DialogueController controller = offc.DialogueHandler.GetComponent<DialogueController>();
                 controller.Choices.Clear();
 
-                copNet.transform.Find("Avatar").gameObject.SetActive(true);
+                myNpc.Avatar.SetVisible(true);
+                myNpc.Avatar.gameObject.SetActive(true);
                 copNet.GetComponent<NavMeshAgent>().enabled = true;
 
                 Log("Reset avatar");
                 _quest.SetRandomOfficerAvatar(offc);
 
+                string beltId = string.Empty;
+                if (offc.PoliceBelt != null)
+                {
+                    beltId = offc.PoliceBelt._id;
+                    Log($"Baton assinged in belt: {offc.PoliceBelt.BatonObject != null}");
+                    Log($"taser assinged in belt: {offc.PoliceBelt.TaserObject != null}");
+                    Log($"gun assinged in belt: {offc.PoliceBelt.GunObject != null}");
+                }
+                else
+                {
+                    Log("Police belt is unassigned pre spawn!");
+                }
+                // Aftter cloning this way the avatar retains prev look in the objects container but doesnt track them in the field
+                // so these need to be removed after clone manually
+                // but avoid removing belt
+                /*
+                Does cause following error??
+                NullReferenceException: Object reference not set to an instance of an object
+                at ScheduleOne.Core.Avatar.AttachmentColorApplicator.Start ()
+                */
+
+
+                Log($"Removing unassigned avatar objects count: {offc.Avatar.Appearance._avatarObjectsContainer.transform.childCount}");
+                Transform target = offc.Avatar.Appearance._avatarObjectsContainer.transform;
+                List<AvatarObject> destroyable = new();
+                for (int j = offc.Avatar.Appearance._avatarObjectsContainer.transform.childCount - 1; j >= 0; j--)
+                {
+                    Transform avatarObjectTr = target.GetChild(j);
+                    if (avatarObjectTr)
+                    {
+                        AvatarObject comp = avatarObjectTr.gameObject.GetComponent<AvatarObject>();
+
+                        if (beltId != string.Empty && comp._id == beltId)
+                            continue; // to avoid null refs, probably causes a duped belt though
+
+                        if (comp != null && !offc.Avatar.Appearance._appliedObjects.Contains(comp))
+                            destroyable.Add(comp);
+                    }
+                }
+                foreach (AvatarObject avObj in destroyable)
+                {
+                    avObj.Destroy();
+                }
+
+                Transform hipsTr = offc.Avatar._ragdollRoot;
+                if (hipsTr.gameObject.TryGetComponent<Rigidbody>(out Rigidbody rb))
+                {
+                    Log("Removing ragdoll rigidbody component pre spawn");
+                    // constant force class has it required so remove that first?
+                    ConstantForce force = hipsTr.gameObject.GetComponent<ConstantForce>();
+                    if (force != null)
+                        UnityEngine.Object.Destroy(force);
+                    UnityEngine.Object.Destroy(rb);
+                }
+
+                offc.HasUmbrella = false;
                 offc.PursuitBehaviour.arrestingEnabled = false;
                 offc.Behaviour.ScheduleManager.DisableSchedule();
-                offc.Movement.PauseMovement();
 
                 offc.Movement.Warp(_quest.ambushCopSpawnPositions[i]);
                 offc.Awareness.VisionCone.WorldspaceIconsEnabled = false;
-                offc.Awareness.SetAwarenessActive(false);
+                offc.SetIgnorePlayers(true);
                 _quest.ambushCops.Add(offc);
+
+                yield return Wait01;
+                if (offc.Avatar._impostor != null && offc.Avatar._impostor.isActiveAndEnabled)
+                    offc.Avatar._impostor.Disable();
+
+                if (!offc.Avatar.Animation.animationEnabled)
+                    offc.Avatar.Animation.SetAnimationEnabled(true); // or play standup anim?
+
+                yield return Wait01;
+                offc.Avatar.Animation.PlayStandUpAnimation();
+
+                if (offc.PoliceBelt != null)
+                {
+                    Log($"Baton assinged in belt: {offc.PoliceBelt.BatonObject != null}");
+                    Log($"taser assinged in belt: {offc.PoliceBelt.TaserObject != null}");
+                    Log($"gun assinged in belt: {offc.PoliceBelt.GunObject != null}");
+                }
+                else
+                {
+                    Log("Officer Belt is NULL after spawn!");
+                }
+
                 Log("Done spawning");
             }
 
@@ -1080,7 +1165,7 @@ namespace CartelEnforcer
 
             // 1 copp shoots at player and allied goon shoots at that same cop
             _quest.ambushCops[2].Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
-            _quest.ambushCops[2].Awareness.SetAwarenessActive(true);
+            _quest.ambushCops[2].SetIgnorePlayers(false);
 
             _quest.alliedGoons[2].Behaviour.CombatBehaviour.SetTarget(_quest.ambushCops[2].GetComponent<ICombatTargetable>().NetworkObject);
 
@@ -1103,16 +1188,14 @@ namespace CartelEnforcer
                         if (_quest.currentAmbushWave == 1)
                         {
                             _quest.currentAmbushWave++;
-                            coros.Add(MelonCoroutines.Start(SpawnSecondWave()));
+                            ModCoroutines.Start(SpawnSecondWave());
                         }
                     }
                 }
                 OnCopDiedAction = (UnityEngine.Events.UnityAction)OnCopDied;
                 offc.Health.onDieOrKnockedOut.AddListener(OnCopDiedAction);
 
-                offc.Movement.ResumeMovement();
                 offc.Movement.SetDestination(Quest_TrueBrothers.followDestination);
-
 
                 offc.Behaviour.CombatBehaviour.Enable_Networked();
             }
@@ -1161,7 +1244,6 @@ namespace CartelEnforcer
 
                 }
                 // start combat
-                goon.Movement.ResumeMovement();
                 goon.Behaviour.CombatBehaviour.Enable_Networked();
             }
 
@@ -1244,7 +1326,7 @@ namespace CartelEnforcer
                 Log("Navigation complete");
             }
 
-            policeVehicle.Agent.Flags.OverriddenSpeed = 70f;
+            policeVehicle.Agent.Flags.OverriddenSpeed = 40f;
             policeVehicle.Agent.Flags.OverrideSpeed = true;
 
             // Navigate from spawn position to target
@@ -1257,16 +1339,18 @@ namespace CartelEnforcer
 
             // Wait for arrived to position and exit cops
             // OR Wait until travel timeout (incase car navigation fails or gets blocked)
-            int maxNavigationTime = 20;
+            // OR Wait until nearby player
+            int maxNavigationTime = 30;
             int currentNavigationTime = 0;
+            float distFromPlayer = 100f;
             for (; ; )
             {
                 yield return Wait1;
                 if (!registered) yield break;
 
                 currentNavigationTime++;
-
-                if (currentNavigationTime >= maxNavigationTime)
+                distFromPlayer = Vector3.Distance(Player.Local.transform.position, policeVehicle.transform.position);
+                if (currentNavigationTime >= maxNavigationTime || distFromPlayer < 8f)
                 {
                     if (policeVehicle.Agent.storedNavigationCallback != null)
                         policeVehicle.Agent.storedNavigationCallback = null;
@@ -1288,8 +1372,8 @@ namespace CartelEnforcer
                 if (!registered) yield break;
 
                 offc.ExitVehicle();
-                // All cops attack the player
-                offc.Awareness.SetAwarenessActive(true);
+                // All cops can attack the player
+                offc.SetIgnorePlayers(false);
                 offc.Behaviour.CombatBehaviour.SetTarget(Player.Local.GetComponent<ICombatTargetable>().NetworkObject);
                 offc.Behaviour.CombatBehaviour.Enable_Networked();
                 offc.Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
@@ -1325,7 +1409,17 @@ namespace CartelEnforcer
             // Goons attack cops
             for (int i = 0; i < _quest.alliedGoons.Count; i++)
             {
-                _quest.alliedGoons[i].Behaviour.CombatBehaviour.SetTarget(_quest.ambushCops[i].GetComponent<ICombatTargetable>().NetworkObject);
+                if (!_quest.alliedGoons[i].Health.IsDead)
+                {
+                    // because they seem to drop weapons occasionally
+                    _quest.alliedGoons[i].Behaviour.CombatBehaviour.SetWeapon("Avatar/Equippables/M1911");
+
+                    _quest.alliedGoons[i].Behaviour.CombatBehaviour.SetTarget(_quest.ambushCops[i].GetComponent<ICombatTargetable>().NetworkObject);
+
+                    // because sometimes they just stand afk at first for a long time
+                    if (_quest.alliedGoons[i].Behaviour.activeBehaviour != _quest.alliedGoons[i].Behaviour.CombatBehaviour)
+                        _quest.alliedGoons[i].Behaviour.CombatBehaviour.Enable_Networked();
+                }
             }
 
             Log("End of 2nd wave");
@@ -1351,7 +1445,7 @@ namespace CartelEnforcer
             // If the main goon is not dead after ambush, thank the player and complete mission on continue button
             if (!_quest.startGoon.Health.IsDead && !_quest.startGoon.Health.IsKnockedOut && _quest.startGoon.IsConscious)
             {
-                _quest.startGoon.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, Quest_TrueBrothers.startGoonMoveSpeed));
+                _quest.startGoon.Movement.SpeedController.AddSpeedControl("combat", Quest_TrueBrothers.startGoonMoveSpeed, 5);
 
                 // If the start goon is alive then it has now enabled schedule prevent that to traverse to player instead and after reset
                 _quest.startGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
@@ -1361,7 +1455,7 @@ namespace CartelEnforcer
 
                 DialogueController.GreetingOverride greeting = new();
                 greeting.ShouldShow = true;
-                string gender = Player.Local.Avatar.IsMale() ? "brother" : "sister";
+                string gender = Player.Local.Avatar.Appearance.Gender == EGender.Male ? "brother" : "sister";
                 greeting.Greeting = $"Thanks for your help! You're our true {gender}!";
                 greeting.VOType = EVOLineType.None;
                 greeting.PlayVO = true;
@@ -1418,7 +1512,7 @@ namespace CartelEnforcer
                     {
                         _quest.startGoon.Movement.EndSetDestination(NPCMovement.WalkResult.Success);
                         _quest.startGoon.Movement.FacePoint(Player.Local.CenterPointTransform.position);
-                        _quest.startGoon.Movement.PauseMovement();
+                        _quest.startGoon.Movement.Stop();
                         controller.StartGenericDialogue(false);
                         playerConversated = true;
                         Log("Start Conversate");
@@ -1442,12 +1536,10 @@ namespace CartelEnforcer
                     else
                     {
                         Log("Traverse to player");
-                        if (!_quest.startGoon.Movement.HasDestination)
+                        if (!_quest.startGoon.Movement._hasDestination)
                         {
                             _quest.startGoon.Movement.SetDestination(Player.Local.CenterPointTransform);
                         }
-                        if (_quest.startGoon.Movement.IsPaused)
-                            _quest.startGoon.Movement.ResumeMovement();
                     }
                 }
 

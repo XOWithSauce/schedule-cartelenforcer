@@ -1,5 +1,4 @@
 using System.Collections;
-using MelonLoader;
 using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
@@ -115,7 +114,7 @@ namespace CartelEnforcer
         public static void OnHourPassTryGather()
         {
             if (!currentConfig.cartelGatherings) return;
-            coros.Add(MelonCoroutines.Start(TryStartGathering()));
+            ModCoroutines.Start(TryStartGathering());
         }
         public static IEnumerator TryStartGathering()
         {
@@ -231,12 +230,20 @@ namespace CartelEnforcer
             }
 
             combatStartedAction = (UnityEngine.Events.UnityAction)CombatStarted;
-                
+
+            // needs wait here for consistency because schedule seems to enable later in spawn than
+            // what this runs at
+            yield return Wait01;
+            List<Vector3> spawnPositions = new List<Vector3>() { spawnPos1, spawnPos2, spawnPos3 };
 
             for (int i = 0; i < spawnedGatherGoons.Count; i++)
             {
                 spawnedGatherGoons[i].Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
                 spawnedGatherGoons[i].Behaviour.ScheduleManager.DisableSchedule();
+
+                // if schedule wasnt consistently disabled then position might have moved
+                // set back to pos and rotate towards center
+                spawnedGatherGoons[i].Movement.Warp(spawnPositions[i]);
                 spawnedGatherGoons[i].Movement.FacePoint(location.position);
 
                 spawnedGatherGoons[i].Behaviour.CombatBehaviour.onBegin.AddListener(combatStartedAction);
@@ -244,8 +251,8 @@ namespace CartelEnforcer
                 if (DealerActivity.currentDealerActivity < 0f)
                 {
                     // increase hp
-                    spawnedGatherGoons[i].NPCData.Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
-                    spawnedGatherGoons[i].Health.Health = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
+                    spawnedGatherGoons[i].Health.MaxHealth = Mathf.Lerp(100f, 250f, -DealerActivity.currentDealerActivity);
+                    spawnedGatherGoons[i].Health.RestoreHealth();
                 }
             }
             // Fill random attendant inv slot with stolen item
@@ -318,8 +325,8 @@ namespace CartelEnforcer
             }
 
             Log("Gathering Spawned at: " + location.position.ToString());
-            
-            coros.Add(MelonCoroutines.Start(EvaluateCurrentGathering(location)));
+
+            ModCoroutines.Start(EvaluateCurrentGathering(location));
 
             yield break;
         }
@@ -360,7 +367,7 @@ namespace CartelEnforcer
                 float sum = 0f;
                 foreach (DialogueController ctr in controllers)
                 {
-                    sum += (Time.time - ctr.lastGreetingTime);
+                    sum += (Time.time - ctr._lastGreetingTime);
                 }
                 return sum;
             }
@@ -582,7 +589,7 @@ namespace CartelEnforcer
             }
 
             bool gatheringDefeated = (dead == 3 && elapsed < 180);
-            coros.Add(MelonCoroutines.Start(EndGatherEvent(gatheringDefeated, location)));
+            ModCoroutines.Start(EndGatherEvent(gatheringDefeated, location));
 
             yield return null;
         }
@@ -620,7 +627,7 @@ namespace CartelEnforcer
             {
                 yield return Wait05;
                 if (!registered) yield break;
-                goon.NPCData.Health.MaxHealth = 100f;
+                goon.Health.MaxHealth = 100f;
                 if (goon.IsGoonSpawned)
                     goon.Despawn();
             }

@@ -1,5 +1,6 @@
 using MelonLoader;
 using System.Reflection;
+
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 
@@ -17,7 +18,7 @@ namespace CartelEnforcer
             modConfigCategory.CreateEntry(
                 "debugMode", currentConfig.debugMode,
                 display_name: "Debug Mode Enabled",
-                description: "Enable keybinds & display visual cues"
+                description: "Enable debug features & display visual cues"
             );
 
             modConfigCategory.CreateEntry(

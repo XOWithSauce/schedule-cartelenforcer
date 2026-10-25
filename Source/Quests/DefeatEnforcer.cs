@@ -1,7 +1,7 @@
 using System.Collections;
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
+using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -9,7 +9,6 @@ using static CartelEnforcer.EndGameQuest;
 
 #if MONO
 using ScheduleOne.PlayerScripts;
-using static ScheduleOne.AvatarFramework.AvatarSettings;
 using ScheduleOne.Combat;
 using ScheduleOne.AvatarFramework.Equipping;
 using ScheduleOne.Cartel;
@@ -19,10 +18,13 @@ using ScheduleOne.DevUtilities;
 using ScheduleOne.NPCs.Other;
 using ScheduleOne.Levelling;
 using ScheduleOne.Persistence;
+using ScheduleOne.Messaging;
+using ScheduleOne.Core.Avatar;
+using ScheduleOne.Core.Avatar.Properties;
 using FishNet;
 #else
+using static CartelEnforcer.Il2CppCollections.Il2CppCollectionsHelper;
 using Il2CppScheduleOne.PlayerScripts;
-using static Il2CppScheduleOne.AvatarFramework.AvatarSettings;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
 using Il2CppScheduleOne.Cartel;
@@ -31,6 +33,9 @@ using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.DevUtilities;
 using Il2CppScheduleOne.Levelling;
 using Il2CppScheduleOne.Persistence;
+using Il2CppScheduleOne.Messaging;
+using Il2CppScheduleOne.Core.Avatar;
+using Il2CppScheduleOne.Core.Avatar.Properties;
 using Il2CppFishNet;
 using Il2CppScheduleOne.NPCs.Other;
 using Il2CppInterop.Runtime.Injection;
@@ -38,6 +43,7 @@ using Il2CppInterop.Runtime.Injection;
 
 namespace CartelEnforcer
 {
+
 #if IL2CPP
     [RegisterTypeInIl2Cpp]
 #endif
@@ -58,6 +64,9 @@ namespace CartelEnforcer
         public Quest_DefeatEnforcer() : base(ClassInjector.DerivedConstructorPointer<Quest_DefeatEnforcer>())
             => ClassInjector.DerivedConstructorBody(this);
 
+        public new string title;
+        public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
         public bool bossHasSpawned = false;
         public bool bossCombatBegun = false;
@@ -149,12 +158,11 @@ namespace CartelEnforcer
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
 
-                var action = (Action)OnMinPass;
-
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
-                instance.onMinutePass.Remove(action);
+                instance.onMinutePass -= this.OnMinPass;
 #else
+                var action = (Action)OnMinPass;
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
@@ -188,7 +196,7 @@ namespace CartelEnforcer
             _investigateAction = (UnityAction)OnInvestigateComplete;
             _helper.InitializeQuestEntry(ref QuestEntry_Investigate,
                 name: "Investigate",
-                title: "• Intercept Cartel Dead Drops (0/2)\nOR\n• Defeat Cartel Gatherings (0/1)",
+                title: "â€¢ Intercept Cartel Dead Drops (0/2)\nOR\nâ€¢ Defeat Cartel Gatherings (0/1)",
                 new PoIConfig(false, false, false),
                 _investigateAction);
 
@@ -204,12 +212,16 @@ namespace CartelEnforcer
                 title: "Defeat the Cartel Brute",
                 new PoIConfig(true, false, false, poiPosition: bossSelectedPosition));
 
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
+#endif
+
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
-            var action = (Action)OnMinPass;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
-            instance.onMinutePass.Add(action);
+            instance.onMinutePass += this.OnMinPass;
 #else
+            var action = (Action)OnMinPass;
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
@@ -231,19 +243,19 @@ namespace CartelEnforcer
             switch (mannyMessagesSent)
             {
                 case 0:
-                    fixer.SendTextMessage("One of the cartel brutes is hiding out in the woods. I sent you the location.");
+                    fixer.MSGConversation.SendMessage(new(_text:"One of the cartel brutes is hiding out in the woods. I sent you the location.", _type: Message.ESenderType.Other));
                     break;
 
                 case 1:
-                    fixer.SendTextMessage("Hurry up! Go take down the Benzies thug. They will leave the area soon.");
+                    fixer.MSGConversation.SendMessage(new(_text:"Hurry up! Go take down the Benzies thug. They will leave the area soon.", _type: Message.ESenderType.Other));
                     break;
 
                 case 2:
-                    fixer.SendTextMessage("I marked the location on your map. Head there and take the down their brute.");
+                    fixer.MSGConversation.SendMessage(new(_text:"I marked the location on your map. Head there and take the down their brute.", _type: Message.ESenderType.Other));
                     break;
 
                 case 3:
-                    fixer.SendTextMessage("Nevermind. I guess you were not the right person for the job.");
+                    fixer.MSGConversation.SendMessage(new(_text:"Nevermind. I guess you were not the right person for the job.", _type: Message.ESenderType.Other));
                     break;
             }
             mannyMessagesSent++;
@@ -262,7 +274,7 @@ namespace CartelEnforcer
             if (QuestEntry_Investigate != null && QuestEntry_Investigate.State == EQuestState.Active)
             {
                 if (QuestEntry_Investigate != null && QuestEntry_Investigate.entryUI != null && this.hudUIExists)
-                    QuestEntry_Investigate.SetEntryTitle($"• Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\n• Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
+                    QuestEntry_Investigate.SetEntryTitle($"â€¢ Intercept Cartel Dead Drops ({StageDeadDropsObserved}/2)\nOR\nâ€¢ Defeat Cartel Gatherings ({StageGatheringsDefeated}/1)");
 
                 if (StageDeadDropsObserved >= 2 || StageGatheringsDefeated >= 1)
                     QuestEntry_Investigate.Complete();
@@ -271,7 +283,7 @@ namespace CartelEnforcer
             }
             if (QuestEntry_WaitForContact != null && QuestEntry_WaitForContact.State == EQuestState.Active)
             {
-                if (fixer != null && fixer.MSGConversation != null && fixer.MSGConversation.isOpen && mannyMessagesSent > 0)
+                if (fixer != null && fixer.MSGConversation != null && fixer.MSGConversation.IsOpen && mannyMessagesSent > 0)
                 {
                     mannyMessageRead = true;
                     QuestEntry_WaitForContact.Complete();
@@ -307,7 +319,7 @@ namespace CartelEnforcer
                     if (dist < 40f)
                     {
                         isBossSpawning = true;
-                        coros.Add(MelonCoroutines.Start(_helper.RunBossSpawn()));
+                        ModCoroutines.Start(_helper.RunBossSpawn());
                         return;
                     }
                 }
@@ -341,13 +353,13 @@ namespace CartelEnforcer
 
                             if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null || bossGoon.Behaviour.CombatBehaviour.IsCurrentWeaponMelee())
                             {
-                                coros.Add(MelonCoroutines.Start(_helper.EquipBossWeapon()));
+                                ModCoroutines.Start(_helper.EquipBossWeapon());
                             }
 
                             if (bossGoon.Health.Health < 230f || fightElapsed > 40)
                             {
                                 rageStageStarted = true;
-                                coros.Add(MelonCoroutines.Start(_helper.RunRageStage()));
+                                ModCoroutines.Start(_helper.RunRageStage());
                             }
                         }
 
@@ -432,7 +444,7 @@ namespace CartelEnforcer
         public void OnBossDied()
         {
             defeatEnforcerCompleted = true;
-            coros.Add(MelonCoroutines.Start(QuestReward(bossGoon)));
+            ModCoroutines.Start(QuestReward(bossGoon));
             Complete();
 
             if (bossDiedAction != null)
@@ -456,8 +468,8 @@ namespace CartelEnforcer
                 }
 
                 // Reset all non default stats that would carry on modified
-                bossGoon.NPCData.Health.MaxHealth = 100f;
-                bossGoon.Movement.MoveSpeedMultiplier = 1f;
+                bossGoon.Health.MaxHealth = 100f;
+                bossGoon.Movement.SpeedController.RemoveSpeedControl("boss_goon");
 
                 bossGoon.Behaviour.ScheduleManager.EnableSchedule();
                 bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);
@@ -495,102 +507,73 @@ namespace CartelEnforcer
                 }
             }
 
-            CartelGoon _bossGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
-            _quest.QuestEntry_DefeatBoss.PoILocation.transform.SetParent(_bossGoon.transform);
+            bossGoon = NetworkSingleton<Cartel>.Instance.GoonPool.SpawnGoon(spawnPos);
+            _quest.QuestEntry_DefeatBoss.PoILocation.transform.SetParent(bossGoon.transform);
             _quest.QuestEntry_DefeatBoss.PoILocation.transform.localPosition = Vector3.zero;
 
-            _bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
-            _bossGoon.Behaviour.ScheduleManager.DisableSchedule();
-            bossGoon = _bossGoon;
+            bossGoon.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(false);
+            bossGoon.Behaviour.ScheduleManager.DisableSchedule();
 
-            /*
-            if (_bossGoon.Health.IsDead || _bossGoon.Health.IsKnockedOut)
-                _bossGoon.Health.Revive();
-            yield return Wait05;
-            if (!registered) yield break;
-            // because for some reason the avatar goes off and same with nav
-            if (_bossGoon.isInBuilding)
-            {
-                Log("Exit Building!!");
-                _bossGoon.ExitBuilding();
-            }
-            if (!_bossGoon.Avatar.gameObject.activeSelf) _bossGoon.Avatar.gameObject.SetActive(true);
-            if (_bossGoon.Movement.Agent != null && _bossGoon.Movement.Agent.enabled == false) _bossGoon.Movement.Agent.enabled = true;
+            bossGoon.Health.MaxHealth = Mathf.Round(Mathf.Lerp(500f, 1000f, _quest.questDifficultyScalar - 1f) / 10f) * 10f;
+            bossGoon.Health.RestoreHealth();
+            bossGoon.Movement.SpeedController.AddSpeedControl("boss_goon", 0.20f, 5);
 
-
-            yield return Wait05;
-            if (!registered) yield break;
-             */
-
-            _bossGoon.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(500f, 1000f, _quest.questDifficultyScalar - 1f) / 10f) * 10f;
-            _bossGoon.Health.Health = Mathf.Round(Mathf.Lerp(500f, 1000f, _quest.questDifficultyScalar - 1f) / 10f) * 10f;
-            _bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
-
-            coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+            ModCoroutines.Start(EquipBossWeapon());
 
             #region Avatar
-
-            var originalAccessorySettings = _bossGoon.Avatar.CurrentSettings.AccessorySettings;
+            // Serialize current worn objects
 #if MONO
-            List<AccessorySetting> accessorySettings = new();
+            List<SerializedAvatarObject> wornObjects = new();
 #else
-            Il2CppSystem.Collections.Generic.List<AccessorySetting> accessorySettings = new();
+            Il2CppSystem.Collections.Generic.List<SerializedAvatarObject> wornObjects = new();
 #endif
-            foreach (var acc in originalAccessorySettings)
+            foreach (AvatarObject orig in bossGoon.Avatar.Appearance._wornObjects)
+                wornObjects.Add(orig.Serialize());
+
+            // Add Vest, Goldchain, polex if any missing
+            if (!wornObjects.Any(x => x.Id == "tacticalvest"))
             {
-                accessorySettings.Add(new AccessorySetting
-                {
-                    path = acc.path,
-                    color = acc.color
-                });
+                SerializedColorProperty[] vestProperties = new SerializedColorProperty[1];
+                vestProperties[0] = new SerializedColorProperty("MainColor", new Color(0.1f, 0.5f, 0.1f));
+                SerializedAvatarObject vest = new("tacticalvest", vestProperties);
+                wornObjects.Add(vest);
             }
-            for (int i = 0; i < accessorySettings.Count; i++)
+            if (!wornObjects.Any(x => x.Id == "chain"))
             {
-                var acc = accessorySettings[i];
-                acc.path = "";
-                acc.color = Color.white;
-                accessorySettings[i] = acc;
+                SerializedColorProperty[] chainProperties = new SerializedColorProperty[1];
+                chainProperties[0] = new SerializedColorProperty("MainColor", new Color(1f, 0.756f, 0.2123f));
+                SerializedAvatarObject chain = new("chain", chainProperties);
+                wornObjects.Add(chain);
+            }
+            if (!wornObjects.Any(x => x.Id == "polex"))
+            {
+                SerializedColorProperty[] polexProperties = new SerializedColorProperty[1];
+                polexProperties[0] = new SerializedColorProperty("MainColor", new Color(0.96f, 0.79f, 0.23f));
+                SerializedAvatarObject polex = new("polex", polexProperties);
+                wornObjects.Add(polex);
             }
 
-            var vest = accessorySettings[0];
-            vest.path = "Avatar/Accessories/Chest/BulletproofVest/BulletproofVest";
-            vest.color = new Color(0.1f, 0.5f, 0.1f);
-            accessorySettings[0] = vest;
-            var chain = accessorySettings[1];
-            chain.path = "Avatar/Accessories/Neck/GoldChain/GoldChain";
-            chain.color = new Color(0.96f, 0.79f, 0.23f);
-            accessorySettings[1] = chain;
-            var watch = accessorySettings[2];
-            watch.path = "Avatar/Accessories/Hands/Polex/Polex";
-            watch.color = new Color(0.96f, 0.79f, 0.23f);
-            accessorySettings[2] = watch;
+            // Config the naked appearance to be larger and taller
+            NakedAppearance nakedAppearance = bossGoon.Avatar.Appearance.AppliedNakedAppearance.Clone();
+            nakedAppearance.Height = 2f;
+            nakedAppearance.Weight = 1f;
 
-            _bossGoon.Avatar.CurrentSettings.Height = 2f;
-            _bossGoon.Avatar.CurrentSettings.Weight = 1f;
-            _bossGoon.Avatar.SetAdditionalWeight(0.5f);
-            _bossGoon.Avatar.ApplyBodySettings(_bossGoon.Avatar.CurrentSettings);
-
-            _bossGoon.Avatar.CurrentSettings.AccessorySettings = accessorySettings;
-            _bossGoon.Avatar.ApplyAccessorySettings(_bossGoon.Avatar.CurrentSettings);
-
-            _bossGoon.Avatar.Impostor.SetAvatarSettings(_bossGoon.Avatar.CurrentSettings);
-
-            if (_bossGoon.Avatar.onSettingsLoaded != null)
-                _bossGoon.Avatar.onSettingsLoaded.Invoke();
-
-            #endregion
+            // apply both
+            bossGoon.Avatar.Appearance.ApplyNakedAppearance(nakedAppearance);
+            bossGoon.Avatar.Appearance.ApplyOutfit(wornObjects);
+#endregion
 
             if (!_quest.hasSavedCombatVariables)
             {
-                _quest.GiveUpRange = _bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
-                _quest.GiveUpAfterSuccessfulHits = _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
-                _quest.DefaultSearchTime = _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
+                _quest.GiveUpRange = bossGoon.Behaviour.CombatBehaviour.GiveUpRange;
+                _quest.GiveUpAfterSuccessfulHits = bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
+                _quest.DefaultSearchTime = bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime;
                 _quest.hasSavedCombatVariables = true;
             }
 
-            _bossGoon.Behaviour.CombatBehaviour.GiveUpRange = 70f;
-            _bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 200;
-            _bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
+            bossGoon.Behaviour.CombatBehaviour.GiveUpRange = 70f;
+            bossGoon.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 200;
+            bossGoon.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
 
             _quest.bossDiedAction = (UnityEngine.Events.UnityAction)_quest.OnBossDied;
             bossGoon.Health.onDieOrKnockedOut.AddListener(_quest.bossDiedAction);
@@ -652,20 +635,20 @@ namespace CartelEnforcer
 
                 if (bossGoon.Behaviour.CombatBehaviour.currentWeapon == null)
                 {
-                    coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+                    ModCoroutines.Start(EquipBossWeapon());
                 }
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.95f && !healthRegenerated)
                 {
                     if (drinkAct != null)
                     {
-                        bossGoon.Movement.PauseMovement();
+                        bossGoon.Movement.Stop();
                         drinkAct.Begin();
                         for (int i = 0; i < 3; i++)
                         {
                             yield return Wait2;
                             if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) yield break;
-                            bossGoon.Health.Health += Mathf.RoundToInt(Mathf.Lerp(35f, 65f, _quest.questDifficultyScalar - 1f));
+                            bossGoon.Health._currentHealth += Mathf.RoundToInt(Mathf.Lerp(35f, 65f, _quest.questDifficultyScalar - 1f));
                         }
                         drinkAct.End();
                         healthRegenerated = true;
@@ -678,8 +661,6 @@ namespace CartelEnforcer
                     yield return Wait01;
                     if (!registered) yield break;
 
-                    bossGoon.Movement.ResumeMovement();
-
                     if (bossGoon.Behaviour.CombatBehaviour.Target == null)
                         bossGoon.Behaviour.CombatBehaviour.SetTarget(p.GetComponent<ICombatTargetable>().NetworkObject);
                     if (!bossGoon.Behaviour.CombatBehaviour.isActiveAndEnabled)
@@ -687,26 +668,27 @@ namespace CartelEnforcer
                     yield return Wait01;
                     if (!registered) yield break;
 
-                    coros.Add(MelonCoroutines.Start(EquipBossWeapon()));
+                    ModCoroutines.Start(EquipBossWeapon());
                 }
                 yield return Wait05;
                 if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
 
                 if (UnityEngine.Random.Range(0f, 1f) > 0.95f)
                 {
+                    float orig = bossGoon.Movement.SpeedController._speedMultiplier;
                     for (int i = 0; i < 3; i++)
                     {
                         yield return Wait05;
                         if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
-                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 2.6f, 0.33f);
+                        bossGoon.Movement.SpeedController.SetSpeedMultiplier(Mathf.Lerp(bossGoon.Movement.SpeedController._speedMultiplier, 0.88f, 0.33f));
                     }
                     for (int i = 0; i < 3; i++)
                     {
                         yield return Wait05;
                         if (!registered || bossGoon.Health.IsDead || bossGoon.Health.IsKnockedOut) break;
-                        bossGoon.Movement.MoveSpeedMultiplier = Mathf.Lerp(bossGoon.Movement.MoveSpeedMultiplier, 0.4f, 0.33f);
+                        bossGoon.Movement.SpeedController.SetSpeedMultiplier(Mathf.Lerp(bossGoon.Movement.SpeedController._speedMultiplier, 0.15f, 0.33f));
                     }
-                    bossGoon.Movement.MoveSpeedMultiplier = 0.4f;
+                    bossGoon.Movement.SpeedController.SetSpeedMultiplier(orig);
                 }
             }
 

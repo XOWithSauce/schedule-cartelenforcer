@@ -1,5 +1,4 @@
 using System.Collections;
-using MelonLoader;
 using UnityEngine;
 using HarmonyLib;
 
@@ -10,6 +9,7 @@ using static CartelEnforcer.AmbushOverrides;
 using static CartelEnforcer.CartelInventory;
 
 #if MONO
+using FrameworkNPCData = ScheduleOne.NPCs.Framework.NPCData;
 using ScheduleOne.Cartel;
 using ScheduleOne.Combat;
 using ScheduleOne.DevUtilities;
@@ -22,8 +22,11 @@ using ScheduleOne.PlayerScripts;
 using ScheduleOne.Quests;
 using ScheduleOne.Product;
 using ScheduleOne.AvatarFramework.Equipping;
-using ScheduleOne.UI.Handover;
+using ScheduleOne.Persistence.Datas;
+using ScheduleOne.NPCs;
+using ScheduleOne.Persistence.Loaders;
 #else
+using FrameworkNPCData = Il2CppScheduleOne.NPCs.Framework.NPCData;
 using Il2CppScheduleOne.Cartel;
 using Il2CppScheduleOne.Combat;
 using Il2CppScheduleOne.DevUtilities;
@@ -36,7 +39,9 @@ using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.Product;
 using Il2CppScheduleOne.Quests;
 using Il2CppScheduleOne.AvatarFramework.Equipping;
-using Il2CppScheduleOne.UI.Handover;
+using Il2CppScheduleOne.Persistence.Datas;
+using Il2CppScheduleOne.NPCs;
+using Il2CppScheduleOne.Persistence.Loaders;
 #endif
 
 namespace CartelEnforcer
@@ -252,7 +257,7 @@ namespace CartelEnforcer
                         yield return Wait2;
                         if (!registered) yield break;
 
-                        if (!d.isInBuilding && !d.Movement.HasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
+                        if (!d.isInBuilding && !d.Movement._hasDestination && !d.Health.IsDead && !d.Health.IsKnockedOut)
                         {
                             WalkToInterestPoint(d);
                         }
@@ -267,7 +272,7 @@ namespace CartelEnforcer
                 if (TimeManager.Instance.CurrentTime >= currentStayInsideEnd || TimeManager.Instance.CurrentTime <= currentStayInsideStart)
                 {
                     // Current time is in deal signal window
-                    coros.Add(MelonCoroutines.Start(StartActiveSignal()));
+                    ModCoroutines.Start(StartActiveSignal());
                 }
             }
 
@@ -389,9 +394,9 @@ namespace CartelEnforcer
 
             foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
             {
-                dealer.NPCData.Movement.WalkSpeed = dealerConfig.CartelDealerWalkSpeed;
-                dealer.NPCData.Health.MaxHealth = dealerConfig.CartelDealerHP;
-                dealer.Health.Health = dealerConfig.CartelDealerHP;
+                dealer.Movement.SpeedController.SetDefaultSpeed(dealerConfig.CartelDealerWalkSpeed);
+                dealer.Health.MaxHealth = dealerConfig.CartelDealerHP;
+                dealer.Health.RestoreHealth();
                 AvatarWeapon weapon = null;
 #if MONO
                 if (equippable is AvatarWeapon)
@@ -406,10 +411,6 @@ namespace CartelEnforcer
                 if (weapon != null)
                 {
                     dealer.Behaviour.CombatBehaviour.SetDefaultWeapon(weapon);
-                    if (dealer.Avatar != null)
-                        equippable.Equip(dealer.Avatar);
-                    else
-                        Log($"{dealer.Region} dealer is missing avatar field");
                 }
 
                 Log($"Setup {dealer.Region} weapon");
@@ -443,7 +444,7 @@ namespace CartelEnforcer
                         {
                             if (!dealer.IsAcceptingDeals)
                                 dealer.SetIsAcceptingDeals(true);
-                            coros.Add(MelonCoroutines.Start(WalkToInterestPoint(dealer, Wait5)));
+                            ModCoroutines.Start(WalkToInterestPoint(dealer, Wait5));
                         }
                     }
 
@@ -507,54 +508,28 @@ namespace CartelEnforcer
 #endif
                     foreach (CartelGoon goon in goons)
                     {
-                        goon.Movement.WarpToNavMesh(); // just incase
                         if (UnityEngine.Random.Range(0f, 1f) > 0.7f && RangedWeapons != null && RangedWeapons.Length != 0)
                             goon.Behaviour.CombatBehaviour.SetDefaultWeapon(RangedWeapons[UnityEngine.Random.Range(0, RangedWeapons.Length)]);
                         else if (MeleeWeapons != null && MeleeWeapons.Length != 0)
                             goon.Behaviour.CombatBehaviour.SetDefaultWeapon(MeleeWeapons[UnityEngine.Random.Range(0, MeleeWeapons.Length)]);
                         goon.AttackEntity(p.GetComponent<ICombatTargetable>(), true);
                     }
-                    coros.Add(MelonCoroutines.Start(DespawnDefenderGoonsSoon(goons)));
+                    ModCoroutines.Start(DespawnDefenderGoonsSoon(goons));
                     return;
                 }
                 dealer.Health.onDieOrKnockedOut.AddListener((UnityEngine.Events.UnityAction)TrySpawnGoonsOnDeath);
                 Log($"Setup {dealer.Region} health callback");
                 #endregion
 
+                // To ensure it doesnt clear out the stolen temp items && doesnt spawn naked
+                dealer.NPCData.Inventory.ClearInventoryOnNewDay = false;
 
+
+                // incase naked
+                dealer.RandomizeAppearance();
             }
             Log("Done Configuring Cartel Dealer Event values");
 
-            #region Ensure that the dealers have avatar settings loaded
-            List<CartelDealer> missingAvatar = new();
-            Log("Ensure Cartel Dealers have avatar textures");
-            foreach (CartelDealer dealer in DealerActivity.allCartelDealers) 
-            {
-                if (dealer.Avatar.CurrentSettings == null)
-                {
-                    missingAvatar.Add(dealer);
-                }
-            }
-            if (missingAvatar.Count > 0)
-            {
-                Log($"Found {missingAvatar.Count} missing Dealer avatar settings");
-
-                foreach (CartelDealer dealer in missingAvatar)
-                {
-                    dealer.RandomizeAppearance();
-                }
-
-            }
-            missingAvatar.Clear();
-            missingAvatar = null;
-            Log("Done checking Cartel Dealer avatar textures");
-
-            // To ensure it doesnt clear out the stolen temp items
-            foreach (CartelDealer dealer in DealerActivity.allCartelDealers)
-            {
-                dealer.NPCData.Inventory.ClearInventoryOnNewDay = false;
-            }
-            #endregion
         }
 
 #if MONO
@@ -743,7 +718,7 @@ namespace CartelEnforcer
                     {
                         Log("No action taken");
                         // Has no contract but is in time window, and random roll didnt award the contract
-                        if (!d.isInBuilding && !d.Movement.HasDestination)
+                        if (!d.isInBuilding && !d.Movement._hasDestination)
                         {
                             // and is outside meaning just afk standing
                             WalkToInterestPoint(d);
@@ -1053,91 +1028,101 @@ namespace CartelEnforcer
         }
 
         // Patch the OnUnconscious function to block Failing the stolen contracts for Cartel Dealers
-        // Todo: could also add the quick revive reature later ussing this patch to IEnumerator -> sleep 30 -> respawn at hospital
-        // NOTE: during cartel stealing player dealers active deals, if the player dealer dies during this event e.g. Jane dies while Cartel has stolen theiir contract
-        //      -> This will fail the cartel dealers cooopy also? In theory its possible that it can happen but bug fixing is required anyway
-
+        // and for player dealers whenever their contract was stolen and copied to cartel dealers
+        // So that if one of them dies the other contract dealer will still complete it
         [HarmonyPatch(typeof(Dealer), "DealerUnconscious")]
         public static class Dealer_DealerUnconscious_Patch
         {
             [HarmonyPrefix]
             public static bool Prefix(Dealer __instance)
             {
-                // only run it for cartel dealers
-                if (__instance.DealerData.DealerType == EDealerType.CartelDealer)
-                {
 #if MONO
-                    List<Contract> cartelDealerContracts = new(__instance.ActiveContracts);
+                List<Contract> dealerContracts = new(__instance.ActiveContracts);
 #else
-                    Il2CppSystem.Collections.Generic.List<Contract> cartelDealerContracts = new();
-                    for (int i = 0; i < __instance.ActiveContracts.Count; i++)
-                    {
-                        if (__instance.ActiveContracts[i] != null)
-                            if (!cartelDealerContracts.Contains(__instance.ActiveContracts[i]))
-                                cartelDealerContracts.Add(__instance.ActiveContracts[i]);
-                    }
+                Il2CppSystem.Collections.Generic.List<Contract> dealerContracts = new();
+                for (int i = 0; i < __instance.ActiveContracts.Count; i++)
+                {
+                    if (__instance.ActiveContracts[i] != null)
+                        if (!dealerContracts.Contains(__instance.ActiveContracts[i]))
+                            dealerContracts.Add(__instance.ActiveContracts[i]);
+                }
 #endif
-                    
-                    List<Contract> normalContracts = new();
-                    List<Contract> stolenContracts = new();
-                    foreach (Contract contract in cartelDealerContracts)
+                List<Contract> normalContracts = new();
+                List<Contract> stolenContracts = new();
+                foreach (Contract contract in dealerContracts)
+                {
+                    lock (playerDealerStolenLock)
                     {
+                        if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
+                        {
+                            stolenContracts.Add(contract);
+                        }
+                        else
+                        {
+                            normalContracts.Add(contract);
+                        }
+                    }
+                }
+
+                if (normalContracts.Count > 0)
+                {
+                    // By default the patched function runs just this
+                    foreach (Contract contract in normalContracts)
+                        contract.Fail();
+                }
+
+                // If it was cartel dealer and contains stolen contract
+                // then that needs to be removed and customer assigned one dealer property reset
+                if (stolenContracts.Count > 0 && __instance.DealerData.DealerType == EDealerType.CartelDealer)
+                {
+                    foreach (Contract contract in stolenContracts)
+                    {
+                        Dealer originalPlayerDealer = null;
+                        int originalXP = 0;
+                        if (playerDealerStolen.TryGetValue(contract.GUID.ToString(), out var tuple))
+                        {
+                            originalPlayerDealer = tuple.Item1;
+                            originalXP = tuple.Item2;
+                        }
+
+                        // Reset dealer prooperty in customer copy of contract to be the original dealer
+                        Customer contractCustomer = contract.Customer.GetComponent<Customer>();
+                        if (contractCustomer != null && contractCustomer.CurrentContract != null)
+                        {
+                            if (contractCustomer.CurrentContract.Dealer != null && contractCustomer.CurrentContract.Dealer == __instance)
+                                contractCustomer.CurrentContract.Dealer = originalPlayerDealer;
+
+                            contractCustomer.CurrentContract.CompletionXP = originalXP;
+                        }
+                        // Lastly remove it from tracking and Cartel Dealers active deals
                         lock (playerDealerStolenLock)
                         {
                             if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
-                            {
-                                stolenContracts.Add(contract);
-                            }
-                            else
-                            {
-                                normalContracts.Add(contract);
-                            }
-                        }
-                    }
-
-                    if (normalContracts.Count > 0)
-                    {
-                        // By default the patched function runs just this
-                        foreach (Contract contract in normalContracts)
-                            contract.Fail();
-                    }
-
-                    // If contains stolen contract then that needs to be removed and customer assigned one dealer property reset
-                    if (stolenContracts.Count > 0)
-                    {
-                        foreach (Contract contract in stolenContracts)
-                        {
-                            Dealer originalPlayerDealer = null;
-                            int originalXP = 0;
-                            if (playerDealerStolen.TryGetValue(contract.GUID.ToString(), out var tuple))
-                            {
-                                originalPlayerDealer = tuple.Item1;
-                                originalXP = tuple.Item2;
-                            }
-
-                            // Reset dealer prooperty in customer copy of contract to be the original dealer
-                            Customer contractCustomer = contract.Customer.GetComponent<Customer>();
-                            if (contractCustomer != null && contractCustomer.CurrentContract != null)
-                            {
-                                if (contractCustomer.CurrentContract.Dealer != null && contractCustomer.CurrentContract.Dealer == __instance)
-                                    contractCustomer.CurrentContract.Dealer = originalPlayerDealer;
-
-                                contractCustomer.CurrentContract.CompletionXP = originalXP;
-                            }
-                            // Lastly remove it from tracking and Cartel Dealers active deals
-                            lock (playerDealerStolenLock)
-                            {
                                 playerDealerStolen.Remove(contract.GUID.ToString());
-                            }
-                            __instance.ActiveContracts.Remove(contract);
-                            __instance.currentContract = null;
                         }
+                        __instance.ActiveContracts.Remove(contract);
+                        __instance.currentContract = null;
                     }
-
-                    // block original since this does the same now
-                    return false;
                 }
-                return true;
+                // Else for the original dealer remove it manually without failing the original contract
+                // should have the cartel dealer assigned on it on the dealer
+                else if (stolenContracts.Count > 0 && __instance.DealerData.DealerType == EDealerType.PlayerDealer)
+                {
+                    foreach (Contract contract in stolenContracts)
+                    {
+                        // Remove it from tracking and Cartel Dealers active deals
+                        lock (playerDealerStolenLock)
+                        {
+                            if (playerDealerStolen.ContainsKey(contract.GUID.ToString()))
+                                playerDealerStolen.Remove(contract.GUID.ToString());
+                        }
+                        __instance.ActiveContracts.Remove(contract);
+                        __instance.currentContract = null;
+                    }
+                }
+
+                // block original since this does the same now
+                return false;
             }
         }
 
@@ -1149,31 +1134,26 @@ namespace CartelEnforcer
             private static readonly string name = "ProcessHandover";
             [HarmonyPrefix]
 #if MONO
-            public static bool Prefix(Customer __instance, HandoverScreen.EHandoverOutcome outcome, Contract contract, List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
+            public static bool Prefix(Customer __instance, Contract contract, List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
 #else
-            public static bool Prefix(Customer __instance, HandoverScreen.EHandoverOutcome outcome, Contract contract, Il2CppSystem.Collections.Generic.List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
+            public static bool Prefix(Customer __instance, Contract contract, Il2CppSystem.Collections.Generic.List<ItemInstance> items, bool handoverByPlayer, bool giveBonuses = true)
 #endif
             {
                 Log("Process Handover");
-                if (handoverByPlayer)
-                {
-                    Log("Handover by player true return");
-                    return true;
-                }
                 if (contract.Dealer == null)
                 {
                     Log($"Contract dealer is null check intercept: {contract.title} {contract.Description}");
                     // Process Intercept contract
-                    CheckIntercept(__instance, contract, outcome, handoverByPlayer);
+                    CheckIntercept(__instance, contract, handoverByPlayer);
                     return true;
                 }
                 Log("Process Handover Proceed");
 
-                CheckPlayerDealerStolen(__instance, contract, outcome);
+                CheckPlayerDealerStolen(__instance, contract);
                 return true;
             }
 
-            public static void CheckPlayerDealerStolen(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome)
+            public static void CheckPlayerDealerStolen(Customer __instance, Contract contract)
             {
                 // Check PlayerDealer Stolen
                 if (!playerDealerStolen.ContainsKey(contract.GUID.ToString())) return;
@@ -1191,7 +1171,7 @@ namespace CartelEnforcer
                 // only at longer distances, needs outcome logged too to figure out what happens with it
 
                 Log($"STOLEN HANDOVER CUSTOMER: ${__instance.NPC.NPCData.BasicInfo.ID}", name);
-                Log($"Handover: {contract.title} {contract.Entries[0].name} - {outcome}", name);
+                Log($"Handover: {contract.title} {contract.Entries[0].name}", name);
                 Log($"    Completed by CartelDealer: {distanceToCartelDealer < distanceToPlayerDealer && distanceToCartelDealer < 2f} dist:{distanceToCartelDealer}", name);
                 Log($"    Completed by PlayerDealer: {distanceToPlayerDealer < distanceToCartelDealer && distanceToPlayerDealer < 2f} dist:{distanceToPlayerDealer}", name);
 
@@ -1246,7 +1226,7 @@ namespace CartelEnforcer
             }
 
 
-            public static void CheckIntercept(Customer __instance, Contract contract, HandoverScreen.EHandoverOutcome outcome, bool handoverByPlayer)
+            public static void CheckIntercept(Customer __instance, Contract contract, bool handoverByPlayer)
             {
                 if (!currentConfig.interceptDeals) 
                 {
@@ -1271,7 +1251,6 @@ namespace CartelEnforcer
                     contractGuids[guid].CompletedByCartel = true;
                 }
             }
-
         }
 
         // Patch the CartelDealers randomize inventory to prevent clearing out cartel dealers inventory to reduce amount of stolen items being cleared out
@@ -1327,6 +1306,74 @@ namespace CartelEnforcer
             }
         }
 
+        #region Persistence override
+        // The base game doesn't identify the cartel dealers from one another
+        // and instead they are saved with same "carteldealer" id in npc json
+        // This will cause the cartel dealers to not be able to save 
+        // their npc and dealer data correctly so patch load and save
+
+        // On initialize switch the cartel dealer id to be region suffixed
+        // Because the npc object itself doesnt yet have the ERegion in dealer class
+        // it must be determined in other ways, this one uses gameobject name that has
+        // region in the (), the alt way is to use deterministic load order and map it out
+
+        [HarmonyPatch(typeof(NPC), "InitializeNPC", new Type[] { typeof(FrameworkNPCData) })]
+        public static class NPC_InitializeNPC_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(NPC __instance, ref FrameworkNPCData data)
+            {
+                if (data.BasicInfo.ID != "carteldealer") return true;
+                string regionStr = __instance.gameObject.name.Split('(', ')')[1].Trim().ToLower();
+                data.BasicInfo.ID = $"carteldealer_{regionStr}";
+                return true;
+            }
+
+        }
+
+        // Because cartel dealers have the msg conversation unassigned as field it must be
+        // instantiated before the load function runs otherwise null ref error
+        [HarmonyPatch(typeof(NPCLoader), "Load", new Type[] { typeof(DynamicSaveData) })]
+        public static class NPCLoader_Load_Patch
+        {
+            [HarmonyPrefix]
+            public static bool Prefix(NPCLoader __instance, DynamicSaveData saveData)
+            {
+                NPCData baseData = DynamicLoader.ExtractBaseData<NPCData>(saveData);
+                if (baseData != null)
+                {
+                    if (baseData.ID.Contains("carteldealer"))
+                    {
+                        NPC npc = NPCManager.GetNPC(baseData.ID);
+                        if (npc != null)
+                        {
+                            //Log($"Create default conv (ptr {__instance.Pointer}) for npc {npc.gameObject.name} ({npc.gameObject.GetInstanceID()}) ");
+                            npc.CreateAndAssignDefaultMessageConversation();
+                        }
+
+                    }
+                }
+
+                return true;
+            }
+
+        }
+
+        // Before save modify the saveable npc data id to be region suffixed
+        // this replaces the id in place in the nps json file for the first time save
+        [HarmonyPatch(typeof(Dealer), "GetNPCData")]
+        public static class Dealer_GetNPCData_Patch
+        {
+            [HarmonyPostfix]
+            public static void Postfix(Dealer __instance, ref NPCData __result)
+            {
+                if (__instance.ID != "carteldealer") return;
+                string cartelDealerId = "carteldealer_" + __instance.Region.ToString().ToLower();
+                __result.ID = cartelDealerId;
+                return;
+            }
+        }
+#endregion
     }
 
     [Serializable]

@@ -1,7 +1,6 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
-using MelonLoader;
 
 using static CartelEnforcer.DebugModule;
 using static CartelEnforcer.CartelEnforcer;
@@ -56,7 +55,6 @@ using Il2CppScheduleOne.Property;
 using Il2CppFishNet.Managing;
 using Il2CppFishNet.Managing.Object;
 using Il2CppFishNet.Object;
-using Il2CppFishNet;
 using Il2CppTMPro;
 #endif
 
@@ -69,7 +67,7 @@ namespace CartelEnforcer
         // todo add motoroil?
         public static readonly List<string> barrelLootIds = new()
         {
-            "acid", "phosphorus", "gasoline", "fertilizer", "pgr", "speedgrow"
+            "acid", "phosphorus", "gasoline", "fertilizer", "pgr", "speedgrow", "motoroil"
         };
         public static List<ItemInstance> barrelLoot = new();
 
@@ -153,7 +151,7 @@ namespace CartelEnforcer
             waterfrontBarrel.GuardPosition = new Vector3(-63.3022f, -4.035f, 163.7165f);
             waterfrontBarrel.GuardRotation = new Vector3(0f, 94.6f, 0f);
             waterfrontBarrel.BarrelObjects = new();
-            transformPath = "Hyland Point/Region_Northtown/Waterfront/Pallet Rack/";
+            transformPath = "Hyland Point/Region_Northtown/North Waterfront/Pallet Rack/";
             searchName = "Pallet_LiquidDrum";
             PopulateBarrels(transformPath, searchName, waterfrontBarrel.BarrelObjects);
 
@@ -313,7 +311,7 @@ namespace CartelEnforcer
                     }
                 }
 
-                coros.Add(MelonCoroutines.Start(SpawnSupplyVan(new Tuple<Vector3, Vector3>(location.CarPosition, location.CarRotation))));
+                ModCoroutines.Start(SpawnSupplyVan(new Tuple<Vector3, Vector3>(location.CarPosition, location.CarRotation)));
             }
 
             // spawn guard
@@ -520,9 +518,9 @@ namespace CartelEnforcer
             }
             goonGuard.Behaviour.CombatBehaviour._defaultWeapon.Equip(goonGuard.Avatar);
 
-            goonGuard.NPCData.Health.MaxHealth = 500f;
-            goonGuard.Health.Health = 500f;
-            goonGuard.Movement.SpeedController.AddSpeedControl(new NPCSpeedController.SpeedControl("combat", 5, 0.55f));
+            goonGuard.HasUmbrella = false;
+
+            goonGuard.Movement.SpeedController.AddSpeedControl("goon_guard", 0.55f, 5);
 
             // create dialogue choice
 
@@ -552,13 +550,13 @@ namespace CartelEnforcer
 
             alliedGuard = goonGuard;
 
-            coros.Add(MelonCoroutines.Start(HandleGuardGoon()));
+            ModCoroutines.Start(HandleGuardGoon());
             return;
         }
 
         public static IEnumerator HandleGuardGoon()
         {
-            coros.Add(MelonCoroutines.Start(CheckInterrogate()));
+            ModCoroutines.Start(CheckInterrogate());
 
             for (; ; )
             {
@@ -577,7 +575,7 @@ namespace CartelEnforcer
                 float distFromGuardPos = Vector3.Distance(alliedGuard.CenterPoint, activeAlliedSupplies.location.GuardPosition);
                 if (distFromGuardPos > 30f || (activeAlliedSupplies.playerNoticed && activeAlliedSupplies.playerInterrogated && distFromGuardPos > 2f))
                 {
-                    if (alliedGuard.Movement.HasDestination && Vector3.Distance(alliedGuard.Movement.CurrentDestination, activeAlliedSupplies.location.GuardPosition) < 2f) continue;
+                    if (alliedGuard.Movement._hasDestination && Vector3.Distance(alliedGuard.Movement.CurrentDestination, activeAlliedSupplies.location.GuardPosition) < 2f) continue;
                     else
                         alliedGuard.Movement.EndSetDestination(NPCMovement.WalkResult.Interrupted);
 
@@ -588,7 +586,7 @@ namespace CartelEnforcer
                             // Calculate forward position from guard pos facing guard rot and then face point
                             Vector3 fwdFromPos = activeAlliedSupplies.location.GuardPosition + (Quaternion.Euler(activeAlliedSupplies.location.GuardRotation) * Vector3.forward * 1.5f);
                             alliedGuard.Movement.FacePoint(fwdFromPos);
-                            alliedGuard.Movement.PauseMovement();
+                            alliedGuard.Movement.Stop();
                         }
                     }
 #if MONO
@@ -597,8 +595,6 @@ namespace CartelEnforcer
                     Il2CppSystem.Action<NPCMovement.WalkResult> walkCallback = (Il2CppSystem.Action<NPCMovement.WalkResult>)OnGuardArrivedToPos;
 #endif
                     alliedGuard.Movement.SetDestination(activeAlliedSupplies.location.GuardPosition, walkCallback, interruptExistingCallback: true);
-                    if (alliedGuard.Movement.IsPaused)
-                        alliedGuard.Movement.ResumeMovement();
                     continue;
                 }
 
@@ -621,10 +617,8 @@ namespace CartelEnforcer
                 if (activeAlliedSupplies.playerNoticed && !activeAlliedSupplies.playerInterrogated)
                 {
                     // if not traversing to player
-                    if (alliedGuard.Movement.HasDestination || alliedGuard.Movement.IsMoving) continue;
+                    if (alliedGuard.Movement._hasDestination || alliedGuard.Movement.IsMoving) continue;
                     alliedGuard.Movement.SetDestination(Player.Local.CenterPointTransform);
-                    if (alliedGuard.Movement.IsPaused)
-                        alliedGuard.Movement.ResumeMovement();
                 }
             }
             yield break;
@@ -681,7 +675,8 @@ namespace CartelEnforcer
             if (NetworkSingleton<Cartel>.Instance.Status != Il2Cpp.ECartelStatus.Truced) return;
 #endif
 
-            if (alliedSuppliesActive) return;
+            if (IsAnyAlliedQuestActive())
+                return;
 
             if (alliedQuests.hoursUntilNextSupplies > 0)
             {
@@ -696,7 +691,7 @@ namespace CartelEnforcer
             // if the quest has not been activated
             if (activeAlliedSupplies == null)
             {
-                coros.Add(MelonCoroutines.Start(SetupTruceSuppliesQuest()));
+                ModCoroutines.Start(SetupTruceSuppliesQuest());
             }
             // else quest already exists and can be reactivated
             else

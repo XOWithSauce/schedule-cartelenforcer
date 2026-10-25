@@ -1,5 +1,4 @@
 ﻿using System.Collections;
-using MelonLoader;
 using UnityEngine;
 
 using static CartelEnforcer.CartelEnforcer;
@@ -307,7 +306,7 @@ namespace CartelEnforcer
                         listItems.AddRange(fromStolenPool);
                 }
 
-                coros.Add(MelonCoroutines.Start(CreateDropContent(random, listItems, npc, fromStolenPool, hasPreposition)));
+                ModCoroutines.Start(CreateDropContent(random, listItems, npc, fromStolenPool, hasPreposition));
                 controller.handler.ContinueSubmitted();
                 NetworkSingleton<MoneyManager>.Instance.ChangeCashBalance(-paid, true, false);
                 string prep = "";
@@ -338,7 +337,7 @@ namespace CartelEnforcer
                         controller.handler.WorldspaceRend.ShowText($"They have been stashing items {prep} {location}.", 9f);
                         break;
                 }
-                coros.Add(MelonCoroutines.Start(HurryUpMessage(controller)));
+                ModCoroutines.Start(HurryUpMessage(controller));
             }
             else if (CartelGathering.areGoonsGathering && CartelGathering.currentGatheringLocation != null && hasCash)
             {
@@ -386,13 +385,14 @@ namespace CartelEnforcer
             }
             targetNPCs[npc].HasActiveQuest = false;
             targetNPCs[npc].HasAskedQuestToday = true;
-            coros.Add(MelonCoroutines.Start(DisposeChoice(controller, npc)));
+            ModCoroutines.Start(DisposeChoice(controller, npc));
             return;
         }
 
         public static IEnumerator HurryUpMessage(DialogueController controller)
         {
             yield return Wait10;
+            if (!registered) yield break;
             controller.handler.WorldspaceRend.ShowText($"You need to hurry before they grab it!", 5f);
             yield return null;
         }

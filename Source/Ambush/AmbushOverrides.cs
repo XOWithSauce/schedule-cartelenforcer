@@ -5,7 +5,6 @@ using HarmonyLib;
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
 
-
 #if MONO
 using ScheduleOne.Cartel;
 using ScheduleOne.DevUtilities;

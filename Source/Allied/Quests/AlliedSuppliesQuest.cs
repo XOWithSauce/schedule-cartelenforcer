@@ -1,6 +1,6 @@
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
+using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -51,6 +51,7 @@ namespace CartelEnforcer
 
         public new string title;
         public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
         public RectTransform groupRt;
 
@@ -118,7 +119,7 @@ namespace CartelEnforcer
                 if (hudUI != null)
                     hudUI.gameObject.SetActive(false);
 
-                coros.Add(MelonCoroutines.Start(CleanupTruceSuppliesQuest(this.location)));
+                ModCoroutines.Start(CleanupTruceSuppliesQuest(this.location));
 
                 Log("Quest_AlliedSupplies: Base End method finished successfully.");
             }
@@ -189,7 +190,7 @@ namespace CartelEnforcer
 
             Log("Reset Complete");
 
-            coros.Add(MelonCoroutines.Start(SpawnSupply(this.location)));
+            ModCoroutines.Start(SpawnSupply(this.location));
         }
 
         public void SetupSelf()
@@ -218,7 +219,12 @@ namespace CartelEnforcer
                 title: "Receive the Cartel supplies",
                 new PoIConfig(true, false, false, poiPosition: gatherSuppliesPoIPosition));
 
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
+#endif
+
             _helper.StartQuestFromEntry(QuestEntry_LocateSupplies);
+
 
             if (QuestEntry_LocateSupplies != null)
             {
@@ -232,11 +238,12 @@ namespace CartelEnforcer
             }
 
 #if MONO
-            instance.onMinutePass.Add(new Action(OnMinPass));
+            instance.onMinutePass += this.OnMinPass;
 #else
-            instance.onMinutePass += (Il2CppSystem.Action)OnMinPass;
+            Action action = (Action)this.OnMinPass;
+            instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
-            coros.Add(MelonCoroutines.Start(SpawnSupply(this.location)));
+            ModCoroutines.Start(SpawnSupply(this.location));
         }
 
         public override void OnMinPass()
@@ -318,7 +325,6 @@ namespace CartelEnforcer
             }
             return;
         }
-        
         public void OnLocateSuppliesComplete()
         {
             if (QuestEntry_LocateSupplies != null && QuestEntry_LocateSupplies.State == EQuestState.Failed) return;

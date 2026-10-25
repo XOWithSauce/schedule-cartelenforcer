@@ -1,8 +1,7 @@
 using System.Collections;
-using HarmonyLib;
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.UI;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.ConfigLoader;
@@ -11,6 +10,7 @@ using static CartelEnforcer.EndGameQuest;
 using static CartelEnforcer.InterceptEvent;
 using static CartelEnforcer.CartelPersuade;
 using static CartelEnforcer.SuppliesModule;
+using static CartelEnforcer.ManorLaunder;
 
 #if MONO
 using ScheduleOne.NPCs;
@@ -40,11 +40,6 @@ using Il2CppScheduleOne.UI.Handover;
 using Il2CppScheduleOne.PlayerScripts;
 using Il2CppScheduleOne.UI.Phone.ContactsApp;
 using Il2CppScheduleOne.Persistence;
-using static Il2CppScheduleOne.Dialogue.DialogueController;
-using Il2CppScheduleOne.NPCs.CharacterClasses;
-using Il2Cpp;
-using Il2CppInterop.Runtime;
-using Il2CppFishNet.Connection;
 #endif
 
 namespace CartelEnforcer
@@ -54,7 +49,7 @@ namespace CartelEnforcer
     {
         public static CartelAlliedConfig alliedConfig;
         public static CartelAlliedQuests alliedQuests;
-        public static DialogueContainer persuadeContainer;
+        public static Conversation persuadeContainer;
         public static DialogueNodeData entryNode;
 
         // Save dealers by region to map out connections 
@@ -152,7 +147,7 @@ namespace CartelEnforcer
                     // When Can start can exit earliest then wait a moment incase the player just 
                     // exited dialogue
                     yield return Wait05;
-                    coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
+                    ModCoroutines.Start(SetupTruceIntroQuest());
                 }
             }
 #if MONO
@@ -200,7 +195,7 @@ namespace CartelEnforcer
         {
             if (!currentConfig.alliedExtensions) return;
             Log("OnAlliedStateChange");
-            coros.Add(MelonCoroutines.Start(DelayedStateChange(oldStatus, newStatus)));
+            ModCoroutines.Start(DelayedStateChange(oldStatus, newStatus));
             return;
         }
 
@@ -217,20 +212,28 @@ namespace CartelEnforcer
             // Init the Supplies quest module
             InitSuppliesModule();
 
+            // Init the manor laundering msg logic with thomas
+            SetupMsgConversation();
+
             TimeManager timeInstance = NetworkSingleton<TimeManager>.Instance;
             timeInstance.onMinutePass.Add(new Action(ReduceCooldown));
 #if MONO
             NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassEvaluateSupply;
             NetworkSingleton<TimeManager>.Instance.onHourPass += OnHourPassTrySpawnEncounter;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += TryStartLogisticsQuest;
 #else
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassEvaluateSupply;
             NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)OnHourPassTrySpawnEncounter;
+            NetworkSingleton<TimeManager>.Instance.onHourPass += (Il2CppSystem.Action)TryStartLogisticsQuest;
 #endif
-            // Increase chance of trying to spawn encounter after sleep end daily+1
 #if MONO
-            NetworkSingleton<TimeManager>.Instance.onSleepEnd += OnSleepEndIncreaseEncounterChance;
+            // Increase chance of trying to spawn encounter after sleep end daily+1
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += OnSleepEndIncreaseEncounterChance;
+            // Process the cartel laundering logic after sleep
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += OnDayPassProcessLaunder;
 #else
-            NetworkSingleton<TimeManager>.Instance.onSleepEnd += (Il2CppSystem.Action)OnSleepEndIncreaseEncounterChance;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += (Il2CppSystem.Action)OnSleepEndIncreaseEncounterChance;
+            NetworkSingleton<SleepController>.Instance.OnSleepEnd += (Il2CppSystem.Action)OnDayPassProcessLaunder;
 #endif
             // So when the status is still unknown, or truced here it should add the listener to the delegates?
             // To manage state change whenever it goes from unknown to truced or truced to hostile
@@ -310,9 +313,13 @@ namespace CartelEnforcer
                 {
                     AssignDealerConfig(d);
 
-                    // Change mugshot and first name
+                    // Note these 3 lines dont work consistently between mono and il2cpp
+                    // Change mugshot and first name (applies to map poi etc.)
                     d.NPCData.Appearance.Mugshot = benziesLogo;
                     d.NPCData.BasicInfo.FirstName = $"{d.FirstName} ({d.Region})";
+                    // Apply the above 2 to the msg conversation too because
+                    // that field gets instantiated earlier than the changes
+                    d.MSGConversation._sender._icon = benziesLogo;
 
                     // Set flag for automatic start of the intro allied quest
                     if (d.Region == EMapRegion.Westville && d.IsRecruited)
@@ -321,6 +328,10 @@ namespace CartelEnforcer
                     if (d.IsRecruited)
                     {
                         d.NPCData.Inventory.ClearInventoryOnNewDay = false;
+
+                        if (!d.MSGConversation.IsSenderKnown)
+                            d.MSGConversation.SetIsKnown(true); // should apply the icon / name update (il2cpp doesnt..)
+
                         // Already has default dialogue options
                         Log($"- {d.Region} already recruited");
                         continue;
@@ -351,6 +362,15 @@ namespace CartelEnforcer
                     if (!kvp.Value.IsRecruited && kvp.Value.HasBeenRecommended)
                     {
                         kvp.Value.SetUpDialogue();
+                        // to setup some of the mod related logic upon recruit
+                        if (kvp.Value.recruitChoice != null)
+                        {
+                            void RecruitChoiceCallback()
+                            {
+                                ModCoroutines.Start(DialogueController_Dealer_ChoiceCallback_Patch.OnRecruitChosen(kvp.Value));
+                            }
+                            kvp.Value.recruitChoice.onChoosen.AddListener((UnityEngine.Events.UnityAction)RecruitChoiceCallback);
+                        }
                     }
 
                     // For recruited cartel dealers, when game loads it needs
@@ -365,7 +385,7 @@ namespace CartelEnforcer
                 // If the allied intro quest not yet completed and cartel truced and first dealer not yet recruited
                 if (!alliedQuests.alliedIntroCompleted && activeTruceIntro == null && !westvilleRecruited)
                 {
-                    coros.Add(MelonCoroutines.Start(SetupTruceIntroQuest()));
+                    ModCoroutines.Start(SetupTruceIntroQuest());
                 }
             }
 
@@ -388,9 +408,7 @@ namespace CartelEnforcer
             // play 1 time per session only
             if (trueBrothersCompleted) return;
             // Only when not active
-            if (activeTrueBrothersQuest != null) return;
-            // Only when the goon is not already active
-            if (encounterActive) return;
+            if (IsAnyAlliedQuestActive()) return;
 
             // From 11am - 11pm
             bool inTimeWindow = (NetworkSingleton<TimeManager>.Instance.CurrentTime >= 1100 && NetworkSingleton<TimeManager>.Instance.CurrentTime <= 2300);
@@ -404,9 +422,9 @@ namespace CartelEnforcer
                 return;
             }
             Log("Prerequirements met for True Brothers");
-            // 7 day cycle increases chance towards the end of cycle
-            float chance = UnityEngine.Random.Range(0f, 1f);
-            float threshold = Mathf.Lerp(0.98f, 0.70f, Mathf.Clamp01((float)alliedQuests.daysPassedSinceEncounter/7f));
+            // 7 day cycle increases chance towards the end of cycle, chance also padded for not allowing first ~2days
+            float chance = UnityEngine.Random.Range(0f, 0.9825f);
+            float threshold = Mathf.Lerp(1f, 0.95f, Mathf.Clamp01((float)alliedQuests.daysPassedSinceEncounter/7f));
             Log("Threshold: " + threshold);
             if (chance < threshold)
             {
@@ -416,7 +434,7 @@ namespace CartelEnforcer
             Log("Chance Hits Spawning encounter");
 
             // Prerequirements passed
-            coros.Add(MelonCoroutines.Start(SummonConversateGoon()));
+            ModCoroutines.Start(SummonConversateGoon());
         }
 
         // True brothers quest tracks days passed since last quest (after prereqs)
@@ -427,32 +445,41 @@ namespace CartelEnforcer
             alliedQuests.daysPassedSinceEncounter++;
         }
 
+        public static float RelationAdjust(CartelDealer d, float configVal)
+        {
+            float minSalesCut = 0.15f;
+            if (configVal <= minSalesCut)
+                return configVal;
+            else
+                return Mathf.Lerp(configVal, minSalesCut, d.RelationData.NormalizedRelationDelta);
+        }
+
         public static void AssignDealerConfig(CartelDealer d)
         {
             switch (d.Region)
             {
                 case EMapRegion.Westville:
-                    d.DealerData.SalesCutPercentage = alliedConfig.WestvilleCartelDealerCut;
+                    d.DealerData.SalesCutPercentage = RelationAdjust(d, alliedConfig.WestvilleCartelDealerCut);
                     d.DealerData.SigningFee = alliedConfig.WestvilleCartelSigningFee;
                     break;
 
                 case EMapRegion.Downtown:
-                    d.DealerData.SalesCutPercentage = alliedConfig.DowntownCartelDealerCut;
+                    d.DealerData.SalesCutPercentage = RelationAdjust(d, alliedConfig.DowntownCartelDealerCut);
                     d.DealerData.SigningFee = alliedConfig.DowntownCartelSigningFee;
                     break;
 
                 case EMapRegion.Docks:
-                    d.DealerData.SalesCutPercentage = alliedConfig.DocksCartelDealerCut;
+                    d.DealerData.SalesCutPercentage = RelationAdjust(d, alliedConfig.DocksCartelDealerCut);
                     d.DealerData.SigningFee = alliedConfig.DocksCartelSigningFee;
                     break;
 
                 case EMapRegion.Suburbia:
-                    d.DealerData.SalesCutPercentage = alliedConfig.SuburbiaCartelDealerCut;
+                    d.DealerData.SalesCutPercentage = RelationAdjust(d, alliedConfig.SuburbiaCartelDealerCut);
                     d.DealerData.SigningFee = alliedConfig.SuburbiaCartelSigningFee;
                     break;
 
                 case EMapRegion.Uptown:
-                    d.DealerData.SalesCutPercentage = alliedConfig.UptownCartelDealerCut;
+                    d.DealerData.SalesCutPercentage = RelationAdjust(d, alliedConfig.UptownCartelDealerCut);
                     d.DealerData.SigningFee = alliedConfig.UptownCartelSigningFee;
                     break;
 
@@ -461,25 +488,6 @@ namespace CartelEnforcer
                     d.DealerData.SigningFee = 9999f;
                     break;
             }
-        }
-    }
-    
-    // Patch the Cartel Deal Manager while Truced to avoid changing the cartel status to hostile upon expiry
-    [HarmonyPatch(typeof(CartelDealManager), "ExpireDeal")]
-    public static class CartelDealManager_ExpireDeal_Patch
-    {
-        [HarmonyPrefix]
-        public static bool Prefix(CartelDealManager __instance)
-        {
-            // If the allied extensions features not enabled dont patch this method
-            if (!currentConfig.alliedExtensions) return true;
-
-            __instance.DealQuest.Expire(true);
-            __instance.SendExpiryMessage();
-            __instance.ActiveDeal = null;
-            // Block the original because it has the hostile change function call
-            // NetworkSingleton<Cartel>.Instance.SetStatus(null, ECartelStatus.Hostile, true);
-            return false;
         }
     }
 
@@ -514,7 +522,7 @@ namespace CartelEnforcer
             if (!showEnqueued)
             {
                 showEnqueued = true;
-                coros.Add(MelonCoroutines.Start(InfluenceChangeAnimation(__instance, region, oldInfluence, newInfluence)));
+                ModCoroutines.Start(InfluenceChangeAnimation(__instance, region, oldInfluence, newInfluence));
             }
             // block the original
             return false;
@@ -686,4 +694,5 @@ namespace CartelEnforcer
             return true;
         }
     }
+
 }

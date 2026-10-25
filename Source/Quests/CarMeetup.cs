@@ -1,7 +1,7 @@
 using System.Collections;
-using MelonLoader;
 using UnityEngine;
 using UnityEngine.Events;
+using MelonLoader;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -74,6 +74,10 @@ namespace CartelEnforcer
         }
         public Quest_CarMeetup() : base(ClassInjector.DerivedConstructorPointer<Quest_CarMeetup>())
             => ClassInjector.DerivedConstructorBody(this);
+
+        public new string title;
+        public new string Subtitle;
+        public new Il2CppSystem.Collections.Generic.List<QuestEntry> Entries;
 #endif
 
         public float questDifficultyScalar = 1f;
@@ -99,12 +103,6 @@ namespace CartelEnforcer
         public bool combatBegun = false;
         public bool playerSightedActive = false;
         public bool investigationActive = false;
-
-        // store the combat variables
-        public bool hasSavedCombatVariables = false;
-        public float GiveUpRange = 0f;
-        public int GiveUpAfterSuccessfulHits = 0;
-        public float DefaultSearchTime = 0f;
 
         // Store the callbacks for goon combat logic
         public UnityAction combatStartedAction = null;
@@ -176,11 +174,11 @@ namespace CartelEnforcer
                 TimeManager instance = NetworkSingleton<TimeManager>.Instance;
                 if (instance == null) return;
 
-                var action = (Action)OnMinPass;
 #if MONO
                 instance.onHourPass = (Action)Delegate.Remove(instance.onHourPass, new Action(this.HourPass));
-                instance.onMinutePass.Remove(action);
+                instance.onMinutePass -= this.OnMinPass;
 #else
+                Action action = (Action)OnMinPass;
                 instance.onHourPass -= (Il2CppSystem.Action)this.HourPass;
                 instance.onMinutePass.Remove((Il2CppSystem.Action)action);
 #endif
@@ -225,22 +223,26 @@ namespace CartelEnforcer
             _stopCarMeetupAction = (UnityAction)OnStopCarMeetupComplete;
             _helper.InitializeQuestEntry(ref QuestEntry_StopCarMeetup,
                 name: "StopCarMeetup",
-                title: "• Stop the Benzies from transporting cocaine\n• Avoid police attention",
+                title: "â€¢ Stop the Benzies from transporting cocaine\nâ€¢ Avoid police attention",
                 new PoIConfig(true, false, false, poiPosition: new Vector3(-32.68f, -2.54f, 168.73f)),
                 _stopCarMeetupAction);
 
-            _helper.InitializeQuestEntry(ref QuestEntry_StopCarMeetup,
+            _helper.InitializeQuestEntry(ref QuestEntry_EscapeNorthWaterfront,
                 name: "Escape",
-                title: "• Steal Cocaine from the SUV\n• Escape before police arrive",
+                title: "â€¢ Steal Cocaine from the SUV\nâ€¢ Escape before police arrive",
                 new PoIConfig(false, false, false));
+
+#if IL2CPP
+            _helper.SyncEntriesField(ref this.Entries);
+#endif
 
             TimeManager instance = NetworkSingleton<TimeManager>.Instance;
 
-            var action = (Action)OnMinPass;
 #if MONO
             instance.onHourPass = (Action)Delegate.Combine(instance.onHourPass, new Action(this.HourPass));
-            instance.onMinutePass.Add(action);
+            instance.onMinutePass += this.OnMinPass;
 #else
+            var action = (Action)OnMinPass;
             instance.onHourPass += (Il2CppSystem.Action)this.HourPass;
             instance.onMinutePass += (Il2CppSystem.Action)action;
 #endif
@@ -267,7 +269,7 @@ namespace CartelEnforcer
                     carMeetupCompleted = true;
                     QuestEntry_StopCarMeetup.SetState(EQuestState.Failed);
                     Fail();
-                    coros.Add(MelonCoroutines.Start(_helper.CleanupCarMeetup()));
+                    ModCoroutines.Start(_helper.CleanupCarMeetup());
                     return;
                 }
 
@@ -280,7 +282,7 @@ namespace CartelEnforcer
                     carMeetupCompleted = true;
                     QuestEntry_StopCarMeetup.SetState(EQuestState.Failed);
                     Fail();
-                    coros.Add(MelonCoroutines.Start(_helper.CleanupCarMeetup()));
+                    ModCoroutines.Start(_helper.CleanupCarMeetup());
                     return;
                 }
 
@@ -322,7 +324,7 @@ namespace CartelEnforcer
                         if (spawnedGoons["guard"].Awareness.VisionCone.IsPlayerVisible(nearest))
                         {
                             playerSightedActive = true;
-                            coros.Add(MelonCoroutines.Start(_helper.PlayerSightedByGuard(nearest)));
+                            ModCoroutines.Start(_helper.PlayerSightedByGuard(nearest));
                         }
                     }
                 }
@@ -335,9 +337,9 @@ namespace CartelEnforcer
                     if (Player.Local.CrimeData.CurrentPursuitLevel == PlayerCrimeData.EPursuitLevel.None)
                     {
                         carMeetupCompleted = true;
-                        coros.Add(MelonCoroutines.Start(QuestCarMeetupReward()));
+                        ModCoroutines.Start(QuestCarMeetupReward());
                         Complete();
-                        coros.Add(MelonCoroutines.Start(_helper.CleanupCarMeetup()));
+                        ModCoroutines.Start(_helper.CleanupCarMeetup());
                         return;
                     }
 
@@ -345,7 +347,7 @@ namespace CartelEnforcer
                     {
                         carMeetupCompleted = true;
                         Fail();
-                        coros.Add(MelonCoroutines.Start(_helper.CleanupCarMeetup()));
+                        ModCoroutines.Start(_helper.CleanupCarMeetup());
                         return;
                     }
                 }
@@ -367,13 +369,13 @@ namespace CartelEnforcer
                 {
                     // Add when time is 21:00
                     Action callback = new Action(OnDialogComplete);
-                    coros.Add(MelonCoroutines.Start(GenJeremyOption(callback)));
+                    ModCoroutines.Start(GenJeremyOption(callback));
                 }
                 else if (jeremyDiagIndex != -1 && NetworkSingleton<TimeManager>.Instance.CurrentTime < 2059 && !jeremyDialogueActive)
                 {
                     // Remove if dialogue option not consumed yet and time is smaller than 20:59, e.g. option not consumed until midnight
                     DialogueController controller = jeremy.DialogueHandler.gameObject.GetComponent<DialogueController>();
-                    coros.Add(MelonCoroutines.Start(DisposeJeremyChoice(controller)));
+                    ModCoroutines.Start(DisposeJeremyChoice(controller));
                     // Quest will still stay active and option appears next day basically
                 }
             }
@@ -439,7 +441,7 @@ namespace CartelEnforcer
             QuestEntry_StopCarMeetup.Begin();
             UpdateQuestMapLogo(QuestEntry_StopCarMeetup);
 
-            coros.Add(MelonCoroutines.Start(_helper.SpawnCarMeetup()));
+            ModCoroutines.Start(_helper.SpawnCarMeetup());
 
             if (_talkToJeremyAction != null)
             {
@@ -452,7 +454,7 @@ namespace CartelEnforcer
         {
             if (QuestEntry_StopCarMeetup != null && QuestEntry_StopCarMeetup.State == EQuestState.Failed) return;
             if (QuestEntry_EscapeNorthWaterfront == null) return;
-            coros.Add(MelonCoroutines.Start(_helper.StartLateInvestigation()));
+            ModCoroutines.Start(_helper.StartLateInvestigation());
             rewardStorage.AccessSettings = StorageEntity.EAccessSettings.Full;
 
             QuestEntry_EscapeNorthWaterfront.Begin();
@@ -527,7 +529,7 @@ namespace CartelEnforcer
                 else
                     Log("Brick definition is null");
 
-                if (product.StoredItem != null && product.StoredItem is FilledPackaging_StoredItem storedItemInst)
+                if (product.StoredItemPrefab != null && product.StoredItemPrefab is FilledPackaging_StoredItem storedItemInst)
                 {
                     Log("Parsing Brick");
                     GameObject brickOriginal = storedItemInst.Visuals.CocaineVisuals.VisualsContainer.gameObject;
@@ -552,9 +554,9 @@ namespace CartelEnforcer
                 else
                     Log("Brick definition is null");
 
-                if (product.StoredItem != null)
+                if (product.StoredItemPrefab != null)
                 {
-                    FilledPackaging_StoredItem storedItemInst = product.StoredItem.TryCast<FilledPackaging_StoredItem>();
+                    FilledPackaging_StoredItem storedItemInst = product.StoredItemPrefab.TryCast<FilledPackaging_StoredItem>();
                     if (storedItemInst != null)
                     {
                         Log("Parsing Brick");
@@ -734,23 +736,14 @@ namespace CartelEnforcer
                     kvp.Value.Health.Revive();
 
                 float randMaxHP = Mathf.Round(UnityEngine.Random.Range(160f, 230f) / 10f) * 10f;
-                kvp.Value.NPCData.Health.MaxHealth = Mathf.Round(Mathf.Lerp(100f, randMaxHP, _quest.questDifficultyScalar - 1f));
-                kvp.Value.Health.Health = Mathf.Round(Mathf.Lerp(100f, randMaxHP, _quest.questDifficultyScalar - 1f));
-                kvp.Value.Movement.MoveSpeedMultiplier = Mathf.Lerp(UnityEngine.Random.Range(1.1f, 1.3f), 1.5f, _quest.questDifficultyScalar - 1f);
+                kvp.Value.Health.MaxHealth = Mathf.Round(Mathf.Lerp(100f, randMaxHP, _quest.questDifficultyScalar - 1f));
+                kvp.Value.Health.RestoreHealth();
+
+                float moveSpeed = Mathf.Lerp(UnityEngine.Random.Range(0.35f, 0.50f), 0.65f, _quest.questDifficultyScalar - 1f);
+                kvp.Value.Movement.SpeedController.AddSpeedControl("goon_guard_carmeetup", moveSpeed, 5);
 
                 kvp.Value.Behaviour.CombatBehaviour.onBegin.AddListener(_quest.combatStartedAction);
                 kvp.Value.Health.onDieOrKnockedOut.AddListener(_quest.goonDiedAction);
-
-                if (!_quest.hasSavedCombatVariables)
-                {
-                    _quest.GiveUpRange = kvp.Value.Behaviour.CombatBehaviour.GiveUpRange;
-                    _quest.GiveUpAfterSuccessfulHits = kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits;
-                    _quest.DefaultSearchTime = kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime;
-                }
-
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpRange = 120f;
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = 60;
-                kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime = 300f;
 
                 _quest.spawnedGoonsGuids.Add(kvp.Value.GUID.ToString());
             }
@@ -973,13 +966,10 @@ namespace CartelEnforcer
 
                 kvp.Value.Behaviour.CombatBehaviour.Disable_Networked(null);
 
-                kvp.Value.Movement.MoveSpeedMultiplier = 1f;
-                kvp.Value.NPCData.Health.MaxHealth = 100f;
-                kvp.Value.Health.Health = 100f;
+                kvp.Value.Movement.SpeedController.RemoveSpeedControl("goon_guard_carmeetup");
 
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpRange = _quest.GiveUpRange;
-                kvp.Value.Behaviour.CombatBehaviour.GiveUpAfterSuccessfulHits = _quest.GiveUpAfterSuccessfulHits;
-                kvp.Value.Behaviour.CombatBehaviour.DefaultSearchTime = _quest.DefaultSearchTime;
+                kvp.Value.Health.MaxHealth = 100f;
+                kvp.Value.Health.RestoreHealth();
 
                 kvp.Value.Behaviour.ScheduleManager.EnableSchedule();
                 kvp.Value.Behaviour.ScheduleManager.ActionList[0].gameObject.SetActive(true);

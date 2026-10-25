@@ -1,7 +1,6 @@
-using HarmonyLib;
-using MelonLoader;
 using System.Collections;
 using UnityEngine;
+using HarmonyLib;
 
 using static CartelEnforcer.CartelEnforcer;
 using static CartelEnforcer.DebugModule;
@@ -71,7 +70,7 @@ namespace CartelEnforcer
         {
             if (!currentConfig.stealBackCustomers) return;
             Log("OnDayPassTrySteal");
-            coros.Add(MelonCoroutines.Start(WaitSleepEndTrySteal()));
+            ModCoroutines.Start(WaitSleepEndTrySteal());
         }
         public static IEnumerator WaitSleepEndTrySteal()
         {
@@ -120,7 +119,7 @@ namespace CartelEnforcer
             {
                 yield break;
             }
-            coros.Add(MelonCoroutines.Start(StealCustomerWithDelay(allInfluenceNormalized)));
+            ModCoroutines.Start(StealCustomerWithDelay(allInfluenceNormalized));
         }
 
         public static IEnumerator StealCustomerWithDelay(float cartelInfluence)
@@ -219,7 +218,7 @@ namespace CartelEnforcer
                 }
             }
             
-            // If during this session customer has been already stolen once -> resets after loading to menu
+            // If during this session customer has been already stolen once
             List<StealBackCustomer.StolenNPC> currentStolen = new(StealBackCustomer.stolenNPCs);
             for (int i = 0; i < currentStolen.Count; i++)
             {
@@ -259,12 +258,13 @@ namespace CartelEnforcer
             // notify popup
             // todo test how to make the popup not glitch ingame on first time unlock?
             // Note: Still bugs out
+            // Note2: Does still bug out?
             Singleton<NewCustomerPopup>.Instance.PlayPopup(c);
             Singleton<NewCustomerPopup>.Instance.Title.text = "Customer has been stolen by Cartel!";
 
             Log($"Stole customer: {npc.NPCData.BasicInfo.ID}");
             Log($"RelationDelta: {npc.RelationData.RelationDelta}");
-            coros.Add(MelonCoroutines.Start(LateSendMessage(npc)));
+            ModCoroutines.Start(LateSendMessage(npc));
 
             return;
         }
@@ -362,7 +362,6 @@ namespace CartelEnforcer
                 }
             }
         }
-
     }
 
     // SampleWasSufficient check if instance is stolen npc and then remove from tracked

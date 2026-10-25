@@ -1,4 +1,3 @@
-
 using static CartelEnforcer.CartelPersuade;
 
 namespace CartelEnforcer
